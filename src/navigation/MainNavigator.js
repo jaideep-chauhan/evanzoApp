@@ -8,7 +8,7 @@ import Register from '../screens/auth/Register';
 import OTPVerify from '../screens/auth/OTPVerify';
 import TabNavigator from './TabNavigator';
 import TaskDetail from '../screens/tasks/TaskDetail';
-import VendorChat from '../screens/vendors/chat';
+import VendorChat from '../screens/vendors/vendorDetails';
 import { ChatList, ChatScreen } from '../screens/chat';
 
 // Settings Screens

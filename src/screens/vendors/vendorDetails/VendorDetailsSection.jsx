@@ -1,0 +1,280 @@
+import React, { useState } from 'react';
+import {
+    View,
+    Text,
+    StyleSheet,
+    Image,
+    TextInput,
+    TouchableOpacity,
+    ScrollView,
+} from 'react-native';
+import Icon from 'react-native-vector-icons/Ionicons';
+
+function renderReviews(reviews, styles) {
+    if (reviews && reviews.length > 0) {
+        return reviews.map((review) => (
+            <View key={review.id} style={styles.reviewBlock}>
+                <View style={styles.rowBetween}>
+                    <Text style={styles.reviewTitle}>{review.user}</Text>
+                    <Text style={styles.reviewDate}>{review.date}</Text>
+                </View>
+                <View style={styles.ratingRow}>
+                    {[...Array(5)].map((_, i) => (
+                        <Icon
+                            key={i}
+                            name="star"
+                            size={16}
+                            color={i < review.rating ? "#1E2B4F" : "#E0E0E0"}
+                        />
+                    ))}
+                </View>
+                <Text style={styles.reviewDescription}>{review.comment}</Text>
+            </View>
+        ));
+    } else {
+        return <Text style={{ color: '#888', fontSize: 13 }}>No reviews yet.</Text>;
+    }
+}
+import img from '../../../assets/images/evanzoLogo.png'; // Adjust the path as needed
+import OfferGrid from './OfferCard';
+import ProfileCardCarousel from './ProfileCardCarousel';
+
+
+export default function VendorDetailsSection({
+    photos = [],
+    onSend,
+    description = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do ds ds ds d sdsjhhs hdsi dsiucds ud hdsic dsiguc cudicgdsuc sguicds csbui chduicgdsuicds gcudis cdusicgdisucgdsug cdsgchddchd",
+    reviews = [],
+}) {
+    const [descExpanded, setDescExpanded] = useState(false);
+    return (
+        <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+            <View>
+                {/* Photos Section */}
+                <View style={styles.card}>
+                    <View style={styles.rowBetween}>
+                        <Text style={styles.sectionTitle}>About</Text>
+                    </View>
+                    <ScrollView
+                        horizontal
+                        pagingEnabled
+                        showsHorizontalScrollIndicator={false}
+                        style={styles.carousel}
+                        contentContainerStyle={{ alignItems: 'center' }}
+                    >
+                        {photos.map((photo, idx) => (
+                            <View key={idx} style={styles.photoWrapper}>
+                                <Image source={photo} style={styles.photo} />
+                            </View>
+                        ))}
+                    </ScrollView>
+                    {/* Description below images */}
+                    <View style={styles.descContainer}>
+                        {!descExpanded ? (
+                            <>
+                                <Text style={styles.descriptionText} numberOfLines={3}>
+                                    {description}
+                                </Text>
+                                <Text style={styles.seeMoreBtn} onPress={() => setDescExpanded(true)}>
+                                    See More
+                                </Text>
+                            </>
+                        ) : (
+                            <>
+                                <Text style={styles.descriptionText}>{description}</Text>
+                                <Text style={styles.seeMoreBtn} onPress={() => setDescExpanded(false)}>
+                                    See Less
+                                </Text>
+                            </>
+                        )}
+                    </View>
+                </View>
+
+                <OfferGrid />
+
+                <ProfileCardCarousel />
+
+                {/* Message Input */}
+                <View style={styles.card}>
+                    <Text style={styles.sectionTitle}>Send a Message</Text>
+                    <View style={styles.messageBox}>
+                        <Icon name="chatbubble-outline" size={20} color="#1E2B4F" style={styles.inputIcon} />
+                        <TextInput
+                            placeholder="Type your message..."
+                            placeholderTextColor="#888"
+                            style={styles.input}
+                        />
+                        <TouchableOpacity style={styles.sendBtn} onPress={onSend}>
+                            <Icon name="send" size={18} color="#fff" />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                {/* Review Section
+                <View style={styles.card}>
+                    <View style={styles.rowBetween}>
+                        <Text style={styles.sectionTitle}>Reviews</Text>
+                        <Text style={styles.linkText}>See all</Text>
+                    </View>
+
+                    <View style={{ marginTop: 14 }}>
+                        {renderReviews(reviews, styles)}
+                    </View>
+                </View> */}
+            </View>
+        </ScrollView>
+    );
+    // ...existing code ends above. Removed duplicate/erroneous JSX block.
+}
+
+const styles = StyleSheet.create({
+    container: {
+        padding: 16,
+        backgroundColor: '#fff',
+
+    },
+    card: {
+        backgroundColor: '#FCFAFA',
+        borderRadius: 14,
+        padding: 16,
+        marginBottom: 18,
+        shadowColor: '#000',
+        shadowOpacity: 0.06,
+        shadowOffset: { width: 0, height: 2 },
+        shadowRadius: 4,
+        elevation: 3,
+        boxShadow: '1px 1px 4px 0px #00000029',
+
+    },
+    sectionTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#1D1B20',
+    },
+    rowBetween: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    carousel: {
+        marginTop: 12,
+    },
+    photoWrapper: {
+        borderRadius: 12,
+        overflow: 'hidden',
+        marginRight: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 5,
+        elevation: 4,
+        backgroundColor: '#fff',
+    },
+    photo: {
+        width: 264,
+        height: 158,
+        borderRadius: 12,
+        opacity: 1,
+    },
+    descContainer: {
+        marginTop: 14,
+    },
+    seeMoreBtn: {
+        color: '#1E2B4F',
+        fontWeight: '700',
+        marginTop: 4,
+        fontSize: 14,
+        alignSelf: 'flex-end',
+    },
+    messageBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 14,
+        borderWidth: 1.2,
+        borderColor: '#E5EAF2',
+        borderRadius: 12,
+        backgroundColor: '#F4F6FA',
+        paddingHorizontal: 10,
+        paddingVertical: 2,
+    },
+    inputIcon: {
+        marginRight: 8,
+    },
+    input: {
+        flex: 1,
+        paddingVertical: 10,
+        color: '#1E2B4F',
+        fontSize: 15,
+        backgroundColor: 'transparent',
+    },
+    sendBtn: {
+        backgroundColor: '#1E2B4F',
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginLeft: 8,
+    },
+    sendText: {
+        color: '#fff',
+        fontWeight: '600',
+    },
+    descriptionText: {
+        color: '#444',
+        fontSize: 14,
+        lineHeight: 20,
+    },
+    reviewBlock: {
+        marginBottom: 18,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F0F0F0',
+        paddingBottom: 12,
+    },
+    reviewTitle: {
+        fontSize: 15,
+        fontWeight: '700',
+        marginBottom: 2,
+        color: '#1E2B4F',
+    },
+    reviewDate: {
+        fontSize: 12,
+        color: '#888',
+    },
+    ratingRow: {
+        flexDirection: 'row',
+        gap: 2,
+        marginBottom: 6,
+        marginTop: 2,
+    },
+    reviewDescription: {
+        color: '#666',
+        fontSize: 13,
+        marginBottom: 4,
+    },
+    reviewerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    avatar: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        marginRight: 8,
+    },
+    reviewerName: {
+        fontSize: 14,
+        color: '#333',
+        fontWeight: '500',
+    },
+    eyeIcon: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginLeft: 'auto',
+        gap: 4,
+    },
+    eyeText: {
+        fontSize: 12,
+        color: '#aaa',
+    },
+});

@@ -1,9 +1,10 @@
 import React from 'react'
 import VendorProfileCard from './VendorProfileCard';
-import { SafeAreaView } from 'react-native-safe-area-context';
+// Removed SafeAreaView
 import { ScrollView, StyleSheet, View } from 'react-native';
 import img from '../../../assets/images/dummy.png';
 import VendorDetailsSection from './VendorDetailsSection';
+import OfferGrid from './OfferCard';
 
 const dummyReviews = [
     {
@@ -29,9 +30,10 @@ const dummyReviews = [
     },
 ];
 
+
 export default function VendorChat({ navigation }) {
     return (
-        <SafeAreaView style={styles.safe}>
+        <View style={styles.safe}>
             <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
                 <VendorProfileCard
                     logo={img}
@@ -41,7 +43,7 @@ export default function VendorChat({ navigation }) {
                     onBackPress={() => navigation && navigation.goBack ? navigation.goBack() : null}
                     onBellPress={() => console.log('Notifications')}
                 />
-                <View style={{ marginTop: 32 }}>
+                <View style={{ marginTop: 130 }}>
                     <VendorDetailsSection
                         photos={[img, img, img, img, img]}
                         description="Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do"
@@ -50,7 +52,7 @@ export default function VendorChat({ navigation }) {
                     />
                 </View>
             </ScrollView>
-        </SafeAreaView>
+        </View>
     );
 }
 
