@@ -2,7 +2,9 @@ import React, { useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Dimensions, TouchableOpacity, Animated, Image } from 'react-native';
 import { useTheme } from '../../ThemeContext';
 import img from '../../assets/images/dummy.png';
-
+import AntDesign from 'react-native-vector-icons/AntDesign';
+import Foundation from 'react-native-vector-icons/Foundation';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 const { width } = Dimensions.get('window');
 
 
@@ -70,13 +72,14 @@ const CatererCard = () => {
                 </View>
                 <View style={{ flex: 1 }}>
                     <Text style={styles.title}>Shahi Awadh Caterer</Text>
-                    <View style={styles.tagRow}>
+                    {/* <View style={styles.tagRow}>
                         <Text style={styles.tag}>🍽️ Catering</Text>
                         <Text style={styles.tag}>📍 Ontario, Canada</Text>
-                    </View>
+                    </View> */}
                 </View>
                 <View style={styles.ratingBox}>
-                    <Text style={styles.rating}>⭐ 4.0</Text>
+                    <AntDesign name="star" color="#2C3D5BF5" size={13} />
+                    <Text style={styles.rating}> 4.0</Text>
                 </View>
             </View>
             <View style={styles.card}>
@@ -84,19 +87,30 @@ const CatererCard = () => {
                 <View style={styles.subCard}>
                     {/* Offer Info */}
                     <View style={styles.offerRow}>
-                        <View style={styles.offerItem}>
-                            <Text style={[styles.offerLabel, { color: theme.colors.textSecondary }]}>Amount spent</Text>
-                            <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.primary }]}>
-                                <Text style={styles.offerValue}>💲150</Text>
+                        <View style={styles.offerTextContainer}>
+                            <Text style={styles.offerText}>Offer:</Text>
+                            <View style={styles.offerItem}>
+                                <Text style={[styles.offerLabel, { color: theme.colors.textSecondary }]}>Amount spent</Text>
+                                <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
+                                    <View style={styles.iconBox}>
+                                        <Foundation name="dollar" color="#fff" size={10} />
+                                    </View>
+                                    <Text style={styles.offerValue}>150</Text>
+                                </View>
+                            </View>
+                            <View style={styles.offerItem}>
+                                <Text style={[styles.offerLabel, { color: theme.colors.textSecondary }]}>Percentage</Text>
+                                <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
+                                    <View style={styles.iconBox}>
+                                        <MaterialCommunityIcons name="percent" color="#fff" size={10} />
+                                    </View>
+                                    <Text style={styles.offerValue}>10%</Text>
+                                </View>
                             </View>
                         </View>
-                        <View style={styles.offerItem}>
-                            <Text style={[styles.offerLabel, { color: theme.colors.textSecondary }]}>Percentage</Text>
-                            <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.primary }]}>
-                                <Text style={styles.offerValue}>🔟%</Text>
-                            </View>
+                        <View style={styles.seeMoreBox}>
+                            <Text style={[styles.seeMore, { color: theme.colors.white }]}>SEE MORE</Text>
                         </View>
-                        <Text style={[styles.seeMore, { color: theme.colors.primary }]}>SEE MORE</Text>
                     </View>
 
                     {/* Image Carousel (infinite auto-scroll) */}
@@ -143,44 +157,61 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         borderRadius: 16,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 5,
+        // shadowOffset: { width: 0, height: 2 },
+        // shadowOpacity: 0.1,
+        // shadowRadius: 8,
+        // elevation: 5,
     },
     card: {
-        backgroundColor: '#fff',
-        borderRadius: 16,
-        // padding: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 5,
+        marginHorizontal: 12,
+        marginBottom: 16,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 10, // As per your spec
+
+        width: 354,
+        // height: 306,
+
+        // iOS shadow
+        shadowColor: '#000000',
+        shadowOffset: { width: 1, height: 1 }, // Matches 1px x 1px
+        shadowOpacity: 0.16, // ~16% (29 in hex is ~16% opacity)
+        shadowRadius: 6.5, // Approximates the 13px blur
+
+        // Android shadow
+        elevation: 2, // Closer to a 13px blur feel on Android
+
+        // Optional position values if needed
+        // position: 'absolute',
+        // top: 710,
+        // left: 24,
     },
+
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 16
+        backgroundColor: '#fff',
+        marginBottom: 16,
+        paddingHorizontal: 12,
+        paddingTop: 12,
     },
     avatar: {
-        backgroundColor: '#f0f0f0',
-        width: 48,
-        height: 48,
-        borderRadius: 24,
+        backgroundColor: '#2C3D5BF5',
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 12
     },
     avatarText: {
-        fontWeight: 'bold',
+        fontWeight: '500',
         fontSize: 16,
-        color: '#333'
+        color: '#fff'
     },
     title: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#333',
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#000',
         marginBottom: 4
     },
     tagRow: {
@@ -197,11 +228,17 @@ const styles = StyleSheet.create({
         color: '#666'
     },
     ratingBox: {
+        backgroundColor: '#F4F4F4',
+        height: 30,
+        width: 60,
+        borderRadius: 15,
+        flexDirection: 'row',
+        justifyContent: 'center',
         alignItems: 'center'
     },
     rating: {
-        fontSize: 14,
-        fontWeight: 'bold',
+        fontSize: 12,
+        fontWeight: '500',
         color: '#333'
     },
     subCard: {
@@ -221,33 +258,67 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: 16,
-        paddingBottom: 12,
+        // paddingBottom: 12,
         // borderBottomWidth: 1,
-        borderBottomColor: '#e9ecef'
+        borderBottomColor: '#fff'
+    },
+    offerTextContainer: {
+        flexDirection: 'row',
+        gap: 5,
+    },
+    offerText: {
+        fontSize: 8,
+        fontWeight: '400',
+        color: '#344562',
+        alignSelf: 'flex-end',
+        marginBottom: 6
     },
     offerItem: {
         alignItems: 'center'
     },
     offerLabel: {
-        fontSize: 12,
+        fontSize: 6,
+        fontWeight: '400',
         marginBottom: 6
     },
-    offerValueContainer: {
+    iconBox: {
+        height: 12,
+        width: 12,
         borderRadius: 8,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        minWidth: 60,
+        backgroundColor: '#2C3D5BF5',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    offerValueContainer: {
+        height: 20,
+        width: 55,
+        backgroundColor: '#F4F4F4',
+        borderRadius: 8,
+        // paddingHorizontal: 12,
+        // paddingVertical: 6,
+        // minWidth: 60,
+        flexDirection: 'row',
+        gap: 4,
+        justifyContent: 'center',
         alignItems: 'center'
     },
     offerValue: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#fff'
+        fontSize: 10,
+        fontWeight: '500',
+        color: '#2C3D5BF5'
+    },
+    seeMoreBox: {
+        height: 20,
+        width: 60,
+        borderRadius: 10,
+        alignSelf: 'flex-end',
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#2C3D5B'
     },
     seeMore: {
-        fontWeight: 'bold',
-        fontSize: 12,
-        textDecorationLine: 'underline'
+        fontWeight: '500',
+        fontSize: 8,
     },
     carouselContainer: {
         marginBottom: 16,
@@ -268,16 +339,18 @@ const styles = StyleSheet.create({
     },
     description: {
         flex: 1,
-        fontSize: 14,
+        fontSize: 8,
+        fontWeight: '400',
         color: '#495057',
         lineHeight: 20
     },
     chatButton: {
-        paddingVertical: 10,
-        paddingHorizontal: 20,
+        height: 40,
+        width: 80,
+        backgroundColor: '#15253F',
+        justifyContent: 'center',
+        alignItems: 'center',
         borderRadius: 20,
-        minWidth: 80,
-        alignItems: 'center'
     },
     chatButtonText: {
         color: '#fff',
