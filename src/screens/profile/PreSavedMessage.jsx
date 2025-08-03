@@ -43,7 +43,7 @@ const PreSavedMessage = () => {
                 </View>
                 <View style={[styles.fieldGroup, styles.half]}>
                     <Text style={[styles.label, { color: theme.colors.primary }]}>Date</Text>
-                    <Pressable onPress={() => setShowDatePicker(true)} style={({ pressed }) => [styles.input, pressed && { backgroundColor: '#ececec' }]}> 
+                    <Pressable onPress={() => setShowDatePicker(true)} style={({ pressed }) => [styles.input, pressed && { backgroundColor: '#ececec' }]}>
                         <Text style={{ color: '#444', fontSize: 15 }}>
                             {date ? date.toLocaleDateString() : 'Select date'}
                         </Text>
