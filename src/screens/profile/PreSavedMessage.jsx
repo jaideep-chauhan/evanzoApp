@@ -1,9 +1,13 @@
-import React from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Platform, Modal, Pressable } from 'react-native';
 import { useTheme } from '../../ThemeContext';
+import DatePicker from 'react-native-date-picker';
 
 const PreSavedMessage = () => {
     const theme = useTheme();
+
+    const [date, setDate] = useState(new Date());
+    const [showDatePicker, setShowDatePicker] = useState(false);
 
     return (
         <View style={styles.container}>
@@ -12,16 +16,6 @@ const PreSavedMessage = () => {
                 <TextInput
                     style={styles.input}
                     placeholder="Enter event name"
-                    placeholderTextColor="#999"
-                    editable={false}
-                />
-            </View>
-
-            <View style={styles.fieldGroup}>
-                <Text style={[styles.label, { color: theme.colors.primary }]}>Category</Text>
-                <TextInput
-                    style={styles.input}
-                    placeholder="Enter event category"
                     placeholderTextColor="#999"
                     editable={false}
                 />
@@ -37,6 +31,38 @@ const PreSavedMessage = () => {
                 />
             </View>
 
+            <View style={styles.row}>
+                <View style={[styles.fieldGroup, styles.half]}>
+                    <Text style={[styles.label, { color: theme.colors.primary }]}>Category</Text>
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Enter event category"
+                        placeholderTextColor="#999"
+                        editable={false}
+                    />
+                </View>
+                <View style={[styles.fieldGroup, styles.half]}>
+                    <Text style={[styles.label, { color: theme.colors.primary }]}>Date</Text>
+                    <Pressable onPress={() => setShowDatePicker(true)} style={({ pressed }) => [styles.input, pressed && { backgroundColor: '#ececec' }]}> 
+                        <Text style={{ color: '#444', fontSize: 15 }}>
+                            {date ? date.toLocaleDateString() : 'Select date'}
+                        </Text>
+                    </Pressable>
+                    <DatePicker
+                        modal
+                        open={showDatePicker}
+                        date={date}
+                        mode="date"
+                        onConfirm={(selectedDate) => {
+                            setShowDatePicker(false);
+                            setDate(selectedDate);
+                        }}
+                        onCancel={() => setShowDatePicker(false)}
+                        theme={theme.dark ? 'dark' : 'light'}
+                        textColor={theme.colors.primary}
+                    />
+                </View>
+            </View>
             <View style={styles.row}>
                 <View style={[styles.fieldGroup, styles.half]}>
                     <Text style={[styles.label, { color: theme.colors.primary }]}>Time</Text>

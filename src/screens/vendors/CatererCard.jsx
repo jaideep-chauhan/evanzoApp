@@ -5,6 +5,8 @@ import img from '../../assets/images/dummy.png';
 import AntDesign from 'react-native-vector-icons/AntDesign';
 import Foundation from 'react-native-vector-icons/Foundation';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import percent from '../../assets/icons/percent.png';
+import dollar from '../../assets/icons/dollar.png';
 const { width } = Dimensions.get('window');
 
 
@@ -64,7 +66,7 @@ const CatererCard = () => {
     };
 
     return (
-        <View style={[styles.maincard, { backgroundColor: theme.colors.background }]}>
+        <View style={[styles.maincard, { backgroundColor: '#fff' }]}>
             {/* Header */}
             <View style={styles.header}>
                 <View style={styles.avatar}>
@@ -72,10 +74,10 @@ const CatererCard = () => {
                 </View>
                 <View style={{ flex: 1 }}>
                     <Text style={styles.title}>Shahi Awadh Caterer</Text>
-                    {/* <View style={styles.tagRow}>
+                    <View style={styles.tagRow}>
                         <Text style={styles.tag}>🍽️ Catering</Text>
                         <Text style={styles.tag}>📍 Ontario, Canada</Text>
-                    </View> */}
+                    </View>
                 </View>
                 <View style={styles.ratingBox}>
                     <AntDesign name="star" color="#2C3D5BF5" size={13} />
@@ -93,7 +95,7 @@ const CatererCard = () => {
                                 <Text style={[styles.offerLabel, { color: theme.colors.textSecondary }]}>Amount spent</Text>
                                 <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
                                     <View style={styles.iconBox}>
-                                        <Foundation name="dollar" color="#fff" size={10} />
+                                        <Image source={dollar} style={{ width: 10, height: 10, resizeMode: 'contain' }} />
                                     </View>
                                     <Text style={styles.offerValue}>150</Text>
                                 </View>
@@ -102,7 +104,7 @@ const CatererCard = () => {
                                 <Text style={[styles.offerLabel, { color: theme.colors.textSecondary }]}>Percentage</Text>
                                 <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
                                     <View style={styles.iconBox}>
-                                        <MaterialCommunityIcons name="percent" color="#fff" size={10} />
+                                        <Image source={percent} style={{ width: 10, height: 10, resizeMode: 'contain' }} />
                                     </View>
                                     <Text style={styles.offerValue}>10%</Text>
                                 </View>
@@ -153,46 +155,29 @@ export default CatererCard;
 
 const styles = StyleSheet.create({
     maincard: {
-        margin: 16,
+        marginTop: 10,
         backgroundColor: '#fff',
         borderRadius: 16,
         shadowColor: '#000',
-        // shadowOffset: { width: 0, height: 2 },
-        // shadowOpacity: 0.1,
-        // shadowRadius: 8,
-        // elevation: 5,
     },
     card: {
         marginHorizontal: 12,
         marginBottom: 16,
         backgroundColor: '#FFFFFF',
         borderRadius: 10, // As per your spec
-
-        width: 354,
-        // height: 306,
-
-        // iOS shadow
         shadowColor: '#000000',
         shadowOffset: { width: 1, height: 1 }, // Matches 1px x 1px
         shadowOpacity: 0.16, // ~16% (29 in hex is ~16% opacity)
         shadowRadius: 6.5, // Approximates the 13px blur
-
-        // Android shadow
-        elevation: 2, // Closer to a 13px blur feel on Android
-
-        // Optional position values if needed
-        // position: 'absolute',
-        // top: 710,
-        // left: 24,
+        elevation: 2,
     },
 
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#fff',
-        marginBottom: 16,
+        marginBottom: 10,
         paddingHorizontal: 12,
-        paddingTop: 12,
     },
     avatar: {
         backgroundColor: '#2C3D5BF5',
@@ -211,7 +196,7 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#000',
+        color: '#1D1B20',
         marginBottom: 4
     },
     tagRow: {
@@ -277,15 +262,14 @@ const styles = StyleSheet.create({
         alignItems: 'center'
     },
     offerLabel: {
-        fontSize: 6,
+        fontSize: 8,
         fontWeight: '400',
         marginBottom: 6
     },
     iconBox: {
-        height: 12,
-        width: 12,
+        height: 14,
+        width: 14,
         borderRadius: 8,
-        backgroundColor: '#2C3D5BF5',
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -294,9 +278,6 @@ const styles = StyleSheet.create({
         width: 55,
         backgroundColor: '#F4F4F4',
         borderRadius: 8,
-        // paddingHorizontal: 12,
-        // paddingVertical: 6,
-        // minWidth: 60,
         flexDirection: 'row',
         gap: 4,
         justifyContent: 'center',
@@ -339,7 +320,7 @@ const styles = StyleSheet.create({
     },
     description: {
         flex: 1,
-        fontSize: 8,
+        fontSize: 10,
         fontWeight: '400',
         color: '#495057',
         lineHeight: 20
