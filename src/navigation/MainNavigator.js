@@ -25,6 +25,7 @@ import PrivacyPolicy from '../screens/settings/PrivacyPolicy';
 
 // Event Detail Screen
 import EventDetailView from '../screens/events/EventDetailView';
+import AllReviewsScreen from '../screens/vendors/vendorViewDetails';
 
 const Stack = createNativeStackNavigator();
 
@@ -54,6 +55,10 @@ const MainNavigator = () => {
                 <Stack.Screen name="Chat" component={VendorChat} />
                 <Stack.Screen name="ChatList" component={ChatList} />
                 <Stack.Screen name="ChatScreen" component={ChatScreen} />
+
+
+                {/* Vendor View Details */}
+                <Stack.Screen name="AllReviews" component={AllReviewsScreen} />
 
                 {/* Vendor Add Detail Screen */}
                 <Stack.Screen name="VendorAddDetail" component={VendorChat} />

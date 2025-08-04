@@ -42,6 +42,7 @@ export default function VendorChat({ navigation }) {
                     location="Ontario, Canada"
                     onBackPress={() => navigation && navigation.goBack ? navigation.goBack() : null}
                     onBellPress={() => console.log('Notifications')}
+                    navigation={navigation}
                 />
                 <View style={{ marginTop: 130 }}>
                     <VendorDetailsSection

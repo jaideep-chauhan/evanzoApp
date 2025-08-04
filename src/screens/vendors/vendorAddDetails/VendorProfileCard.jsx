@@ -67,6 +67,7 @@ export default function VendorProfileCard({
     location,
     onBackPress,
     onBellPress,
+    navigation,
 }) {
     return (
         <View style={{ flex: 1, backgroundColor: '#fff' }}>
@@ -85,7 +86,7 @@ export default function VendorProfileCard({
             {/* White Info Card */}
             <View style={[styles.infoCardWrapper, { flex: 1 }]}>
                 <View style={[styles.infoCard, { flexGrow: 1 }]}>
-                    <TouchableOpacity style={styles.seeAllBtn} onPress={() => { }} activeOpacity={0.7}>
+                    <TouchableOpacity style={styles.seeAllBtn} onPress={() => navigation.navigate('AllReviews')} activeOpacity={0.7}>
                         <Text style={styles.seeAllText}>See All</Text>
                     </TouchableOpacity>
                     <View style={styles.avatarWrapper}>
