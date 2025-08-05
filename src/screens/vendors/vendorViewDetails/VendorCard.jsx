@@ -99,7 +99,7 @@ export default VendorCard;
 
 const styles = StyleSheet.create({
     banner: {
-        height: 180,
+        height: 230,
         borderBottomLeftRadius: 30,
         borderBottomRightRadius: 30,
         overflow: 'hidden',
@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
         borderColor: '#ffffff66',
     },
     infoCardWrapper: {
-        marginTop: -60,
+        marginTop: -90,
         paddingHorizontal: 16,
     },
     infoCard: {
