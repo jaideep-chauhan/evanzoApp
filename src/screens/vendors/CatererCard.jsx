@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
     },
     title: {
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '700',
         color: '#1D1B20',
         marginBottom: 4
     },
@@ -223,36 +223,32 @@ const styles = StyleSheet.create({
     },
     rating: {
         fontSize: 12,
-        fontWeight: '500',
+        fontWeight: '600',
         color: '#333'
     },
     subCard: {
         backgroundColor: '#fafbfc',
         borderRadius: 12,
-        // borderWidth: 1,
         borderColor: '#e1e5e9',
         padding: 12,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
         shadowRadius: 4,
-        // elevation: 2,
     },
     offerRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: 16,
-        // paddingBottom: 12,
-        // borderBottomWidth: 1,
         borderBottomColor: '#fff'
     },
     offerTextContainer: {
         flexDirection: 'row',
-        gap: 5,
+        gap: 10,
     },
     offerText: {
-        fontSize: 8,
+        fontSize: 12,
         fontWeight: '400',
         color: '#344562',
         alignSelf: 'flex-end',
@@ -262,26 +258,24 @@ const styles = StyleSheet.create({
         alignItems: 'center'
     },
     offerLabel: {
-        fontSize: 8,
+        fontSize: 10,
         fontWeight: '400',
         marginBottom: 6
     },
     iconBox: {
-        height: 14,
-        width: 14,
         borderRadius: 8,
         justifyContent: 'center',
         alignItems: 'center',
     },
     offerValueContainer: {
-        height: 20,
-        width: 55,
         backgroundColor: '#F4F4F4',
-        borderRadius: 8,
+        borderRadius: 30,
         flexDirection: 'row',
         gap: 4,
         justifyContent: 'center',
-        alignItems: 'center'
+        alignItems: 'center',
+        paddingHorizontal: 10,
+        paddingVertical: 4
     },
     offerValue: {
         fontSize: 10,

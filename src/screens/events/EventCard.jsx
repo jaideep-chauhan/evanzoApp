@@ -91,16 +91,13 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         padding: 16,
         marginBottom: 18,
-        shadowOpacity: 0.08,
-        shadowOffset: { width: 0, height: 6 },
         shadowRadius: 12,
         elevation: 5,
-        borderWidth: 1,
-        borderColor: '#000',
         marginHorizontal: 10,
         alignSelf: 'stretch',
-        width: '100%',
         minHeight: 0,
+        boxShadow: `2px 2px 4px 0px #0000001A`,
+
 
     },
     rowBetween: {

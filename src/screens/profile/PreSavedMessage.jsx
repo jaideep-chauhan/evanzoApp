@@ -8,6 +8,12 @@ const PreSavedMessage = () => {
 
     const [date, setDate] = useState(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
+    const [eventName, setEventName] = useState('');
+    const [location, setLocation] = useState('');
+    const [category, setCategory] = useState('');
+    const [time, setTime] = useState('');
+    const [duration, setDuration] = useState('');
+    const [description, setDescription] = useState('');
 
     return (
         <View style={styles.container}>
@@ -17,7 +23,8 @@ const PreSavedMessage = () => {
                     style={styles.input}
                     placeholder="Enter event name"
                     placeholderTextColor="#999"
-                    editable={false}
+                    value={eventName}
+                    onChangeText={setEventName}
                 />
             </View>
 
@@ -27,7 +34,8 @@ const PreSavedMessage = () => {
                     style={styles.input}
                     placeholder="Enter event location"
                     placeholderTextColor="#999"
-                    editable={false}
+                    value={location}
+                    onChangeText={setLocation}
                 />
             </View>
 
@@ -38,7 +46,8 @@ const PreSavedMessage = () => {
                         style={styles.input}
                         placeholder="Enter event category"
                         placeholderTextColor="#999"
-                        editable={false}
+                        value={category}
+                        onChangeText={setCategory}
                     />
                 </View>
                 <View style={[styles.fieldGroup, styles.half]}>
@@ -70,7 +79,8 @@ const PreSavedMessage = () => {
                         style={styles.input}
                         placeholder="Enter event time"
                         placeholderTextColor="#999"
-                        editable={false}
+                        value={time}
+                        onChangeText={setTime}
                     />
                 </View>
                 <View style={[styles.fieldGroup, styles.half]}>
@@ -79,7 +89,8 @@ const PreSavedMessage = () => {
                         style={styles.input}
                         placeholder="Enter event duration"
                         placeholderTextColor="#999"
-                        editable={false}
+                        value={duration}
+                        onChangeText={setDuration}
                     />
                 </View>
             </View>
@@ -92,7 +103,8 @@ const PreSavedMessage = () => {
                     numberOfLines={4}
                     placeholder="Enter event description"
                     placeholderTextColor="#999"
-                    editable={false}
+                    value={description}
+                    onChangeText={setDescription}
                 />
             </View>
 
@@ -112,9 +124,9 @@ export default PreSavedMessage;
 
 const styles = StyleSheet.create({
     container: {
-        backgroundColor: '#fff',
+        // backgroundColor: '#fff',
         borderRadius: 12,
-        padding: 20,
+        // padding: 20,
         width: '100%',
         maxWidth: 600,
         alignSelf: 'center',

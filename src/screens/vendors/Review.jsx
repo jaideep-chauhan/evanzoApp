@@ -10,6 +10,7 @@ import {
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const Review = () => {
     const [rating, setRating] = useState(0);
@@ -27,7 +28,7 @@ const Review = () => {
     };
 
     return (
-        <View style={styles.container}>
+        <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
                     <Icon name="arrow-back-outline" size={22} color="#2C3D5BF5" />
@@ -68,7 +69,7 @@ const Review = () => {
             <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
                 <Text style={styles.submitText}>Submit</Text>
             </TouchableOpacity>
-        </View>
+        </SafeAreaView>
     );
 };
 

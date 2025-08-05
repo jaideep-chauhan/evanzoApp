@@ -129,7 +129,7 @@ const vendors = [
     },
 ];
 
-export default function ReviewList() {
+export default function ReviewList({ navigation }) {
     const [activeTab, setActiveTab] = useState('REVIEWS');
 
     const renderTabContent = () => {
@@ -162,7 +162,7 @@ export default function ReviewList() {
                 return (
                     <View>
                         {/* Write Review */}
-                        <TouchableOpacity style={styles.writeReview}>
+                        <TouchableOpacity style={styles.writeReview} onPress={() => navigation.navigate('Review')}>
                             <Text style={styles.writeText}>Write a review</Text>
                             <Icon name="chevron-right" size={16} color="#000" />
                         </TouchableOpacity>
@@ -248,7 +248,7 @@ export default function ReviewList() {
             </TouchableOpacity>
 
             {/* Review List */}
-            {dummyReviews.map((review) => (
+            {/* {dummyReviews.map((review) => (
                 <View key={review.id} style={styles.card}>
                     <View style={styles.top}>
                         <Text style={styles.title}>{review.title}</Text>
@@ -278,7 +278,7 @@ export default function ReviewList() {
                         </View>
                     </View>
                 </View>
-            ))}
+            ))} */}
         </View>
     );
 }

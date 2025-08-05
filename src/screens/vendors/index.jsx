@@ -6,27 +6,28 @@ import {
     View,
     Text,
     TouchableOpacity,
+    Modal,
 } from 'react-native';
 import SearchHeader from './SearchHeader';
 import Tabs from './Tabs';
 import VendorCard from './VendorCard';
 import LocationSearchModal from './LocationSearchModal';
-import DateRangePickerModal from './DateRangePickerModal';
 import CategorySelectionModal from './CategorySelectionModal';
+import PreSavedMessage from '../profile/PreSavedMessage';
 import img from '../../assets/images/dummy.png';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
 import CatererCard from './CatererCard';
+import Icon from 'react-native-vector-icons/Ionicons';
 
 export default function Vendor() {
     const navigation = useNavigation();
     const theme = useTheme();
     const [selectedLocation, setSelectedLocation] = useState(null);
     const [showLocationModal, setShowLocationModal] = useState(false);
-    const [selectedDateRange, setSelectedDateRange] = useState(null);
-    const [showDateRangeModal, setShowDateRangeModal] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [showCategoryModal, setShowCategoryModal] = useState(false);
+    const [showPreSaveModal, setShowPreSaveModal] = useState(false);
     const [activeTab, setActiveTab] = useState(null); // No tab active by default
 
     const vendors = [
@@ -136,8 +137,8 @@ export default function Vendor() {
         setActiveTab(tabIndex);
         if (tabLabel === 'Location') {
             setShowLocationModal(true);
-        } else if (tabLabel === 'Date') {
-            setShowDateRangeModal(true);
+        } else if (tabLabel === 'Pre Save') {
+            setShowPreSaveModal(true);
         } else if (tabLabel === 'Category') {
             setShowCategoryModal(true);
         }
@@ -145,10 +146,6 @@ export default function Vendor() {
 
     const handleLocationSelect = (location) => {
         setSelectedLocation(location);
-    };
-
-    const handleDateRangeSelect = (dateRange) => {
-        setSelectedDateRange(dateRange);
     };
 
     const handleCategorySelect = (category) => {
@@ -165,7 +162,7 @@ export default function Vendor() {
                 <View style={styles.headerWrapper} >
                     <SearchHeader />
                     <Tabs
-                        tabs={['Location', 'Date', 'Category']}
+                        tabs={['Location', 'Pre Save', 'Category']}
                         onTabPress={handleTabPress}
                         defaultActive={activeTab}
                     />
@@ -186,24 +183,7 @@ export default function Vendor() {
                 )}
 
                 {/* Date Range Filter Indicator */}
-                {selectedDateRange && (
-                    <View style={[styles.filterIndicator, { backgroundColor: '#f0fff4', borderColor: theme.colors.success + '33' }]}>
-                        <Text style={[styles.filterIndicatorText, { color: theme.colors.success }]}>
-                            Date Range: {selectedDateRange.startDate.toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric'
-                            })} - {selectedDateRange.endDate.toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric'
-                            })}
-                        </Text>
-                        <Text style={styles.vendorCount}>
-                            Filter applied for availability
-                        </Text>
-                    </View>
-                )}
+                {/* Removed date range filter indicator since we're not using date filter anymore */}
 
                 {/* Category Filter Indicator */}
                 {selectedCategory && (
@@ -258,13 +238,25 @@ export default function Vendor() {
                 currentLocation={selectedLocation}
             />
 
-            {/* Date Range Picker Modal */}
-            <DateRangePickerModal
-                visible={showDateRangeModal}
-                onClose={() => setShowDateRangeModal(false)}
-                onDateRangeSelect={handleDateRangeSelect}
-                currentDateRange={selectedDateRange}
-            />
+            {/* Pre Save Modal */}
+            <Modal
+                visible={showPreSaveModal}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setShowPreSaveModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <PreSavedMessage />
+                        <TouchableOpacity
+                            style={styles.closeBtn}
+                            onPress={() => setShowPreSaveModal(false)}
+                        >
+                            <Icon name="close" size={24} color={theme.colors.primary} />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
 
             {/* Category Selection Modal */}
             <CategorySelectionModal
@@ -335,5 +327,32 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#666',
         textAlign: 'center',
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    modalContent: {
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        padding: 20,
+        width: '100%',
+        maxWidth: 600,
+        position: 'relative',
+        shadowColor: '#000',
+        shadowOpacity: 0.1,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 5,
+    },
+    closeBtn: {
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        zIndex: 1,
+        padding: 5,
     },
 });
