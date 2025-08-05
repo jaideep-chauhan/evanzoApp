@@ -12,7 +12,7 @@ const AllReviewsScreen = ({ navigation }) => {
                 <VendorCard 
                 onBackPress={() => navigation && navigation.goBack ? navigation.goBack() : null}
                 navigation={navigation}/>
-                <ReviewList />
+                <ReviewList navigation={navigation}/>
             </ScrollView>
         </View>
     );

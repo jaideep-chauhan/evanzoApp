@@ -43,7 +43,7 @@ const dummyReviews = [
     },
 ];
 
-export default function ReviewList() {
+export default function ReviewList({ navigation }) {
     return (
         <View style={styles.container}>
             {/* Tabs */}
@@ -60,7 +60,10 @@ export default function ReviewList() {
             </View>
 
             {/* Write Review */}
-            <TouchableOpacity style={styles.writeReview}>
+            <TouchableOpacity
+                onPress={() => navigation.navigate('Review')}
+                style={styles.writeReview}
+            >
                 <Text style={styles.writeText}>Write a review</Text>
                 <Icon name="chevron-right" size={16} color="#000" />
             </TouchableOpacity>
