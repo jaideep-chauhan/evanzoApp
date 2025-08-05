@@ -238,6 +238,47 @@ export default function ReviewList() {
 
             {/* Tab Content */}
             {renderTabContent()}
+            {/* Write Review */}
+            <TouchableOpacity
+                onPress={() => navigation.navigate('Review')}
+                style={styles.writeReview}
+            >
+                <Text style={styles.writeText}>Write a review</Text>
+                <Icon name="chevron-right" size={16} color="#000" />
+            </TouchableOpacity>
+
+            {/* Review List */}
+            {dummyReviews.map((review) => (
+                <View key={review.id} style={styles.card}>
+                    <View style={styles.top}>
+                        <Text style={styles.title}>{review.title}</Text>
+                        <View style={styles.stars}>
+                            {[...Array(5)].map((_, index) => (
+                                <FontAwesome
+                                    key={index}
+                                    name={index < review.rating ? 'star' : 'star-o'}
+                                    size={12}
+                                    color="#2C3D5B"
+                                    style={{ marginRight: 2 }}
+                                />
+                            ))}
+                        </View>
+                    </View>
+
+                    <Text style={styles.description}>{review.description}</Text>
+
+                    <View style={styles.footer}>
+                        <View style={styles.userInfo}>
+                            <Image source={{ uri: review.avatar }} style={styles.avatar} />
+                            <Text style={styles.userName}>{review.name}</Text>
+                        </View>
+                        <View style={styles.commentInfo}>
+                            <Icon name="message-circle" size={14} color='rgba(28, 28, 28, 0.4)' />
+                            <Text style={styles.commentCount}>{review.comments}</Text>
+                        </View>
+                    </View>
+                </View>
+            ))}
         </View>
     );
 }
