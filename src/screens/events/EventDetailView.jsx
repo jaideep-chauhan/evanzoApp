@@ -16,7 +16,8 @@ import { useNavigation } from '@react-navigation/native';
 import img from '../../assets/images/dummy.png';
 import bg1 from '../../assets/images/bg1.png';
 import { useTheme } from '../../ThemeContext';
-
+import Icon2 from 'react-native-vector-icons/Feather'
+import Icon3 from 'react-native-vector-icons/Entypo'
 const { width } = Dimensions.get('window');
 const AVATAR_SIZE = 40;
 
@@ -77,7 +78,7 @@ export default function EventDetailView() {
                         <Icon name="arrow-back-outline" size={20} color="#fff" />
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.iconBtn}>
-                        <Icon name="ellipsis-horizontal" size={20} color="#fff" />
+                        <Icon2 name="bell" size={20} color="#fff" />
                     </TouchableOpacity>
                 </View>
             </ImageBackground>
@@ -94,7 +95,7 @@ export default function EventDetailView() {
                     </View>
                     <View style={styles.actionIcons}>
                         <TouchableOpacity style={styles.actionBtn}>
-                            <Icon name="share-outline" size={20} color="#334462" />
+                            <Icon3 name="share" size={20} color="#334462" />
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.actionBtn} onPress={toggleFavorite}>
                             <Icon
@@ -183,46 +184,80 @@ export default function EventDetailView() {
 
                 {/* User Info Section */}
                 <View style={styles.userInfo}>
-                    <Image source={eventData.organizer.avatar} style={styles.avatar} />
-                    <Text style={styles.organizerName}>{eventData.organizer.name}</Text>
-                    <View style={styles.rating}>
-                        {renderStars(eventData.organizer.rating)}
-                        <Text style={styles.ratingText}>({eventData.organizer.reviewCount})</Text>
+                    <View style={styles.userInfoBox}>
+                        <Text style={styles.userInfoTitle}>User Information</Text>
+                        <View style={styles.rating}>
+                            {renderStars(eventData.organizer.rating)}
+                            <Text style={styles.ratingText}>({eventData.organizer.reviewCount})</Text>
+                        </View>
                     </View>
+                    <View style={styles.userInfoBox2}>
+                        <Image source={eventData.organizer.avatar} style={styles.avatar} />
+                        <Text style={styles.organizerName}>{eventData.organizer.name}</Text>
+                    </View>
+                    <Text style={styles.seeAllText}>See All</Text>
                 </View>
 
                 {/* Suggestion Section */}
                 <View style={styles.suggestionSection}>
                     <Text style={styles.suggestionText}>You might also like</Text>
-                    <View style={styles.suggestionCard}>
-                        <Image source={img} style={styles.suggestionAvatar} />
-                        <View>
-                            <Text style={styles.suggestionTitle}>Corporate Event</Text>
-                            <Text style={styles.suggestionOrganizer}>Tushar Dhania</Text>
-                            <Text style={styles.suggestionDate}>October 30, 2023</Text>
-                        </View>
-                        <TouchableOpacity style={styles.viewBtn}>
-                            <Text style={styles.viewText}>View</Text>
-                        </TouchableOpacity>
-                    </View>
-                    <View style={styles.suggestionCard}>
-                        <Image source={img} style={styles.suggestionAvatar} />
-                        <View>
-                            <Text style={styles.suggestionTitle}>Corporate Event</Text>
-                            <Text style={styles.suggestionOrganizer}>Tushar Dhania</Text>
-                            <Text style={styles.suggestionDate}>October 30, 2023</Text>
-                        </View>
-                        <TouchableOpacity style={styles.viewBtn}>
-                            <Text style={styles.viewText}>View</Text>
-                        </TouchableOpacity>
-                    </View>
+
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.suggestionList}
+                    >
+                        {[1, 2].map((_, index) => (
+                            <View key={index} style={styles.suggestionCard}>
+                                {/* Close Button */}
+                                <TouchableOpacity style={styles.closeIcon}>
+                                    <Icon name="close" size={16} color="#334462" />
+                                </TouchableOpacity>
+
+                                {/* Duration Tag */}
+                                <View style={styles.durationTag}>
+                                    <Text style={styles.durationText}>2 Hours</Text>
+                                </View>
+
+                                {/* Title */}
+                                <Text style={styles.suggestionTitle}>Corporate Event</Text>
+
+                                {/* Organizer Info */}
+                                <View style={styles.nameBox}>
+                                    <View style={styles.iconBox}>
+                                        <Icon name="person" size={12} color="#2C3D5BF5" />
+                                    </View>
+                                    <Text style={styles.suggestionOrganizer}>Tushar Dhania</Text>
+                                </View>
+
+                                {/* Location and Date */}
+                                <View style={styles.detailRow}>
+                                    <View style={styles.pill}>
+                                        <Icon name="location-outline" size={12} color="#334462" style={{ marginRight: 4 }} />
+                                        <Text style={styles.pillText}>Ontario, Canada</Text>
+                                    </View>
+                                    <View style={styles.pill}>
+                                        <Icon name="calendar-outline" size={12} color="#334462" style={{ marginRight: 4 }} />
+                                        <Text style={styles.pillText}>October 30, 2023</Text>
+                                    </View>
+                                </View>
+
+                                {/* View Button */}
+                                <TouchableOpacity style={styles.viewBtn}>
+                                    <Text style={styles.viewText}>View</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ))}
+                    </ScrollView>
                 </View>
+
 
                 {/* Quote Section */}
                 <View style={styles.quoteSection}>
                     <TextInput
                         style={styles.quoteInput}
                         placeholder="Give a quote..."
+                        placeholderTextColor="#ccc"
                         value={quoteText}
                         onChangeText={setQuoteText}
                     />
@@ -230,6 +265,7 @@ export default function EventDetailView() {
                         <Text style={styles.sendText}>Send</Text>
                     </TouchableOpacity>
                 </View>
+
             </View>
         </ScrollView>
     );
@@ -239,6 +275,7 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#fff',
+        paddingBottom: 100,
     },
     banner: {
         height: 250,
@@ -403,9 +440,43 @@ const styles = StyleSheet.create({
         alignSelf: 'flex-start',
     },
     userInfo: {
+        // borderWidth: 1,
+        borderRadius: 10,
+        marginBottom: 20,
+        backgroundColor: '#fff', // Required for shadow to appear properly
+
+        // iOS shadow
+        shadowColor: '#000',
+        shadowOffset: { width: 1, height: 1 },
+        shadowOpacity: 0.16,
+        shadowRadius: 4,
+        paddingHorizontal: 7,
+        paddingVertical: 5,
+        // Android shadow (elevation)
+        elevation: 2,
+    },
+
+    userInfoBox: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 20,
+        justifyContent: 'space-between',
+        paddingHorizontal: 10,
+        paddingVertical: 10,
+        // marginBottom: 4,
+    },
+    userInfoBox2: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        // justifyContent: 'space-between',
+        paddingHorizontal: 10,
+        paddingVertical: 10,
+        // marginBottom: 4,
+    },
+    userInfoTitle: {
+        fontSize: 8,
+        fontWeight: '500',
+        color: '#000000',
+        marginBottom: 4,
     },
     avatar: {
         width: AVATAR_SIZE,
@@ -417,6 +488,14 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '700',
         color: '#1D1B20',
+    },
+    seeAllText: {
+        fontSize: 10,
+        color: '#003A9B',
+        fontWeight: '500',
+        marginBottom: 4,
+        alignSelf: 'flex-end',
+        paddingHorizontal: 10,
     },
     rating: {
         flexDirection: 'row',
@@ -432,69 +511,177 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     suggestionText: {
-        fontSize: 16,
-        fontWeight: '700',
+        fontSize: 12,
+        fontWeight: '600',
         color: '#111',
         marginBottom: 10,
     },
+    suggestionSection: {
+        marginBottom: 20,
+    },
+
+    suggestionText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#111',
+        marginBottom: 10,
+        paddingHorizontal: 10,
+    },
+
+    suggestionList: {
+        paddingLeft: 10,
+        paddingRight: 10,
+        gap: 16,
+    },
+
     suggestionCard: {
+        width: 320,
+        backgroundColor: '#fff',
+        padding: 16,
+        borderRadius: 16,
+        marginRight: 10,
+        position: 'relative',
+
+        // Shadow (iOS)
+        shadowColor: '#000',
+        shadowOffset: { width: 1, height: 1 },
+        shadowOpacity: 0.16,
+        shadowRadius: 4,
+
+        // Shadow (Android)
+        elevation: 4,
+    },
+
+    closeIcon: {
+        position: 'absolute',
+        top: 12,
+        right: 12,
+        backgroundColor: '#F3F7FF',
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1,
+    },
+
+    durationTag: {
+        alignSelf: 'flex-start',
+        backgroundColor: '#E8F0FF',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 8,
+        marginBottom: 10,
+    },
+
+    durationText: {
+        fontSize: 12,
+        color: '#334462',
+        fontWeight: '700',
+    },
+
+    suggestionTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#1D1B20',
+        marginBottom: 8,
+    },
+
+    nameBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 12,
+    },
+
+    iconBox: {
+        height: 24,
+        width: 24,
+        borderRadius: 12,
+        backgroundColor: '#F3F7FF',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+
+    suggestionOrganizer: {
+        fontSize: 14,
+        color: '#334462',
+        fontWeight: '500',
+    },
+
+    detailRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 10,
+        marginBottom: 16,
+    },
+
+    pill: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#F4F4F4',
-        padding: 10,
-        borderRadius: 10,
-        marginBottom: 10,
-    },
-    suggestionAvatar: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        marginRight: 10,
-    },
-    suggestionTitle: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#1D1B20',
-    },
-    suggestionOrganizer: {
-        fontSize: 12,
-        color: '#666',
-    },
-    suggestionDate: {
-        fontSize: 12,
-        color: '#888',
-    },
-    viewBtn: {
-        marginLeft: 'auto',
-        backgroundColor: '#334462',
-        paddingVertical: 5,
         paddingHorizontal: 10,
-        borderRadius: 5,
+        paddingVertical: 6,
+        borderRadius: 20,
     },
+
+    pillText: {
+        fontSize: 12,
+        color: '#334462',
+    },
+
+    viewBtn: {
+        backgroundColor: '#2C3D5BF5',
+        paddingVertical: 10,
+        borderRadius: 8,
+        alignItems: 'center',
+        marginTop: 4,
+    },
+
     viewText: {
         color: '#fff',
-        fontSize: 12,
+        fontSize: 14,
+        fontWeight: '600',
     },
+
+
     quoteSection: {
         flexDirection: 'row',
         alignItems: 'center',
+        backgroundColor: '#2C3D5B',
+        padding: 25,
+        borderRadius: 50,
+        marginVertical: 20,
+        // marginHorizontal: 10,
     },
+
     quoteInput: {
         flex: 1,
-        backgroundColor: '#F4F4F4',
-        padding: 10,
+        backgroundColor: 'transparent',
+        borderColor: '#ccc',
+        borderWidth: 1,
         borderRadius: 10,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        color: '#fff',
         marginRight: 10,
     },
+
     sendBtn: {
-        backgroundColor: '#334462',
+        backgroundColor: '#fff',
         paddingVertical: 10,
         paddingHorizontal: 20,
         borderRadius: 10,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
+
     sendText: {
-        color: '#fff',
-        fontSize: 14,
-        fontWeight: '500',
+        color: '#2C3D5B',
+        fontSize: 16,
+        fontWeight: '600',
     },
+
 });
