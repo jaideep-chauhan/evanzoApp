@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
     View,
     Text,
@@ -7,6 +7,7 @@ import {
     TouchableOpacity,
     Dimensions,
     FlatList,
+    Animated,
 } from 'react-native';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import Entypo from 'react-native-vector-icons/Entypo';
@@ -81,17 +82,109 @@ const ProfileCard = ({ item }) => {
 };
 
 const ProfileCardCarousel = () => {
+    const scrollRef = useRef(null);
+    const intervalRef = useRef(null);
+    const currentIndex = useRef(0);
+    
+    // Create extended data for infinite loop
+    const extendedData = [data[data.length - 1], ...data, data[0]];
+    
+    useEffect(() => {
+        // Initial positioning to the first real item
+        setTimeout(() => {
+            if (scrollRef.current) {
+                scrollRef.current.scrollToIndex({ index: 1, animated: false });
+                currentIndex.current = 1;
+            }
+        }, 100);
+        
+        // Auto-scroll interval
+        intervalRef.current = setInterval(() => {
+            if (scrollRef.current) {
+                try {
+                    currentIndex.current += 1;
+                    
+                    // Check if we've reached the end clone
+                    if (currentIndex.current >= extendedData.length - 1) {
+                        // Reset to the first real item after showing last clone
+                        setTimeout(() => {
+                            currentIndex.current = 1;
+                            scrollRef.current.scrollToIndex({ 
+                                index: 1, 
+                                animated: false 
+                            });
+                        }, 500);
+                    } else {
+                        scrollRef.current.scrollToIndex({ 
+                            index: currentIndex.current, 
+                            animated: true 
+                        });
+                    }
+                } catch (error) {
+                    // Reset to safe index if error occurs
+                    currentIndex.current = 1;
+                    scrollRef.current.scrollToIndex({ 
+                        index: 1, 
+                        animated: false 
+                    });
+                }
+            }
+        }, 3000);
+        
+        return () => {
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+            }
+        };
+    }, [extendedData.length]);
+    
+    const handleScrollEnd = (event) => {
+        const offsetX = event.nativeEvent.contentOffset.x;
+        const index = Math.round(offsetX / (CARD_WIDTH + 10));
+        
+        if (index === 0) {
+            // If scrolled to the clone at the beginning, jump to the last real item
+            currentIndex.current = data.length;
+            scrollRef.current.scrollToIndex({ 
+                index: data.length, 
+                animated: false 
+            });
+        } else if (index === extendedData.length - 1) {
+            // If scrolled to the clone at the end, jump to the first real item
+            currentIndex.current = 1;
+            scrollRef.current.scrollToIndex({ 
+                index: 1, 
+                animated: false 
+            });
+        } else {
+            currentIndex.current = index;
+        }
+    };
+    
+    const getItemLayout = (_, index) => ({
+        length: CARD_WIDTH + 10,
+        offset: (CARD_WIDTH + 10) * index,
+        index,
+    });
+
     return (
         <View style={styles.carouselContainer}>
             <Text style={styles.sectionTitle}>You might also like</Text>
             <FlatList
-                data={data}
+                ref={scrollRef}
+                data={extendedData}
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                keyExtractor={(item) => item.id}
+                keyExtractor={(item, index) => `${item.id}_${index}`}
                 contentContainerStyle={{ paddingHorizontal: 0 }}
                 ItemSeparatorComponent={() => <View style={{ width: 10 }} />}
                 renderItem={({ item }) => <ProfileCard item={item} />}
+                onMomentumScrollEnd={handleScrollEnd}
+                onScrollToIndexFailed={() => {}}
+                getItemLayout={getItemLayout}
+                pagingEnabled={false}
+                snapToInterval={CARD_WIDTH + 10}
+                decelerationRate="fast"
             />
         </View>
     );
@@ -109,6 +202,7 @@ const styles = StyleSheet.create({
         marginLeft: 16,
         marginBottom: 16,
         color: '#1D1B20',
+        
     },
     card: {
         width: CARD_WIDTH,
@@ -123,6 +217,7 @@ const styles = StyleSheet.create({
         shadowRadius: 6,
         elevation: 3,
         boxShadow: '2px 2px 6px 0px #0000001A',
+        paddingVertical: 20,
 
     },
     ratingBadge: {
@@ -176,7 +271,7 @@ const styles = StyleSheet.create({
         alignSelf: 'center',
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 10,
+        marginBottom: 12,
     },
     locationText: {
         marginLeft: 6,
@@ -185,9 +280,10 @@ const styles = StyleSheet.create({
     },
     button: {
         backgroundColor: '#2c3a58',
-        borderRadius: 14,
-        paddingVertical: 12,
+        borderRadius: 12,
+        paddingVertical: 10,
         alignItems: 'center',
+        
     },
     buttonText: {
         color: '#fff',

@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import Video from 'react-native-video';
-import logo from '../assets/images/splashBG.mp4';
+import logo from '../assets/images/ELogo_2.mp4';
+
 
 const SplashScreen = () => {
     return (

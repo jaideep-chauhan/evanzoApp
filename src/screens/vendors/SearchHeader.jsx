@@ -13,7 +13,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
 import img from '../../assets/images/evanzoLogo.png';
-import bg from '../../assets/images/bg1.png';
+import bg from '../../assets/images/smallHeader.jpg';
 
 export default function SearchHeader() {
     const navigation = useNavigation();
@@ -21,7 +21,7 @@ export default function SearchHeader() {
 
     const placeholders = [
         'Search for location',
-        'Search for date',
+        // 'Search for date',
         'Search for category',
     ];
     const [placeholderIndex, setPlaceholderIndex] = useState(0);
@@ -61,7 +61,7 @@ export default function SearchHeader() {
                         style={[styles.iconCircle, { backgroundColor: theme.colors.lightBackground + '50' }]}
                         onPress={() => navigation.navigate('Settings')}
                     >
-                        <Icon name="settings-outline" size={25} color="#fff" />
+                        <Icon name="settings-outline" size={30} color="#fff" />
                     </TouchableOpacity>
 
                     <Image source={img} style={styles.logo} resizeMode="contain" />
@@ -70,7 +70,7 @@ export default function SearchHeader() {
                         style={[styles.iconCircle, { backgroundColor: theme.colors.lightBackground + '50' }]}
                         onPress={() => navigation.navigate('ChatList')}
                     >
-                        <Icon name="chatbubble-ellipses-outline" size={25} color="#fff" />
+                        <Icon name="chatbubble-ellipses-outline" size={30} color="#fff" />
                     </TouchableOpacity>
                 </View>
 
@@ -136,7 +136,7 @@ export default function SearchHeader() {
                                 />
                             </View>
                             <TouchableOpacity style={styles.filterIconWrapper}>
-                                <Icon name="options-outline" size={20} color="#fff" style={styles.filterIcon} />
+                                {/* <Icon name="options-outline" size={20} color="#fff" style={styles.filterIcon} /> */}
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -177,8 +177,8 @@ const styles = StyleSheet.create({
         borderRadius: 22,
     },
     logo: {
-        width: 120,
-        height: 28,
+        width: 130,
+        height: 30,
     },
     searchBarWrapper: {
         width: '100%',

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
     View,
     Text,
@@ -14,12 +14,12 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import img from '../../assets/images/dummy.png';
-import bg1 from '../../assets/images/bg1.png';
+import bg1 from '../../assets/images/smallHeader.jpg';
 import { useTheme } from '../../ThemeContext';
 import Icon2 from 'react-native-vector-icons/Feather'
 import Icon3 from 'react-native-vector-icons/Entypo'
 const { width } = Dimensions.get('window');
-const AVATAR_SIZE = 40;
+const AVATAR_SIZE = 60;
 
 export default function EventDetailView() {
     const navigation = useNavigation();
@@ -30,6 +30,10 @@ export default function EventDetailView() {
     const [showFullDesc, setShowFullDesc] = useState(false);
     const [descTruncated, setDescTruncated] = useState(false);
     const descTextRef = useRef(null);
+    const scrollViewRef = useRef(null);
+    const scrollX = useRef(0);
+    const [suggestionCards] = useState([1, 2, 3, 4]); // Extended array for continuous effect
+    const [isAutoScrolling, setIsAutoScrolling] = useState(true);
 
     const eventData = {
         title: 'Corporate Event',
@@ -70,189 +74,229 @@ export default function EventDetailView() {
         return stars;
     };
 
+    // Auto-scroll functionality for suggestion carousel
+    useEffect(() => {
+        let scrollInterval;
+        
+        if (isAutoScrolling) {
+            scrollInterval = setInterval(() => {
+                if (scrollViewRef.current) {
+                    scrollX.current += 1;
+                    scrollViewRef.current.scrollTo({
+                        x: scrollX.current,
+                        animated: false
+                    });
+                    
+                    // Reset scroll when reaching end (approximate)
+                    if (scrollX.current >= 336 * suggestionCards.length) { // 320 width + 16 gap
+                        scrollX.current = 0;
+                    }
+                }
+            }, 30); // Adjust speed here (lower = faster)
+        }
+
+        return () => {
+            if (scrollInterval) {
+                clearInterval(scrollInterval);
+            }
+        };
+    }, [suggestionCards.length, isAutoScrolling]);
+
     return (
-        <ScrollView style={styles.container}>
-            <ImageBackground source={bg1} style={styles.banner} resizeMode="cover">
-                <View style={styles.headerIcons}>
-                    <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
-                        <Icon name="arrow-back-outline" size={20} color="#fff" />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.iconBtn}>
-                        <Icon2 name="bell" size={20} color="#fff" />
-                    </TouchableOpacity>
-                </View>
-            </ImageBackground>
-
-            <View style={styles.infoCard}>
-                {/* Header Row with Title/Location on left and Icons on right */}
-                <View style={styles.headerRow}>
-                    <View style={styles.titleSection}>
-                        <Text style={styles.title}>{eventData.title}</Text>
-                        <View style={styles.locationRow}>
-                            <Icon name="location-outline" size={14} color="#334462" style={{ marginRight: 4 }} />
-                            <Text style={styles.location}>{eventData.location}</Text>
-                        </View>
-                    </View>
-                    <View style={styles.actionIcons}>
-                        <TouchableOpacity style={styles.actionBtn}>
-                            <Icon3 name="share" size={20} color="#334462" />
+        <View style={styles.container}>
+            <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                <ImageBackground source={bg1} style={styles.banner} resizeMode="cover">
+                    <View style={styles.headerIcons}>
+                        <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
+                            <Icon name="arrow-back-outline" size={20} color="#fff" />
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.actionBtn} onPress={toggleFavorite}>
-                            <Icon
-                                name={isFavorited ? "heart" : "heart-outline"}
-                                size={20}
-                                color={isFavorited ? "#e91e63" : "#334462"}
-                            />
+                        <TouchableOpacity style={styles.iconBtn}>
+                            <Icon2 name="bell" size={20} color="#fff" />
                         </TouchableOpacity>
                     </View>
-                </View>
+                </ImageBackground>
 
-                {/* Meta Information Grid */}
-                <View style={styles.metaContainer}>
-                    <View style={styles.metaColumn}>
-                        <Text style={styles.metaLabel}>Date</Text>
-                        <View style={styles.metaBox}>
-                            <Text style={styles.metaValue}>{eventData.date}</Text>
-                        </View>
-                    </View>
-                    <View style={styles.metaColumn}>
-                        <Text style={styles.metaLabel}>Duration</Text>
-                        <View style={styles.metaBox}>
-                            <Text style={styles.metaValue}>{eventData.duration} Hr</Text>
-                        </View>
-                    </View>
-                    <View style={styles.metaColumn}>
-                        <Text style={styles.metaLabel}>Time</Text>
-                        <View style={styles.metaBox}>
-                            <Text style={styles.metaValue}>{eventData.time}</Text>
-                        </View>
-                    </View>
-                    <View style={styles.metaColumn}>
-                        <Text style={styles.metaLabel}>Budget</Text>
-                        <View style={styles.metaBox}>
-                            <Text style={styles.metaValue}>{eventData.budget}</Text>
-                        </View>
-                    </View>
-                </View>
-            </View>
-
-            <View style={{ flex: 1, paddingHorizontal: 20 }}>
-                {/* About Section */}
-                <View style={styles.aboutSection}>
-                    <Text style={styles.aboutText}>About</Text>
-                    <ScrollView
-                        horizontal
-                        pagingEnabled
-                        showsHorizontalScrollIndicator={false}
-                        style={styles.carousel}
-                        contentContainerStyle={{ gap: 10 }}
-                    >
-                        {eventData.images.map((imageSrc, idx) => (
-                            <Image
-                                key={idx}
-                                source={imageSrc}
-                                style={styles.carouselImage}
-                                resizeMode="cover"
-                            />
-                        ))}
-                    </ScrollView>
-                    <Text
-                        style={styles.description}
-                        numberOfLines={showFullDesc ? undefined : 3}
-                        ellipsizeMode="tail"
-                        ref={descTextRef}
-                        onTextLayout={e => {
-                            if (!showFullDesc && e.nativeEvent.lines.length > 3 && !descTruncated) {
-                                setDescTruncated(true);
-                            }
-                        }}
-                    >
-                        {eventData.description}
-                    </Text>
-                    {descTruncated && !showFullDesc && (
-                        <TouchableOpacity onPress={() => setShowFullDesc(true)}>
-                            <Text style={styles.readMoreText}>Read more</Text>
-                        </TouchableOpacity>
-                    )}
-                    {showFullDesc && descTruncated && (
-                        <TouchableOpacity onPress={() => setShowFullDesc(false)}>
-                            <Text style={styles.readMoreText}>Show less</Text>
-                        </TouchableOpacity>
-                    )}
-
-                </View>
-
-                {/* User Info Section */}
-                <View style={styles.userInfo}>
-                    <View style={styles.userInfoBox}>
-                        <Text style={styles.userInfoTitle}>User Information</Text>
-                        <View style={styles.rating}>
-                            {renderStars(eventData.organizer.rating)}
-                            <Text style={styles.ratingText}>({eventData.organizer.reviewCount})</Text>
-                        </View>
-                    </View>
-                    <View style={styles.userInfoBox2}>
-                        <Image source={eventData.organizer.avatar} style={styles.avatar} />
-                        <Text style={styles.organizerName}>{eventData.organizer.name}</Text>
-                    </View>
-                    <Text style={styles.seeAllText}>See All</Text>
-                </View>
-
-                {/* Suggestion Section */}
-                <View style={styles.suggestionSection}>
-                    <Text style={styles.suggestionText}>You might also like</Text>
-
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.suggestionList}
-                    >
-                        {[1, 2].map((_, index) => (
-                            <View key={index} style={styles.suggestionCard}>
-                                {/* Close Button */}
-                                <TouchableOpacity style={styles.closeIcon}>
-                                    <Icon name="close" size={16} color="#334462" />
-                                </TouchableOpacity>
-
-                                {/* Duration Tag */}
-                                <View style={styles.durationTag}>
-                                    <Text style={styles.durationText}>2 Hours</Text>
-                                </View>
-
-                                {/* Title */}
-                                <Text style={styles.suggestionTitle}>Corporate Event</Text>
-
-                                {/* Organizer Info */}
-                                <View style={styles.nameBox}>
-                                    <View style={styles.iconBox}>
-                                        <Icon name="person" size={12} color="#2C3D5BF5" />
-                                    </View>
-                                    <Text style={styles.suggestionOrganizer}>Tushar Dhania</Text>
-                                </View>
-
-                                {/* Location and Date */}
-                                <View style={styles.detailRow}>
-                                    <View style={styles.pill}>
-                                        <Icon name="location-outline" size={12} color="#334462" style={{ marginRight: 4 }} />
-                                        <Text style={styles.pillText}>Ontario, Canada</Text>
-                                    </View>
-                                    <View style={styles.pill}>
-                                        <Icon name="calendar-outline" size={12} color="#334462" style={{ marginRight: 4 }} />
-                                        <Text style={styles.pillText}>October 30, 2023</Text>
-                                    </View>
-                                </View>
-
-                                {/* View Button */}
-                                <TouchableOpacity style={styles.viewBtn}>
-                                    <Text style={styles.viewText}>View</Text>
-                                </TouchableOpacity>
+                <View style={styles.infoCard}>
+                    {/* Header Row with Title/Location on left and Icons on right */}
+                    <View style={styles.headerRow}>
+                        <View style={styles.titleSection}>
+                            <Text style={styles.title}>{eventData.title}</Text>
+                            <View style={styles.locationRow}>
+                                <Icon name="location-outline" size={14} color="#334462" style={{ marginRight: 4 }} />
+                                <Text style={styles.location}>{eventData.location}</Text>
                             </View>
-                        ))}
-                    </ScrollView>
+                        </View>
+                        <View style={styles.actionIcons}>
+                            <TouchableOpacity style={styles.actionBtn}>
+                                <Icon3 name="share" size={20} color="#334462" />
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.actionBtn} onPress={toggleFavorite}>
+                                <Icon
+                                    name={isFavorited ? "heart" : "heart-outline"}
+                                    size={20}
+                                    color={isFavorited ? "#e91e63" : "#334462"}
+                                />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    {/* Meta Information Grid */}
+                    <View style={styles.metaContainer}>
+                        <View style={styles.metaColumn}>
+                            <Text style={styles.metaLabel}>Date</Text>
+                            <View style={styles.metaBox}>
+                                <Text style={styles.metaValue}>{eventData.date}</Text>
+                            </View>
+                        </View>
+                        <View style={styles.metaColumn}>
+                            <Text style={styles.metaLabel}>Duration</Text>
+                            <View style={styles.metaBox}>
+                                <Text style={styles.metaValue}>{eventData.duration} Hr</Text>
+                            </View>
+                        </View>
+                        <View style={styles.metaColumn}>
+                            <Text style={styles.metaLabel}>Time</Text>
+                            <View style={styles.metaBox}>
+                                <Text style={styles.metaValue}>{eventData.time}</Text>
+                            </View>
+                        </View>
+                        <View style={styles.metaColumn}>
+                            <Text style={styles.metaLabel}>Budget</Text>
+                            <View style={styles.metaBox}>
+                                <Text style={styles.metaValue}>{eventData.budget}</Text>
+                            </View>
+                        </View>
+                    </View>
                 </View>
 
+                <View style={{ flex: 1, paddingHorizontal: 20 }}>
+                    {/* About Section */}
+                    <View style={styles.aboutSection}>
+                        <Text style={styles.aboutText}>About</Text>
+                        <ScrollView
+                            horizontal
+                            pagingEnabled
+                            showsHorizontalScrollIndicator={false}
+                            style={styles.carousel}
+                            contentContainerStyle={{ gap: 10 }}
+                        >
+                            {eventData.images.map((imageSrc, idx) => (
+                                <Image
+                                    key={idx}
+                                    source={imageSrc}
+                                    style={styles.carouselImage}
+                                    resizeMode="cover"
+                                />
+                            ))}
+                        </ScrollView>
+                        <Text
+                            style={styles.description}
+                            numberOfLines={showFullDesc ? undefined : 3}
+                            ellipsizeMode="tail"
+                            ref={descTextRef}
+                            onTextLayout={e => {
+                                if (!showFullDesc && e.nativeEvent.lines.length > 3 && !descTruncated) {
+                                    setDescTruncated(true);
+                                }
+                            }}
+                        >
+                            {eventData.description}
+                        </Text>
+                        {descTruncated && !showFullDesc && (
+                            <TouchableOpacity onPress={() => setShowFullDesc(true)}>
+                                <Text style={styles.readMoreText}>Read more</Text>
+                            </TouchableOpacity>
+                        )}
+                        {showFullDesc && descTruncated && (
+                            <TouchableOpacity onPress={() => setShowFullDesc(false)}>
+                                <Text style={styles.readMoreText}>Show less</Text>
+                            </TouchableOpacity>
+                        )}
 
-                {/* Quote Section */}
+                    </View>
+
+                    {/* User Info Section */}
+                    <View style={styles.userInfo}>
+                        <View style={styles.userInfoContent}>
+                            <View style={styles.leftSection}>
+                                <Image source={eventData.organizer.avatar} style={styles.avatar} />
+                                <Text style={styles.organizerName}>{eventData.organizer.name}</Text>
+                            </View>
+                            <View style={styles.rating}>
+                                {renderStars(eventData.organizer.rating)}
+                                <Text style={styles.ratingText}>({eventData.organizer.reviewCount})</Text>
+                            </View>
+                        </View>
+                    </View>
+
+                    {/* Suggestion Section */}
+                    <View style={styles.suggestionSection}>
+                        <Text style={styles.suggestionText}>You might also like</Text>
+
+                        <ScrollView
+                            ref={scrollViewRef}
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.suggestionList}
+                            scrollEventThrottle={16}
+                            onTouchStart={() => setIsAutoScrolling(false)}
+                            onTouchEnd={() => setTimeout(() => setIsAutoScrolling(true), 3000)}
+                            onScrollBeginDrag={() => setIsAutoScrolling(false)}
+                            onScrollEndDrag={() => setTimeout(() => setIsAutoScrolling(true), 3000)}
+                        >
+                            {/* Duplicate cards for infinite scroll effect */}
+                            {[...suggestionCards, ...suggestionCards].map((_, index) => (
+                                <View key={index} style={styles.suggestionCard}>
+                                    {/* Close Button */}
+                                    <TouchableOpacity style={styles.closeIcon}>
+                                        <Icon name="close" size={16} color="#334462" />
+                                    </TouchableOpacity>
+
+                                    {/* Duration Tag */}
+                                    <View style={styles.durationTag}>
+                                        <Text style={styles.durationText}>2 Hours</Text>
+                                    </View>
+
+                                    {/* Title */}
+                                    <Text style={styles.suggestionTitle}>Corporate Event</Text>
+
+                                    {/* Organizer Info */}
+                                    <View style={styles.nameBoxContainer}>
+                                        <View style={styles.nameBox}>
+                                            <View style={styles.iconBox}>
+                                                <Icon name="person" size={12} color="#2C3D5BF5" />
+                                            </View>
+                                            <Text style={styles.suggestionOrganizer}>Tushar Dhania</Text>
+                                        </View>
+                                    </View>
+
+                                    {/* Location and Date */}
+                                    <View style={styles.detailRow}>
+                                        <View style={styles.pill}>
+                                            <Icon name="location-outline" size={12} color="#334462" style={{ marginRight: 4 }} />
+                                            <Text style={styles.pillText}>Ontario, Canada</Text>
+                                        </View>
+                                        <View style={styles.pill}>
+                                            <Icon name="calendar-outline" size={12} color="#334462" style={{ marginRight: 4 }} />
+                                            <Text style={styles.pillText}>October 30, 2023</Text>
+                                        </View>
+                                    </View>
+
+                                    {/* View Button */}
+                                    <TouchableOpacity style={styles.viewBtn}>
+                                        <Text style={styles.viewText}>View</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            ))}
+                        </ScrollView>
+                    </View>
+
+
+                </View>
+            </ScrollView>
+
+            {/* Quote Section - Sticky Bottom */}
+            <View style={styles.quoteSectionContainer}>
                 <View style={styles.quoteSection}>
                     <TextInput
                         style={styles.quoteInput}
@@ -265,9 +309,8 @@ export default function EventDetailView() {
                         <Text style={styles.sendText}>Send</Text>
                     </TouchableOpacity>
                 </View>
-
             </View>
-        </ScrollView>
+        </View>
     );
 }
 
@@ -275,7 +318,10 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#fff',
-        paddingBottom: 100,
+    },
+
+    scrollContent: {
+        flex: 1,
     },
     banner: {
         height: 250,
@@ -350,14 +396,16 @@ const styles = StyleSheet.create({
     metaContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginBottom: 20,
-        gap: 0,
+        // marginBottom: 20,
+        gap: 8,
         paddingHorizontal: 0,
-        marginHorizontal: -4, // compensate for child margin
     },
     metaColumn: {
         flex: 1,
-        marginHorizontal: 4,
+        // marginHorizontal: 4,
+        justifyContent: 'center',
+        alignItems: 'center',
+
     },
     metaLabel: {
         fontSize: 10,
@@ -372,12 +420,12 @@ const styles = StyleSheet.create({
     metaBox: {
         backgroundColor: '#F8FAFC',
         borderRadius: 12,
-        paddingVertical: 8,
+        paddingVertical: 24,
         paddingHorizontal: 2,
         alignItems: 'center',
         justifyContent: 'center',
         width: '100%',
-        minHeight: 32,
+        minHeight: 40,
         borderWidth: 1,
         borderColor: '#E2E8F0',
         shadowColor: '#000',
@@ -440,67 +488,47 @@ const styles = StyleSheet.create({
         alignSelf: 'flex-start',
     },
     userInfo: {
-        // borderWidth: 1,
         borderRadius: 10,
         marginBottom: 20,
-        backgroundColor: '#fff', // Required for shadow to appear properly
-
-        // iOS shadow
+        backgroundColor: '#fff',
         shadowColor: '#000',
         shadowOffset: { width: 1, height: 1 },
         shadowOpacity: 0.16,
         shadowRadius: 4,
-        paddingHorizontal: 7,
-        paddingVertical: 5,
-        // Android shadow (elevation)
         elevation: 2,
+        paddingVertical: 20,
+        paddingHorizontal: 15,
     },
 
-    userInfoBox: {
+    userInfoContent: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 10,
-        paddingVertical: 10,
-        // marginBottom: 4,
     },
-    userInfoBox2: {
+
+    leftSection: {
         flexDirection: 'row',
         alignItems: 'center',
-        // justifyContent: 'space-between',
-        paddingHorizontal: 10,
-        paddingVertical: 10,
-        // marginBottom: 4,
+        flex: 1,
     },
-    userInfoTitle: {
-        fontSize: 8,
-        fontWeight: '500',
-        color: '#000000',
-        marginBottom: 4,
-    },
+
     avatar: {
         width: AVATAR_SIZE,
         height: AVATAR_SIZE,
         borderRadius: AVATAR_SIZE / 2,
-        marginRight: 10,
+        marginRight: 12,
     },
+
     organizerName: {
         fontSize: 16,
         fontWeight: '700',
         color: '#1D1B20',
+        flex: 1,
     },
-    seeAllText: {
-        fontSize: 10,
-        color: '#003A9B',
-        fontWeight: '500',
-        marginBottom: 4,
-        alignSelf: 'flex-end',
-        paddingHorizontal: 10,
-    },
+
     rating: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginLeft: 10,
     },
     ratingText: {
         fontSize: 12,
@@ -516,9 +544,6 @@ const styles = StyleSheet.create({
         color: '#111',
         marginBottom: 10,
     },
-    suggestionSection: {
-        marginBottom: 20,
-    },
 
     suggestionText: {
         fontSize: 14,
@@ -532,6 +557,7 @@ const styles = StyleSheet.create({
         paddingLeft: 10,
         paddingRight: 10,
         gap: 16,
+        marginBottom: 100, // Added extra space for sticky quote section
     },
 
     suggestionCard: {
@@ -587,11 +613,16 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
 
+    nameBoxContainer: {
+        width: '100%',
+        alignItems: 'center',
+        paddingVertical: 12,
+    },
+
     nameBox: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        marginBottom: 12,
     },
 
     iconBox: {
@@ -647,14 +678,28 @@ const styles = StyleSheet.create({
     },
 
 
+    quoteSectionContainer: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: 'rgba(255, 255, 255, 0.42)',
+        backdropFilter: 'blur(10px)',
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 5,
+    },
+
     quoteSection: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#2C3D5B',
-        padding: 25,
+        padding: 16,
         borderRadius: 50,
-        marginVertical: 20,
-        // marginHorizontal: 10,
     },
 
     quoteInput: {

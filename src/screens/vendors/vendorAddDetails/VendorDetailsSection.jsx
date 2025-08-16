@@ -45,6 +45,7 @@ export default function VendorDetailsSection({
     onSend,
     description = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do ds ds ds d sdsjhhs hdsi dsiucds ud hdsic dsiguc cudicgdsuc sguicds csbui chduicgdsuicds gcudis cdusicgdisucgdsug cdsgchddchd",
     reviews = [],
+    hideMessageSection = false,
 }) {
     const [descExpanded, setDescExpanded] = useState(false);
     return (
@@ -94,33 +95,24 @@ export default function VendorDetailsSection({
 
                 <ProfileCardCarousel />
 
-                {/* Message Input */}
-                <View style={styles.card}>
-                    <Text style={styles.sectionTitle}>Send a Message</Text>
-                    <View style={styles.messageBox}>
-                        <Icon name="chatbubble-outline" size={20} color="#1E2B4F" style={styles.inputIcon} />
-                        <TextInput
-                            placeholder="Type your message..."
-                            placeholderTextColor="#888"
-                            style={styles.input}
-                        />
-                        <TouchableOpacity style={styles.sendBtn} onPress={onSend}>
-                            <Icon name="send" size={18} color="#fff" />
-                        </TouchableOpacity>
+                {/* Message Input - Only show if not hidden */}
+                {!hideMessageSection && (
+                    <View style={styles.card}>
+                        <Text style={styles.sectionTitle}>Send a Message</Text>
+                        <View style={styles.messageBox}>
+                            <Icon name="chatbubble-outline" size={20} color="#1E2B4F" style={styles.inputIcon} />
+                            <TextInput
+                                placeholder="Type your message..."
+                                placeholderTextColor="#888"
+                                style={styles.input}
+                            />
+                            <TouchableOpacity style={styles.sendBtn} onPress={onSend}>
+                                <Icon name="send" size={18} color="#fff" />
+                            </TouchableOpacity>
+                        </View>
                     </View>
-                </View>
+                )}
 
-                {/* Review Section
-                <View style={styles.card}>
-                    <View style={styles.rowBetween}>
-                        <Text style={styles.sectionTitle}>Reviews</Text>
-                        <Text style={styles.linkText}>See all</Text>
-                    </View>
-
-                    <View style={{ marginTop: 14 }}>
-                        {renderReviews(reviews, styles)}
-                    </View>
-                </View> */}
             </View>
         </ScrollView>
     );
@@ -144,6 +136,7 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
         elevation: 3,
         boxShadow: '1px 1px 4px 0px #00000029',
+        
 
     },
     sectionTitle: {
@@ -171,8 +164,8 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
     },
     photo: {
-        width: 264,
-        height: 158,
+        width: 380,
+        height: 230,
         borderRadius: 12,
         opacity: 1,
     },

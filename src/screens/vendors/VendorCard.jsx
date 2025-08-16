@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
     View,
     Text,
@@ -6,14 +6,15 @@ import {
     Image,
     TouchableOpacity,
     ScrollView,
+    Animated,
+    Dimensions,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/Ionicons';
+import { StarIcon, MapPinIcon, Squares2X2Icon, CurrencyDollarIcon, TagIcon } from 'react-native-heroicons/solid';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
-import locationIcon from '../../assets/icons/location.png';
-import cateogiry from '../../assets/icons/cateogiry.png';
-import date from '../../assets/icons/date.png'
 import theme from '../../theme';
+
+const { width } = Dimensions.get('window');
 
 export default function VendorCard({
     initials,
@@ -25,20 +26,80 @@ export default function VendorCard({
     extraCount,
     location,
     onChatPress,
-    isChat = true
-
+    isChat = true,
+    isFocused = false
 }) {
     const navigation = useNavigation();
     const theme = useTheme();
+
+    // Carousel logic for infinite auto-scroll
+    const extendedImages = [images[images.length - 1], ...images, images[0]];
+    const scrollRef = useRef(null);
+    const currentIndex = useRef(1);
+    const intervalRef = useRef(null);
+    const carouselWidth = (width - 48) * 0.65; // 65% of available width for carousel
+
+    useEffect(() => {
+        // Initial positioning
+        setTimeout(() => {
+            if (scrollRef.current) {
+                scrollRef.current.scrollTo({ x: carouselWidth * 1, animated: false });
+            }
+        }, 10);
+
+        // Auto-scroll interval only when focused
+        if (isFocused) {
+            intervalRef.current = setInterval(() => {
+                if (scrollRef.current) {
+                    currentIndex.current += 1;
+                    scrollRef.current.scrollTo({ x: carouselWidth * currentIndex.current, animated: true });
+                }
+            }, 2500);
+        }
+
+        return () => {
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+            }
+        };
+    }, [carouselWidth, isFocused]);
+
+    const handleScrollEnd = (e) => {
+        const offsetX = e.nativeEvent.contentOffset.x;
+        const slideWidth = carouselWidth;
+        let idx = Math.round(offsetX / slideWidth);
+
+        if (idx === extendedImages.length - 1) {
+            currentIndex.current = 1;
+            if (scrollRef.current) {
+                scrollRef.current.scrollTo({ x: slideWidth, animated: false });
+            }
+        } else if (idx === 0) {
+            currentIndex.current = images.length;
+            if (scrollRef.current) {
+                scrollRef.current.scrollTo({ x: slideWidth * images.length, animated: false });
+            }
+        } else {
+            currentIndex.current = idx;
+        }
+    };
 
     const handleCardPress = () => {
         navigation.navigate('VendorAddDetail', { vendor: { initials, name, type, rating, description, images, extraCount, location } });
     };
 
+    const handleSeeMorePress = () => {
+        navigation.navigate('VendorAddDetail', { 
+            vendor: { initials, name, type, rating, description, images, extraCount, location },
+            scrollToOffer: true 
+        });
+    };
+
     // Reusable filter item for icon+label
-    const FilterItem = ({ icon, label }) => (
+    const FilterItem = ({ icon: Icon, label }) => (
         <View style={styles.filterItemEnhanced}>
-            <Image source={icon} style={styles.filterIconEnhanced} />
+            <Icon size={15} color={theme.colors.primary} strokeWidth={2} />
             <Text style={[styles.filterText, { color: theme.colors.primary }]}>{label}</Text>
         </View>
     );
@@ -55,21 +116,67 @@ export default function VendorCard({
                 <View style={styles.nameBlock}>
                     <Text style={[styles.vendorName, { color: theme.colors.primary }]}>{name}</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersRow} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
-                        <FilterItem icon={cateogiry} label={type} />
-                        {location && <FilterItem icon={locationIcon} label={location} />}
+                        <FilterItem icon={Squares2X2Icon} label={type} />
+                        {location && <FilterItem icon={MapPinIcon} label={location} />}
                     </ScrollView>
                 </View>
                 <View style={[styles.ratingBox, { backgroundColor: theme.colors.tabBackground }]}>
-                    <Icon name="star" size={16} color={theme.colors.primary} />
+                    <StarIcon size={14} color={theme.colors.primary} />
                     <Text style={[styles.ratingText, { color: theme.colors.primary }]}>{rating}</Text>
                 </View>
             </View>
 
             {/* Card */}
             <View style={styles.card}>
+                {/* Offer Section */}
+                <View style={styles.offerRow}>
+                    <View style={styles.offerTextContainer}>
+                        <Text style={styles.offerText}>Offer:</Text>
+                        <View style={styles.offerItem}>
+                            <Text style={[styles.offerLabel, { color: theme.colors.textSecondary }]}>Amount spent</Text>
+                            <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
+                                <CurrencyDollarIcon size={12} color={theme.colors.primary} />
+                                <Text style={styles.offerValue}>150</Text>
+                            </View>
+                        </View>
+                        <View style={styles.offerItem}>
+                            <Text style={[styles.offerLabel, { color: theme.colors.textSecondary }]}>Percentage</Text>
+                            <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
+                                <TagIcon size={12} color={theme.colors.primary} />
+                                <Text style={styles.offerValue}>10%</Text>
+                            </View>
+                        </View>
+                    </View>
+                    <TouchableOpacity style={styles.seeMoreBox} onPress={handleSeeMorePress}>
+                        <Text style={[styles.seeMore, { color: theme.colors.primary }]}>SEE MORE</Text>
+                    </TouchableOpacity>
+                </View>
+
                 {/* Images Grid */}
                 <View style={styles.imageGrid}>
-                    <Image source={images[0]} style={styles.largeImage} />
+                    {/* Carousel for large image */}
+                    <View style={styles.carouselWrapper}>
+                        <Animated.ScrollView
+                            ref={scrollRef}
+                            horizontal
+                            pagingEnabled
+                            showsHorizontalScrollIndicator={false}
+                            style={styles.carouselContainer}
+                            scrollEventThrottle={16}
+                            onMomentumScrollEnd={handleScrollEnd}
+                            snapToInterval={carouselWidth}
+                            decelerationRate="fast"
+                        >
+                            {extendedImages.map((img, idx) => (
+                                <Image
+                                    key={idx}
+                                    source={img}
+                                    style={[styles.carouselImage, { width: carouselWidth }]}
+                                    resizeMode="cover"
+                                />
+                            ))}
+                        </Animated.ScrollView>
+                    </View>
                     <View style={styles.smallImages}>
                         <Image source={images[1]} style={styles.smallImage} />
                         <View style={styles.overlayWrapper}>
@@ -158,13 +265,8 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         paddingHorizontal: 10,
         paddingVertical: 4,
-        marginRight: 0
-    },
-    filterIconEnhanced: {
-        width: 15,
-        height: 15,
-        marginRight: 6,
-        resizeMode: 'contain',
+        marginRight: 0,
+        gap: 6,
     },
     filterText: {
         fontSize: 10,
@@ -204,14 +306,22 @@ const styles = StyleSheet.create({
         gap: 8,
         marginBottom: 12,
     },
-    largeImage: {
-        width: '60%',
+    carouselWrapper: {
+        width: '65%',
         height: 200,
         borderRadius: 12,
+        overflow: 'hidden',
+    },
+    carouselContainer: {
+        height: 200,
+    },
+    carouselImage: {
+        height: 200,
         backgroundColor: '#F2F2F2',
     },
     smallImages: {
         flex: 1,
+        width: '35%',
         justifyContent: 'space-between',
         gap: 8,
     },
@@ -264,5 +374,60 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontWeight: '600',
         fontSize: 12,
+    },
+    // Offer Section Styles
+    offerRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
+        paddingBottom: 8,
+    },
+    offerTextContainer: {
+        flexDirection: 'row',
+        gap: 10,
+        alignItems: 'center',
+    },
+    offerText: {
+        fontSize: 12,
+        fontWeight: '400',
+        color: '#344562',
+        marginRight: 4,
+    },
+    offerItem: {
+        alignItems: 'center',
+    },
+    offerLabel: {
+        fontSize: 10,
+        fontWeight: '400',
+        marginBottom: 6,
+    },
+    offerValueContainer: {
+        backgroundColor: '#F4F4F4',
+        borderRadius: 30,
+        flexDirection: 'row',
+        gap: 4,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+    },
+    offerValue: {
+        fontSize: 10,
+        fontWeight: '500',
+        color: '#2C3D5BF5',
+    },
+    seeMoreBox: {
+        height: 20,
+        width: 60,
+        borderRadius: 10,
+        alignSelf: 'center',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    seeMore: {
+        fontWeight: '500',
+        fontSize: 8,
+        textDecorationLine: 'underline',
     },
 });

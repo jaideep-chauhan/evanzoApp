@@ -124,9 +124,9 @@ export default PreSavedMessage;
 
 const styles = StyleSheet.create({
     container: {
-        // backgroundColor: '#fff',
+        backgroundColor: '#fff',
         borderRadius: 12,
-        // padding: 20,
+        padding: 20,
         width: '100%',
         maxWidth: 600,
         alignSelf: 'center',

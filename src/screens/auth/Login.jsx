@@ -16,26 +16,28 @@ import {
 import logo from '../../assets/images/evanzoLogo.png';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
-
+import appple from '../../assets/images/apple.png';
+import google from '../../assets/images/google.png';
+import facebook from '../../assets/images/fb.png';
 
 const { height } = Dimensions.get('window');
-
 export default function LoginScreen() {
     const navigation = useNavigation();
     const theme = useTheme();
 
     return (
-        <ImageBackground source={theme.images.background} style={styles.bg} resizeMode="cover" edges={['left', 'right', 'bottom']}>
-            <View style={[styles.overlay, { backgroundColor: theme.colors.overlay, opacity: theme.colors.overlayOpacity }]} />
-            <SafeAreaView style={styles.safe}>
-                <KeyboardAvoidingView
-                    style={{ flex: 1 }}
-                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                    keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-                >
+        <ImageBackground source={theme.images.background} style={styles.bg} resizeMode="cover">
+            <View style={styles.container}>
+                <SafeAreaView style={styles.safe} edges={['top']}>
                     <View style={styles.topSection}>
                         <Image source={logo} style={styles.logo} resizeMode="contain" />
                     </View>
+                </SafeAreaView>
+                <KeyboardAvoidingView
+                    style={styles.keyboardView}
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+                >
                     <View style={styles.bottomSectionWrapper}>
                         <View style={styles.bottomSectionShadow} />
                         <View style={styles.bottomSection}>
@@ -45,7 +47,7 @@ export default function LoginScreen() {
                                 showsVerticalScrollIndicator={false}
                             >
                                 <Text style={[styles.loginTitle, { color: theme.colors.primary }]}>Login</Text>
-                                <Text style={[styles.subtitle, { color: theme.colors.primary }]}>Welcome back, you’ve been missed!</Text>
+                                <Text style={[styles.subtitle, { color: theme.colors.primary }]}>Welcome back, you've been missed!</Text>
                                 <View style={styles.inputGroup}>
                                     <Text style={[styles.label, { color: theme.colors.primary }]}>Phone Number or Email</Text>
                                     <TextInput
@@ -78,15 +80,21 @@ export default function LoginScreen() {
                                     <View style={styles.divider} />
                                 </View>
                                 <View style={styles.socialRow}>
-                                    <TouchableOpacity style={[styles.socialIcon, { backgroundColor: theme.colors.primary }]}><Text style={styles.iconText}>G</Text></TouchableOpacity>
-                                    <TouchableOpacity style={[styles.socialIcon, { backgroundColor: theme.colors.primary }]}><Text style={styles.iconText}>f</Text></TouchableOpacity>
-                                    <TouchableOpacity style={[styles.socialIcon, { backgroundColor: theme.colors.primary }]}><Text style={styles.iconText}></Text></TouchableOpacity>
+                                    <TouchableOpacity style={styles.socialIconButton}>
+                                        <Image source={google} style={styles.socialIconImage} resizeMode="contain" />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={styles.socialIconButton}>
+                                        <Image source={facebook} style={styles.socialIconImage} resizeMode="contain" />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={styles.socialIconButton}>
+                                        <Image source={appple} style={styles.socialIconImage} resizeMode="contain" />
+                                    </TouchableOpacity>
                                 </View>
                             </ScrollView>
                         </View>
                     </View>
                 </KeyboardAvoidingView>
-            </SafeAreaView>
+            </View>
         </ImageBackground>
     );
 }
@@ -96,25 +104,22 @@ const styles = StyleSheet.create({
         flex: 1,
         width: '100%',
         height: '100%',
-        justifyContent: 'center',
-        alignItems: 'center',
     },
-    overlay: {
-        ...StyleSheet.absoluteFillObject,
-        zIndex: 1,
-    },
-    safe: {
+    container: {
         flex: 1,
         width: '100%',
         height: '100%',
+    },
+    safe: {
         backgroundColor: 'transparent',
         zIndex: 2,
     },
+    keyboardView: {
+        flex: 1,
+    },
     topSection: {
         alignItems: 'center',
-        justifyContent: 'flex-start',
         marginTop: 32,
-        marginBottom: 0,
         height: 90,
     },
     logo: {
@@ -148,6 +153,7 @@ const styles = StyleSheet.create({
         shadowRadius: 12,
         elevation: 8,
         minHeight: '60%',
+        paddingBottom: Platform.OS === 'ios' ? 34 : 20,
         zIndex: 1,
     },
     scrollContainer: {
@@ -263,5 +269,24 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 30,
         fontWeight: '700',
+    },
+    socialIconButton: {
+        borderRadius: 14,
+        width: 54,
+        height: 54,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#fff',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: '#f0f0f0',
+    },
+    socialIconImage: {
+        width: 28,
+        height: 28,
     },
 });

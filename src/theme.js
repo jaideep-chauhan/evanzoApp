@@ -18,7 +18,7 @@ const theme = {
         heading: '#49454F',
     },
     images: {
-        background: require('./assets/images/bg.png'),
+        background: require('./assets/images/newBg.jpg'),
     },
     spacing: {
         xs: 4,

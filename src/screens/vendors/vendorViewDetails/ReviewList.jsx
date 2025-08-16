@@ -160,7 +160,8 @@ export default function ReviewList({ navigation }) {
                 );
             case 'REVIEWS':
                 return (
-                    <View>
+
+                    <View style={{ paddingHorizontal: 20 }}>
                         {/* Write Review */}
                         <TouchableOpacity style={styles.writeReview} onPress={() => navigation.navigate('Review')}>
                             <Text style={styles.writeText}>Write a review</Text>
@@ -239,13 +240,13 @@ export default function ReviewList({ navigation }) {
             {/* Tab Content */}
             {renderTabContent()}
             {/* Write Review */}
-            <TouchableOpacity
+            {/* <TouchableOpacity
                 onPress={() => navigation.navigate('Review')}
                 style={styles.writeReview}
             >
                 <Text style={styles.writeText}>Write a review</Text>
                 <Icon name="chevron-right" size={16} color="#000" />
-            </TouchableOpacity>
+            </TouchableOpacity> */}
 
             {/* Review List */}
             {/* {dummyReviews.map((review) => (
@@ -285,8 +286,7 @@ export default function ReviewList({ navigation }) {
 
 const styles = StyleSheet.create({
     container: {
-        paddingHorizontal: 20,
-        paddingTop: 10,
+        // paddingTop: 10,
         backgroundColor: '#fff',
         flex: 1,
     },
@@ -295,13 +295,15 @@ const styles = StyleSheet.create({
         justifyContent: 'space-around',
         paddingVertical: 10,
         backgroundColor: '#fff',
-        marginBottom: 20,
+        marginBottom: 10,
+        paddingHorizontal: 20,
+
     },
     tab: {
         backgroundColor: '#F4F4F4',
         justifyContent: 'center',
         alignItems: 'center',
-        paddingVertical: 8,
+        paddingVertical: 10,
         // paddingHorizontal: 16,
         borderRadius: 20,
     },
@@ -310,7 +312,7 @@ const styles = StyleSheet.create({
     },
     tabText: {
         color: '#2C3D5BF5',
-        fontSize: 12,
+        fontSize: 14,
         fontWeight: 600,
     },
     activeText: {
@@ -322,15 +324,16 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         borderWidth: 1,
         borderColor: '#7C8594',
-        padding: 6,
+        padding: 8,
         // backgroundColor: '#f5f5f5',
         paddingLeft: 18,
         borderRadius: 10,
         marginBottom: 20,
+        paddingHorizontal: 20,
     },
     writeText: {
         fontWeight: '500',
-        fontSize: 10,
+        fontSize: 12,
     },
     card: {
         backgroundColor: '#fff',
@@ -405,6 +408,8 @@ const styles = StyleSheet.create({
     adsContainer: {
         flex: 1,
         marginTop: 10,
+
+
     },
     chatContainer: {
         flex: 1,

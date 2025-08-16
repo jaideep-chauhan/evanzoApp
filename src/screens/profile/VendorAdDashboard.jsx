@@ -137,11 +137,11 @@ export default function VendorAdDashboard({ navigation }) {
                     </ImageBackground>
                     <View style={styles.header}>
                         <TouchableOpacity>
-                            <Icon name="settings-outline" size={24} color="#fff" />
+                            <Icon name="settings-outline" size={30} color="#fff" />
                         </TouchableOpacity>
                         <View style={{ width: 32 }} />
                         <TouchableOpacity>
-                            <Icon name="chatbubble-ellipses-outline" size={24} color="#fff" />
+                            <Icon name="chatbubble-ellipses-outline" size={30} color="#fff" />
                         </TouchableOpacity>
                     </View>
                     {/* Profile Info inside blue box */}
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
         borderBottomLeftRadius: 32,
         borderBottomRightRadius: 32,
         paddingBottom: 24,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 50,
+        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 40,
         paddingHorizontal: 0,
         alignItems: 'center',
         minHeight: 100,
@@ -369,7 +369,7 @@ const styles = StyleSheet.create({
     },
     profileSection: {
         alignItems: 'center',
-        marginTop: 6,
+        marginTop: 10,
         zIndex: 2,
     },
     nameRow: {
@@ -445,7 +445,7 @@ const styles = StyleSheet.create({
     },
     createAdBox: {
         margin: 8,
-        paddingVertical: 40,
+        paddingVertical: 30,
         paddingHorizontal: 18,
         minHeight: 80,
         backgroundColor: '#F2F2F2',
@@ -457,8 +457,10 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.16,
         shadowOffset: { width: 1, height: 1 },
         shadowRadius: 13,
-        marginBottom: 30,
+        marginBottom: 20,
         marginTop: 20,
+        boxShadow: '1px 1px 10px 0px #00000019',
+
     },
     createAdInnerVertical: {
         alignItems: 'center',
@@ -477,15 +479,15 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        gap: 6,
+        gap: 14,
         marginTop: 0,
         width: '100%',
         paddingHorizontal: 10,
-        marginBottom: 12,
+        marginBottom: 18,
     },
     activeTab: {
         paddingHorizontal: 0,
-        paddingVertical: 10,
+        paddingVertical: 13,
         borderRadius: 22,
         flex: 1,
         alignItems: 'center',
@@ -499,7 +501,7 @@ const styles = StyleSheet.create({
     inactiveTab: {
         backgroundColor: '#E7F0FF',
         paddingHorizontal: 0,
-        paddingVertical: 10,
+        paddingVertical: 13,
         borderRadius: 22,
         flex: 1,
         alignItems: 'center',
@@ -518,7 +520,7 @@ const styles = StyleSheet.create({
     modalContent: {
         backgroundColor: '#fff',
         borderRadius: 18,
-        width: '100%',
+        width: '90%',
         maxWidth: 400,
         position: 'relative',
         elevation: 10,

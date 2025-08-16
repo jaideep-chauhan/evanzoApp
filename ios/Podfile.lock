@@ -1255,6 +1255,27 @@ PODS:
     - React-jsiexecutor
     - React-RCTFBReactNativeSpec
     - ReactCommon/turbomodule/core
+  - react-native-blur (4.4.1):
+    - DoubleConversion
+    - glog
+    - hermes-engine
+    - RCT-Folly (= 2024.11.18.00)
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - Yoga
   - react-native-date-picker (5.0.12):
     - DoubleConversion
     - glog
@@ -1939,6 +1960,49 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
+  - RNSVG (15.12.0):
+    - DoubleConversion
+    - glog
+    - hermes-engine
+    - RCT-Folly (= 2024.11.18.00)
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - RNSVG/common (= 15.12.0)
+    - Yoga
+  - RNSVG/common (15.12.0):
+    - DoubleConversion
+    - glog
+    - hermes-engine
+    - RCT-Folly (= 2024.11.18.00)
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - Yoga
   - RNVectorIcons (10.2.0):
     - DoubleConversion
     - glog
@@ -2004,6 +2068,7 @@ DEPENDENCIES:
   - React-logger (from `../node_modules/react-native/ReactCommon/logger`)
   - React-Mapbuffer (from `../node_modules/react-native/ReactCommon`)
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
+  - "react-native-blur (from `../node_modules/@react-native-community/blur`)"
   - react-native-date-picker (from `../node_modules/react-native-date-picker`)
   - "react-native-document-picker (from `../node_modules/@react-native-documents/picker`)"
   - react-native-image-picker (from `../node_modules/react-native-image-picker`)
@@ -2048,6 +2113,7 @@ DEPENDENCIES:
   - "RNGoogleSignin (from `../node_modules/@react-native-google-signin/google-signin`)"
   - RNLocalize (from `../node_modules/react-native-localize`)
   - RNScreens (from `../node_modules/react-native-screens`)
+  - RNSVG (from `../node_modules/react-native-svg`)
   - RNVectorIcons (from `../node_modules/react-native-vector-icons`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
@@ -2138,6 +2204,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon"
   React-microtasksnativemodule:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/microtasks"
+  react-native-blur:
+    :path: "../node_modules/@react-native-community/blur"
   react-native-date-picker:
     :path: "../node_modules/react-native-date-picker"
   react-native-document-picker:
@@ -2226,6 +2294,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-localize"
   RNScreens:
     :path: "../node_modules/react-native-screens"
+  RNSVG:
+    :path: "../node_modules/react-native-svg"
   RNVectorIcons:
     :path: "../node_modules/react-native-vector-icons"
   Yoga:
@@ -2275,6 +2345,7 @@ SPEC CHECKSUMS:
   React-logger: 88de26ac2b4ae3ebf55108f4be299f967151d0ec
   React-Mapbuffer: b6619632c9800e300a9dcfb5139009416cec6392
   React-microtasksnativemodule: e99c1d7791f5e8d5be370b78e02433e64d2391d8
+  react-native-blur: b37343d4df1af48a17444156b674b26d5aec2425
   react-native-date-picker: d23f0a313972fe5336540d55380366367f8a2a51
   react-native-document-picker: ead1d62b121e66ab5edbf6fcfdbfb58e81662b55
   react-native-image-picker: fb2d12cb86e0b3e58caee9aa660ddbd5742c841c
@@ -2319,6 +2390,7 @@ SPEC CHECKSUMS:
   RNGoogleSignin: 52671dbd79e1706d62ecbb46c74a12596eec20eb
   RNLocalize: 3d7ad7ba552f88675462007d61571a0f6632ee6f
   RNScreens: 7a4eb8a0fe4dc5537e10559ddedc4709a9cd0561
+  RNSVG: 12aacafb22cbe17f3f1ee1947d7b63cbbc3b9107
   RNVectorIcons: 14a0c42f16a26bcc3e79a19bc1c5718284b1d469
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
   Yoga: dea3cbe52f93ef8f722493a505c1add295fe7fba

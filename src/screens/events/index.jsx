@@ -1,11 +1,14 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
     StyleSheet,
     ScrollView,
     View,
     Text,
+    TextInput,
     TouchableOpacity,
+    Animated,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/Ionicons';
 import Tabs from '../vendors/Tabs';
 import EventCard from './EventCard';
 import LocationSearchModal from '../vendors/LocationSearchModal';
@@ -25,6 +28,8 @@ export default function Events() {
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [activeTab, setActiveTab] = useState(2); // Category tab is default
+    const scrollY = useRef(new Animated.Value(0)).current;
+    const [isScrolled, setIsScrolled] = useState(false);
 
     const events = [
         {
@@ -184,10 +189,26 @@ export default function Events() {
 
     return (
         <View style={[styles.safe, { backgroundColor: '#fff' }]}>
-            <ScrollView
+            <Animated.ScrollView
                 style={{ flex: 1, backgroundColor: '#fff' }}
                 contentContainerStyle={{ paddingBottom: 24 }}
                 showsVerticalScrollIndicator={false}
+                scrollEventThrottle={16}
+                onScroll={Animated.event(
+                    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+                    {
+                        useNativeDriver: false,
+                        listener: (event) => {
+                            const offsetY = event.nativeEvent.contentOffset.y;
+                            // Show sticky header when scrolled past header
+                            if (offsetY > 180 && !isScrolled) {
+                                setIsScrolled(true);
+                            } else if (offsetY <= 180 && isScrolled) {
+                                setIsScrolled(false);
+                            }
+                        }
+                    }
+                )}
             >
                 <SearchHeader />
                 <View style={{ marginBottom: 10 }}>
@@ -263,7 +284,47 @@ export default function Events() {
                         </View>
                     ))
                 )}
-            </ScrollView>
+            </Animated.ScrollView>
+            
+            {/* Sticky Search Bar */}
+            {isScrolled && (
+                <Animated.View 
+                    style={[
+                        styles.stickyHeader,
+                        {
+                            opacity: scrollY.interpolate({
+                                inputRange: [150, 200],
+                                outputRange: [0, 1],
+                                extrapolate: 'clamp',
+                            }),
+                            transform: [{
+                                translateY: scrollY.interpolate({
+                                    inputRange: [150, 200],
+                                    outputRange: [-50, 0],
+                                    extrapolate: 'clamp',
+                                })
+                            }]
+                        }
+                    ]}
+                >
+                    <View style={styles.stickyContent}>
+                        <View style={[styles.stickySearchBar, { backgroundColor: theme.colors.primary + '10' }]}>
+                            <Icon name="search-outline" size={20} color={theme.colors.primary} style={styles.stickySearchIcon} />
+                            <TextInput
+                                style={styles.stickyInput}
+                                placeholder="Search events..."
+                                placeholderTextColor={theme.colors.primary + '80'}
+                            />
+                        </View>
+                        <TouchableOpacity
+                            style={[styles.stickyChatIcon, { backgroundColor: theme.colors.primary }]}
+                            onPress={() => navigation.navigate('ChatList')}
+                        >
+                            <Icon name="chatbubble-ellipses-outline" size={24} color="#fff" />
+                        </TouchableOpacity>
+                    </View>
+                </Animated.View>
+            )}
 
             {/* Location Search Modal */}
             <LocationSearchModal
@@ -366,5 +427,54 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#666',
         textAlign: 'center',
+    },
+    stickyHeader: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: '#fff',
+        paddingTop: 50,
+        paddingBottom: 10,
+        paddingHorizontal: 15,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 5,
+        zIndex: 100,
+    },
+    stickyContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    stickySearchBar: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 25,
+        paddingHorizontal: 15,
+        height: 45,
+    },
+    stickySearchIcon: {
+        marginRight: 8,
+    },
+    stickyInput: {
+        flex: 1,
+        fontSize: 14,
+        color: '#333',
+    },
+    stickyChatIcon: {
+        width: 45,
+        height: 45,
+        borderRadius: 22.5,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+        elevation: 3,
     },
 });

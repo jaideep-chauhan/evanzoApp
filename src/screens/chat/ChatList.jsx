@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        // justifyContent: 'space-between',
+        justifyContent: 'center',
         paddingHorizontal: 20,
         paddingVertical: 16,
         backgroundColor: '#f6f8fa',
@@ -191,18 +191,19 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
         borderBottomWidth: 1,
         borderBottomColor: '#E5E7EB',
+        position: 'relative',
     },
     backButton: {
         padding: 5,
-
+        position: 'absolute',
+        left: 20,
+        zIndex: 1,
     },
     headerTitle: {
         fontSize: 30,
         fontWeight: '600',
         color: '#2C3D5B',
-        flex: 1,
         textAlign: 'center',
-        marginHorizontal: 20,
     },
     headerAction: {
         padding: 5,

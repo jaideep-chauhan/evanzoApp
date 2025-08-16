@@ -1,14 +1,21 @@
 import React from 'react';
-import { View, TouchableOpacity, Text, StyleSheet, Platform, Image } from 'react-native';
+import { View, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import Ionicon from 'react-native-vector-icons/Ionicons';
+import LinearGradient from 'react-native-linear-gradient';
+import { 
+    UserGroupIcon,
+    CalendarDaysIcon,
+    UserIcon
+} from 'react-native-heroicons/outline';
+import {
+    UserGroupIcon as UserGroupIconSolid,
+    CalendarDaysIcon as CalendarDaysIconSolid,
+    UserIcon as UserIconSolid
+} from 'react-native-heroicons/solid';
 import Vendor from '../screens/vendors';
 import Events from '../screens/events';
 import Profile from '../screens/profile/index';
 import { useTheme } from '../ThemeContext';
-import icon1 from '../assets/icons/tabNav1.png';
-import icon2 from '../assets/icons/tabNav2.png';
-import icon3 from '../assets/icons/tabNav3.png';
 
 
 
@@ -18,7 +25,17 @@ function CustomTabBar({ state, descriptors, navigation }) {
     const theme = useTheme();
     return (
         <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center', pointerEvents: 'box-none' }}>
-            <View style={styles.blurContainer} />
+            <LinearGradient
+                colors={[
+                    'rgba(255, 255, 255, 0)',
+                    'rgba(255, 255, 255, 0.3)',
+                    'rgba(255, 255, 255, 0.6)',
+                    'rgba(255, 255, 255, 0.85)'
+                ]}
+                locations={[0, 0.4, 0.7, 1]}
+                style={styles.gradientOverlay}
+                pointerEvents="none"
+            />
             <View style={styles.tabBarContainer}>
                 {state.routes.map((route, index) => {
                     const { options } = descriptors[route.key];
@@ -30,19 +47,32 @@ function CustomTabBar({ state, descriptors, navigation }) {
                                 : route.name;
 
 
-                    let iconName;
                     const isFocused = state.index === index;
-                    switch (route.name) {
-                        case 'Vendors':
-                            iconName = icon1;
-                            break;
-                        case 'Profile':
-                            iconName = icon3;
-                            break;
-                        case 'Events':
-                            iconName = icon2;
-                            break;
-                    }
+                    
+                    const getIcon = () => {
+                        const iconProps = {
+                            size: 24,
+                            color: isFocused ? '#fff' : theme.colors.primary,
+                            strokeWidth: 2
+                        };
+                        
+                        switch (route.name) {
+                            case 'Vendors':
+                                return isFocused ? 
+                                    <UserGroupIconSolid {...iconProps} /> : 
+                                    <UserGroupIcon {...iconProps} />;
+                            case 'Events':
+                                return isFocused ? 
+                                    <CalendarDaysIconSolid {...iconProps} /> : 
+                                    <CalendarDaysIcon {...iconProps} />;
+                            case 'Profile':
+                                return isFocused ? 
+                                    <UserIconSolid {...iconProps} /> : 
+                                    <UserIcon {...iconProps} />;
+                            default:
+                                return null;
+                        }
+                    };
 
                     const onPress = () => {
                         const event = navigation.emit({
@@ -73,15 +103,7 @@ function CustomTabBar({ state, descriptors, navigation }) {
                                     isFocused ? styles.iconWrapperFocused : null,
                                 ]}
                             >
-                                <Image
-                                    source={iconName}
-                                    style={{
-                                        width: '100%',
-                                        height: '100%',
-                                        resizeMode: 'contain',
-                                        tintColor: isFocused ? '#fff' : theme.colors.primary,
-                                    }}
-                                />
+                                {getIcon()}
                             </View>
                             <Text
                                 style={[
@@ -101,34 +123,33 @@ function CustomTabBar({ state, descriptors, navigation }) {
 }
 
 const styles = StyleSheet.create({
-    blurContainer: {
+    gradientOverlay: {
         position: 'absolute',
         left: 0,
         right: 0,
         bottom: 0,
-        height: 120, // Adjust to match or slightly exceed tabBarContainer height
-        borderRadius: 40,
-        marginHorizontal: 0,
-        marginBottom: 0,
+        height: 120,
+        width: '100%',
         zIndex: 0,
-        overflow: 'hidden',
-        backgroundColor: 'rgba(248, 248, 248, 0.3)',
+        ...Platform.select({
+            ios: {
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
+            },
+        }),
     },
     tabBarContainer: {
         flexDirection: 'row',
         backgroundColor: '#F4F4F4',
         borderRadius: 40,
-        marginHorizontal: 30,
+        marginHorizontal: 50,
         marginBottom: 20,
         position: 'relative',
-        elevation: 5,
-        shadowColor: '#ffffffff',
-        shadowOpacity: 0.9,
-        shadowOffset: { width: 0, height: -1 },
-        shadowRadius: 5,
+        elevation: 0,
         overflow: 'hidden',
         alignItems: 'center',
         justifyContent: 'space-around',
+        zIndex: 1,
     },
     tabItem: {
         flex: 1,
@@ -150,16 +171,15 @@ const styles = StyleSheet.create({
         elevation: 6,
     },
     iconWrapper: {
-        width: 26,
-        height: 26,
-        borderRadius: 12,
+        width: 28,
+        height: 28,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: 'transparent',
-        marginVertical: 6,
+        marginVertical: 4,
     },
     iconWrapperFocused: {
-        backgroundColor: '#2C3D5B',
+        backgroundColor: 'transparent',
     },
     tabLabel: {
         fontSize: 14,

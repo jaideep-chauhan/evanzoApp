@@ -32,6 +32,19 @@ export default function EventAdCard({
     const safeAttachments = Array.isArray(attachments) ? attachments : [];
 
     const handleCardPress = () => {
+        // Create event object from props
+        const event = {
+            title,
+            location,
+            duration,
+            date,
+            status,
+            statusColor,
+            profile,
+            description,
+            attachments: safeAttachments,
+        };
+
         navigation.navigate('EventDetailView', { event });
     };
 

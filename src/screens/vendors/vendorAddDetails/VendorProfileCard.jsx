@@ -8,7 +8,7 @@ import {
     Dimensions,
     ImageBackground,
 } from 'react-native';
-import bg1 from '../../../assets/images/bg1.png';
+import bg1 from '../../../assets/images/smallHeader.jpg';
 
 import Icon from 'react-native-vector-icons/Ionicons';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';

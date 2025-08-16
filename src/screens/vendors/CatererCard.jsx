@@ -111,7 +111,7 @@ const CatererCard = () => {
                             </View>
                         </View>
                         <View style={styles.seeMoreBox}>
-                            <Text style={[styles.seeMore, { color: theme.colors.white }]}>SEE MORE</Text>
+                            <Text style={[styles.seeMore, { color: theme.colors.primary }]}>SEE MORE</Text>
                         </View>
                     </View>
 
@@ -289,11 +289,12 @@ const styles = StyleSheet.create({
         alignSelf: 'flex-end',
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#2C3D5B'
+        // backgroundColor: '#2C3D5B'
     },
     seeMore: {
         fontWeight: '500',
         fontSize: 8,
+        textDecorationLine: 'underline',
     },
     carouselContainer: {
         marginBottom: 16,
