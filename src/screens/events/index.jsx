@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
     StyleSheet,
     ScrollView,
@@ -7,6 +7,8 @@ import {
     TextInput,
     TouchableOpacity,
     Animated,
+    RefreshControl,
+    ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import Tabs from '../vendors/Tabs';
@@ -30,6 +32,8 @@ export default function Events() {
     const [activeTab, setActiveTab] = useState(2); // Category tab is default
     const scrollY = useRef(new Animated.Value(0)).current;
     const [isScrolled, setIsScrolled] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
     const events = [
         {
@@ -38,6 +42,8 @@ export default function Events() {
             location: 'Ontario, Canada',
             duration: '2 hours',
             date: 'October 30, 2023',
+            budget: '1500',
+            guests: '150',
             organizer: {
                 name: 'Rachel Swan',
                 avatar: 'https://randomuser.me/api/portraits/women/1.jpg',
@@ -55,6 +61,8 @@ export default function Events() {
             location: 'Toronto, ON',
             duration: '6 hours',
             date: 'November 15, 2023',
+            budget: '5000',
+            guests: '200',
             organizer: {
                 name: 'Emily Johnson',
                 avatar: 'https://randomuser.me/api/portraits/women/2.jpg',
@@ -72,6 +80,8 @@ export default function Events() {
             location: 'Vancouver, BC',
             duration: '4 hours',
             date: 'December 5, 2023',
+            budget: '800',
+            guests: '50',
             organizer: {
                 name: 'Mike Chen',
                 avatar: 'https://randomuser.me/api/portraits/men/3.jpg',
@@ -89,6 +99,8 @@ export default function Events() {
             location: 'Montreal, QC',
             duration: '8 hours',
             date: 'January 20, 2024',
+            budget: '10000',
+            guests: '500',
             organizer: {
                 name: 'Sarah Mitchell',
                 avatar: 'https://randomuser.me/api/portraits/women/4.jpg',
@@ -187,6 +199,35 @@ export default function Events() {
         // navigation.navigate('GiveQuote', { eventId: event.id });
     };
 
+    // Initial loading effect
+    useEffect(() => {
+        // Simulate initial data loading
+        setTimeout(() => {
+            setIsLoading(false);
+        }, 1500); // Simulate 1.5 second initial load
+    }, []);
+
+    const onRefresh = React.useCallback(() => {
+        setRefreshing(true);
+        
+        // Simulate fetching new data
+        setTimeout(() => {
+            // Here you would typically:
+            // 1. Fetch new events from your API
+            // 2. Update the events state with new data
+            // 3. Reset any filters if needed
+            
+            console.log('Refreshing events...');
+            
+            // For now, just reset filters as an example
+            setSelectedLocation(null);
+            setSelectedCategory(null);
+            setSelectedDateRange(null);
+            
+            setRefreshing(false);
+        }, 2000); // Simulate 2 second refresh
+    }, []);
+
     return (
         <View style={[styles.safe, { backgroundColor: '#fff' }]}>
             <Animated.ScrollView
@@ -194,6 +235,15 @@ export default function Events() {
                 contentContainerStyle={{ paddingBottom: 24 }}
                 showsVerticalScrollIndicator={false}
                 scrollEventThrottle={16}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        tintColor={theme.colors.primary}
+                        colors={[theme.colors.primary]}
+                        progressBackgroundColor="#fff"
+                    />
+                }
                 onScroll={Animated.event(
                     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
                     {
@@ -219,6 +269,14 @@ export default function Events() {
                     />
                 </View>
 
+                {/* Loading Spinner below tabs */}
+                {isLoading ? (
+                    <View style={styles.loaderContainer}>
+                        <ActivityIndicator size="large" color={theme.colors.primary} />
+                        <Text style={[styles.loadingText, { color: theme.colors.primary }]}>Loading events...</Text>
+                    </View>
+                ) : (
+                    <>
                 {/* Location Filter Indicator */}
                 {selectedLocation && (
                     <View style={[styles.locationIndicator, { borderColor: theme.colors.primary + '33' }]}>
@@ -283,6 +341,8 @@ export default function Events() {
                             />
                         </View>
                     ))
+                )}
+                    </>
                 )}
             </Animated.ScrollView>
             
@@ -427,6 +487,18 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#666',
         textAlign: 'center',
+    },
+    loaderContainer: {
+        flex: 1,
+        minHeight: 400,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 50,
+    },
+    loadingText: {
+        marginTop: 12,
+        fontSize: 16,
+        fontWeight: '500',
     },
     stickyHeader: {
         position: 'absolute',

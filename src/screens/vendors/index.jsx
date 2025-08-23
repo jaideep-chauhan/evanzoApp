@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useRef } from 'react';
-import { Animated } from 'react-native';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { Animated, RefreshControl, ActivityIndicator } from 'react-native';
 import {
     StyleSheet,
     SafeAreaView,
@@ -33,8 +33,9 @@ export default function Vendor() {
     const [focusedCardIndex, setFocusedCardIndex] = useState(0);
     const scrollViewRef = useRef(null);
     const scrollY = useRef(new Animated.Value(0)).current;
-    const [isScrolled, setIsScrolled] = useState(false);
     const [activeTab, setActiveTab] = useState(null); // No tab active by default
+    const [refreshing, setRefreshing] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
     const vendors = [
         {
@@ -158,6 +159,48 @@ export default function Vendor() {
         setSelectedCategory(category);
     };
 
+    // Create smooth interpolations for sticky header with better ranges
+    const stickyHeaderOpacity = scrollY.interpolate({
+        inputRange: [100, 150, 160],
+        outputRange: [0, 0.5, 1],
+        extrapolate: 'clamp',
+    });
+
+    const stickyHeaderTranslateY = scrollY.interpolate({
+        inputRange: [100, 160],
+        outputRange: [-50, 0],
+        extrapolate: 'clamp',
+    });
+
+    // Initial loading effect
+    useEffect(() => {
+        // Simulate initial data loading
+        setTimeout(() => {
+            setIsLoading(false);
+        }, 1500); // Simulate 1.5 second initial load
+    }, []);
+
+    const onRefresh = React.useCallback(() => {
+        setRefreshing(true);
+        
+        // Simulate fetching new data
+        setTimeout(() => {
+            // Here you would typically:
+            // 1. Fetch new vendors from your API
+            // 2. Update the vendors state with new data
+            // 3. Reset any filters if needed
+            
+            console.log('Refreshing vendors...');
+            
+            // For now, just reset filters as an example
+            setSelectedLocation(null);
+            setSelectedCategory(null);
+            setActiveTab(null);
+            
+            setRefreshing(false);
+        }, 2000); // Simulate 2 second refresh
+    }, []);
+
     return (
         <View style={[styles.safe]}>
             <Animated.ScrollView
@@ -166,22 +209,24 @@ export default function Vendor() {
                 contentContainerStyle={[styles.contentContainer, { backgroundColor: undefined }]}
                 showsVerticalScrollIndicator={false}
                 scrollEventThrottle={16}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        tintColor={theme.colors.primary}
+                        colors={[theme.colors.primary]}
+                        progressBackgroundColor="#fff"
+                    />
+                }
                 onScroll={Animated.event(
                     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
                     {
-                        useNativeDriver: false,
+                        useNativeDriver: true,
                         listener: (event) => {
                             const offsetY = event.nativeEvent.contentOffset.y;
                             const cardHeight = 420;
                             const currentIndex = Math.floor(offsetY / cardHeight);
                             setFocusedCardIndex(Math.max(0, currentIndex));
-                            
-                            // Show sticky header when scrolled past header
-                            if (offsetY > 180 && !isScrolled) {
-                                setIsScrolled(true);
-                            } else if (offsetY <= 180 && isScrolled) {
-                                setIsScrolled(false);
-                            }
                         }
                     }
                 )}
@@ -189,7 +234,7 @@ export default function Vendor() {
                 <View style={styles.headerWrapper} >
                     <SearchHeader />
                     <Tabs
-                        tabs={['Location', 'Pre Save', 'Category']}
+                        tabs={['Location', 'Quick Message', 'Category']}
                         onTabPress={handleTabPress}
                         defaultActive={activeTab}
                     />
@@ -197,6 +242,14 @@ export default function Vendor() {
 
                 {/* <CatererCard /> */}
 
+                {/* Loading Spinner below tabs */}
+                {isLoading ? (
+                    <View style={styles.loaderContainer}>
+                        <ActivityIndicator size="large" color={theme.colors.primary} />
+                        <Text style={[styles.loadingText, { color: theme.colors.primary }]}>Loading vendors...</Text>
+                    </View>
+                ) : (
+                    <>
                 {/* Location Filter Indicator */}
                 {selectedLocation && (
                     <View style={[styles.filterIndicator, { backgroundColor: '#f0f4ff', borderColor: theme.colors.primary + '33' }]}>
@@ -256,29 +309,23 @@ export default function Vendor() {
                         />
                     ))
                 )}
+                    </>
+                )}
             </Animated.ScrollView>
-            
+
             {/* Sticky Search Bar */}
-            {isScrolled && (
-                <Animated.View 
-                    style={[
-                        styles.stickyHeader,
-                        {
-                            opacity: scrollY.interpolate({
-                                inputRange: [150, 200],
-                                outputRange: [0, 1],
-                                extrapolate: 'clamp',
-                            }),
-                            transform: [{
-                                translateY: scrollY.interpolate({
-                                    inputRange: [150, 200],
-                                    outputRange: [-50, 0],
-                                    extrapolate: 'clamp',
-                                })
-                            }]
-                        }
-                    ]}
-                >
+            <Animated.View
+                style={[
+                    styles.stickyHeader,
+                    {
+                        opacity: stickyHeaderOpacity,
+                        transform: [
+                            { translateY: stickyHeaderTranslateY }
+                        ],
+                    }
+                ]}
+                pointerEvents="box-none"
+            >
                     <View style={styles.stickyContent}>
                         <View style={[styles.stickySearchBar, { backgroundColor: theme.colors.primary + '10' }]}>
                             <Icon name="search-outline" size={20} color={theme.colors.primary} style={styles.stickySearchIcon} />
@@ -296,7 +343,6 @@ export default function Vendor() {
                         </TouchableOpacity>
                     </View>
                 </Animated.View>
-            )}
 
             {/* Location Search Modal */}
             <LocationSearchModal
@@ -396,6 +442,18 @@ const styles = StyleSheet.create({
         color: '#666',
         textAlign: 'center',
     },
+    loaderContainer: {
+        flex: 1,
+        minHeight: 400,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 50,
+    },
+    loadingText: {
+        marginTop: 12,
+        fontSize: 16,
+        fontWeight: '500',
+    },
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.5)',
@@ -430,14 +488,16 @@ const styles = StyleSheet.create({
         right: 0,
         backgroundColor: '#fff',
         paddingTop: 50,
-        paddingBottom: 10,
+        paddingBottom: 12,
         paddingHorizontal: 15,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 5,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.12,
+        shadowRadius: 8,
+        elevation: 8,
         zIndex: 100,
+        borderBottomWidth: 0.5,
+        borderBottomColor: 'rgba(0,0,0,0.05)',
     },
     stickyContent: {
         flexDirection: 'row',
@@ -450,7 +510,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         borderRadius: 25,
         paddingHorizontal: 15,
-        height: 45,
+        height: 46,
+        borderWidth: 1,
+        borderColor: 'rgba(44, 61, 91, 0.08)',
     },
     stickySearchIcon: {
         marginRight: 8,
@@ -461,15 +523,15 @@ const styles = StyleSheet.create({
         color: '#333',
     },
     stickyChatIcon: {
-        width: 45,
-        height: 45,
-        borderRadius: 22.5,
+        width: 46,
+        height: 46,
+        borderRadius: 23,
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-        elevation: 3,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.15,
+        shadowRadius: 5,
+        elevation: 5,
     },
 });

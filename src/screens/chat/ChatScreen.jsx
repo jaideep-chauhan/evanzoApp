@@ -11,6 +11,7 @@ import {
     Platform,
     StatusBar,
     Alert,
+    ImageBackground,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import MessageStatus from './MessageStatus';
@@ -162,7 +163,7 @@ export default function ChatScreen({ route, navigation }) {
 
         return (
             <View style={[styles.messageContainer, isMe ? styles.myMessage : styles.theirMessage]}>
-                <View style={[styles.messageBubble, isMe ? [styles.myBubble, { backgroundColor: theme.colors.primary }] : styles.theirBubble]}>
+                <View style={[styles.messageBubble, isMe ? [styles.myBubble] : styles.theirBubble]}>
                     <Text style={[styles.messageText, isMe ? styles.myText : [styles.theirText, { color: theme.colors.primary }]]}>
                         {item.text}
                     </Text>
@@ -196,7 +197,7 @@ export default function ChatScreen({ route, navigation }) {
     };
 
     return (
-        <View style={[styles.container, { backgroundColor: '#f6f8fa', flex: 1 }]}>
+        <View style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor={theme.colors.primary} />
             {/* Header */}
             <View style={[styles.header, { backgroundColor: theme.colors.primary }]}>
@@ -229,7 +230,11 @@ export default function ChatScreen({ route, navigation }) {
             </View>
 
             {/* Messages List */}
-            <View style={{ flex: 1, marginBottom: 70 }}>
+            <ImageBackground
+                source={require('../../assets/images/chatBG.jpg')}
+                style={styles.messagesList}
+                resizeMode="cover"
+            >
                 <FlatList
                     ref={flatListRef}
                     data={messages}
@@ -240,21 +245,21 @@ export default function ChatScreen({ route, navigation }) {
                     showsVerticalScrollIndicator={false}
                     ListFooterComponent={renderTypingIndicator}
                 />
-            </View>
+            </ImageBackground>
 
-            {/* Input Bar */}
+            {/* Sticky Input Bar */}
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
             >
-                <View style={[styles.inputContainer, { position: 'absolute', left: 0, right: 0, bottom: 10, zIndex: 10 }]}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={styles.inputSectionContainer}>
+                    <View style={styles.inputSection}>
                         <View style={styles.inputBar}>
                             <TouchableOpacity style={styles.attachButton}>
                                 <Icon name="add" size={24} color="#8B95A5" />
                             </TouchableOpacity>
                             <TextInput
-                                style={[styles.textInput, { color: theme.colors.primary }]}
+                                style={styles.textInput}
                                 placeholder="Type a message..."
                                 placeholderTextColor="#8B95A5"
                                 value={newMessage}
@@ -366,6 +371,7 @@ const styles = StyleSheet.create({
     messagesContainer: {
         paddingVertical: 20,
         paddingHorizontal: 15,
+        paddingBottom: 100,
     },
     messageContainer: {
         marginVertical: 2,
@@ -384,11 +390,12 @@ const styles = StyleSheet.create({
         marginVertical: 2,
     },
     myBubble: {
-        backgroundColor: '#2C3D5B',
+        backgroundColor: '#E9F1FF',
+        // backgroundColor: '#2C3D5B',
         borderBottomRightRadius: 5,
     },
     theirBubble: {
-        backgroundColor: '#fff',
+        backgroundColor: '#E9F1FF',
         borderBottomLeftRadius: 5,
         elevation: 1,
         shadowColor: '#000',
@@ -401,7 +408,7 @@ const styles = StyleSheet.create({
         lineHeight: 20,
     },
     myText: {
-        color: '#fff',
+        color: '#2C3D5B',
     },
     theirText: {
         color: '#2C3D5B',
@@ -443,21 +450,32 @@ const styles = StyleSheet.create({
         backgroundColor: '#8B95A5',
         marginHorizontal: 2,
     },
-    inputContainer: {
-        backgroundColor: '#fff',
+    inputSectionContainer: {
+        position: 'absolute',
+        bottom: 15,
+        left: 0,
+        right: 0,
         paddingHorizontal: 15,
         paddingVertical: 10,
-        borderTopWidth: 1,
-        borderTopColor: '#e3e8f0',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 5,
+    },
+    inputSection: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
     },
     inputBar: {
         flex: 1,
         flexDirection: 'row',
-        alignItems: 'flex-end',
-        backgroundColor: '#f6f8fa',
+        alignItems: 'center',
+        backgroundColor: '#EEF2F5',
         borderRadius: 25,
         paddingHorizontal: 15,
-        paddingVertical: 8,
+        paddingVertical: 10,
         maxHeight: 100,
     },
     attachButton: {
@@ -469,29 +487,17 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#2C3D5B',
         maxHeight: 80,
-        paddingVertical: 8,
+        paddingVertical: 0,
     },
     sendButton: {
         width: 44,
         height: 44,
         borderRadius: 22,
+        backgroundColor: '#EEF2F5',
         justifyContent: 'center',
         alignItems: 'center',
-        marginLeft: 10,
-        backgroundColor: '#e3e8f0',
-        borderWidth: 1.5,
-        borderColor: '#d1d5db',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
-        elevation: 4,
     },
     sendButtonActive: {
         backgroundColor: '#2C3D5B',
-        borderColor: '#2C3D5B',
-        shadowColor: '#2C3D5B',
-        shadowOpacity: 0.25,
-        elevation: 6,
     },
 });

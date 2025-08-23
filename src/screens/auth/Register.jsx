@@ -9,9 +9,13 @@ import {
     ScrollView,
     KeyboardAvoidingView,
     Platform,
+    Image,
 } from 'react-native';
 import { useTheme } from '../../ThemeContext';
 import { useNavigation } from '@react-navigation/native';
+import appple from '../../assets/images/apple.png';
+import google from '../../assets/images/google.png';
+import facebook from '../../assets/images/fb.png';
 
 
 export default function Register() {
@@ -132,9 +136,15 @@ export default function Register() {
                     </View>
 
                     <View style={styles.socialRow}>
-                        <TouchableOpacity style={[styles.socialIcon, { backgroundColor: theme.colors.primary }]}><Text style={styles.iconText}>G</Text></TouchableOpacity>
-                        <TouchableOpacity style={[styles.socialIcon, { backgroundColor: theme.colors.primary }]}><Text style={styles.iconText}>f</Text></TouchableOpacity>
-                        <TouchableOpacity style={[styles.socialIcon, { backgroundColor: theme.colors.primary }]}><Text style={styles.iconText}></Text></TouchableOpacity>
+                        <TouchableOpacity style={styles.socialIconButton}>
+                            <Image source={google} style={styles.socialIconImage} resizeMode="contain" />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.socialIconButton}>
+                            <Image source={facebook} style={styles.socialIconImage} resizeMode="contain" />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.socialIconButton}>
+                            <Image source={appple} style={styles.socialIconImage} resizeMode="contain" />
+                        </TouchableOpacity>
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -211,6 +221,17 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 18,
     },
+    loginText: {
+        color: '#333',
+        fontSize: 16,
+        fontWeight: '700',
+    },
+    orText: {
+        textAlign: 'center',
+        fontSize: 16,
+        marginBottom: 0,
+        fontWeight: '500',
+    },
     dividerRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -226,24 +247,26 @@ const styles = StyleSheet.create({
     socialRow: {
         flexDirection: 'row',
         justifyContent: 'center',
+        paddingHorizontal: 12,
         gap: 16,
     },
-    socialIcon: {
+    socialIconButton: {
         borderRadius: 14,
         width: 54,
         height: 54,
         alignItems: 'center',
         justifyContent: 'center',
-        marginHorizontal: 8,
+        backgroundColor: '#fff',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.07,
-        shadowRadius: 3,
-        elevation: 1,
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: '#f0f0f0',
     },
-    iconText: {
-        color: '#fff',
-        fontSize: 24,
-        fontWeight: '700',
+    socialIconImage: {
+        width: 28,
+        height: 28,
     },
 });

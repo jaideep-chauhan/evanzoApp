@@ -2,7 +2,7 @@ import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import LinearGradient from 'react-native-linear-gradient';
-import { 
+import {
     UserGroupIcon,
     CalendarDaysIcon,
     UserIcon
@@ -10,7 +10,8 @@ import {
 import {
     UserGroupIcon as UserGroupIconSolid,
     CalendarDaysIcon as CalendarDaysIconSolid,
-    UserIcon as UserIconSolid
+    UserIcon as UserIconSolid,
+    // ClipboardCheckIcon as ClipboardCheckIconSolid
 } from 'react-native-heroicons/solid';
 import Vendor from '../screens/vendors';
 import Events from '../screens/events';
@@ -48,26 +49,26 @@ function CustomTabBar({ state, descriptors, navigation }) {
 
 
                     const isFocused = state.index === index;
-                    
+
                     const getIcon = () => {
                         const iconProps = {
                             size: 24,
                             color: isFocused ? '#fff' : theme.colors.primary,
                             strokeWidth: 2
                         };
-                        
+
                         switch (route.name) {
                             case 'Vendors':
-                                return isFocused ? 
-                                    <UserGroupIconSolid {...iconProps} /> : 
+                                return isFocused ?
+                                    <UserGroupIconSolid {...iconProps} /> :
                                     <UserGroupIcon {...iconProps} />;
                             case 'Events':
-                                return isFocused ? 
-                                    <CalendarDaysIconSolid {...iconProps} /> : 
+                                return isFocused ?
+                                    <CalendarDaysIconSolid {...iconProps} /> :
                                     <CalendarDaysIcon {...iconProps} />;
                             case 'Profile':
-                                return isFocused ? 
-                                    <UserIconSolid {...iconProps} /> : 
+                                return isFocused ?
+                                    <UserIconSolid {...iconProps} /> :
                                     <UserIcon {...iconProps} />;
                             default:
                                 return null;

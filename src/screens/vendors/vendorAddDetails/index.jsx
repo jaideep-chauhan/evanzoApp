@@ -1,12 +1,10 @@
-import React, { useRef } from 'react'
+import React, { useRef, useState } from 'react'
 import VendorProfileCard from './VendorProfileCard';
 // Removed SafeAreaView
 import { ScrollView, StyleSheet, View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import img from '../../../assets/images/dummy.png';
 import VendorDetailsSection from './VendorDetailsSection';
 import { useRoute } from '@react-navigation/native';
-import Icon from 'react-native-vector-icons/Ionicons';
-import { useTheme } from '../../../ThemeContext';
 
 const dummyReviews = [
     {
@@ -35,12 +33,17 @@ const dummyReviews = [
 
 export default function VendorChat({ navigation }) {
     const route = useRoute();
-    const theme = useTheme();
     const scrollViewRef = useRef(null);
     const offerSectionRef = useRef(null);
+    const [quoteText, setQuoteText] = useState('');
 
     const scrollToOffer = route.params?.scrollToOffer;
     const vendor = route.params?.vendor;
+
+    const handleSendQuote = () => {
+        console.log('Sending quote:', quoteText);
+        setQuoteText('');
+    };
 
     // Set initial scroll position based on scrollToOffer flag
     const initialScrollY = scrollToOffer ? 350 : 0;
@@ -78,18 +81,18 @@ export default function VendorChat({ navigation }) {
                     </View>
                 </ScrollView>
 
-                {/* Sticky Send Message Section */}
-                <View style={[styles.messageContainer, { backgroundColor: theme.colors.background || '#FCFAFA' }]}>
-                    <Text style={styles.sectionTitle}>Send a Message</Text>
-                    <View style={styles.messageBox}>
-                        <Icon name="chatbubble-outline" size={20} color="#1E2B4F" style={styles.inputIcon} />
+                {/* Quote Section - Sticky Bottom */}
+                <View style={styles.quoteSectionContainer}>
+                    <View style={styles.quoteSection}>
                         <TextInput
-                            placeholder="Type your message..."
-                            placeholderTextColor="#888"
-                            style={styles.input}
+                            style={styles.quoteInput}
+                            placeholder="Give a quote..."
+                            placeholderTextColor="#ccc"
+                            value={quoteText}
+                            onChangeText={setQuoteText}
                         />
-                        <TouchableOpacity style={[styles.sendBtn, { backgroundColor: theme.colors.primary || '#1E2B4F' }]} onPress={() => console.log('Send message')}>
-                            <Icon name="send" size={18} color="#fff" />
+                        <TouchableOpacity style={styles.sendBtn} onPress={handleSendQuote}>
+                            <Text style={styles.sendText}>Send</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -109,55 +112,51 @@ const styles = StyleSheet.create({
     scrollView: {
         flex: 1,
     },
-    messageContainer: {
+    quoteSectionContainer: {
         position: 'absolute',
-        bottom: Platform.OS === 'ios' ? 0 : 0,
+        bottom: 10,
         left: 0,
         right: 0,
-        backgroundColor: '#FCFAFA',
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        padding: 16,
-        paddingBottom: Platform.OS === 'ios' ? 24 : 16,
+        backgroundColor: 'rgba(255, 255, 255, 0.42)',
+        backdropFilter: 'blur(10px)',
+        paddingHorizontal: 20,
+        paddingVertical: 10,
         shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
         shadowOpacity: 0.1,
-        shadowOffset: { width: 0, height: -4 },
-        shadowRadius: 8,
-        elevation: 10,
+        shadowRadius: 4,
+        elevation: 5,
     },
-    sectionTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#1D1B20',
-        marginBottom: 12,
-    },
-    messageBox: {
+    quoteSection: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#fff',
-        borderRadius: 30,
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderWidth: 1,
-        borderColor: '#E5E5E5',
+        backgroundColor: '#2C3D5B',
+        padding: 16,
+        borderRadius: 50,
     },
-    inputIcon: {
+    quoteInput: {
+        flex: 1,
+        backgroundColor: 'transparent',
+        borderColor: '#ccc',
+        borderWidth: 1,
+        borderRadius: 10,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        color: '#fff',
         marginRight: 10,
     },
-    input: {
-        flex: 1,
-        height: 40,
-        fontSize: 14,
-        color: '#333',
-    },
     sendBtn: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: '#1E2B4F',
+        backgroundColor: '#fff',
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        borderRadius: 10,
         justifyContent: 'center',
         alignItems: 'center',
-        marginLeft: 8,
+    },
+    sendText: {
+        color: '#2C3D5B',
+        fontSize: 16,
+        fontWeight: '600',
     },
 });
 

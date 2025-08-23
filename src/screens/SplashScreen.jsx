@@ -11,7 +11,7 @@ const SplashScreen = () => {
                 source={logo}
                 style={StyleSheet.absoluteFill}
                 resizeMode="cover"
-                repeat
+                repeat={false}
                 muted
                 controls={false}
                 paused={false}

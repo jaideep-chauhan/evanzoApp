@@ -54,6 +54,15 @@ export default function EventCard({ event, onGiveQuote }) {
                 </View>
                 <View style={{ flex: 1 }}>
                     <Text style={styles.description} numberOfLines={4} ellipsizeMode="tail">{event.description}</Text>
+                    {/* Budget */}
+                    {event.budget && (
+                        <View style={styles.budgetContainer}>
+                            <Text style={styles.budgetLabel}>Budget: </Text>
+                            <View style={styles.budgetItem}>
+                                <Text style={[styles.budgetText, { color: theme.colors.primary }]}>${event.budget}</Text>
+                            </View>
+                        </View>
+                    )}
                 </View>
             </View>
 
@@ -165,6 +174,29 @@ const styles = StyleSheet.create({
         lineHeight: 18,
         fontWeight: '400',
         marginTop: 4,
+    },
+    budgetContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 4,
+    },
+    budgetLabel: {
+        fontSize: 13,
+        color: '#444',
+        fontWeight: '500',
+        marginRight: 6,
+    },
+    budgetItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F4F4F4',
+        borderRadius: 20,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+    },
+    budgetText: {
+        fontSize: 12,
+        fontWeight: '700',
     },
     attachmentSection: {
         borderTopWidth: 2,

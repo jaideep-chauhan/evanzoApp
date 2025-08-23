@@ -12,6 +12,7 @@ import {
     Platform,
     Dimensions,
     ImageBackground,
+    ActivityIndicator,
 } from 'react-native';
 import logo from '../../assets/images/evanzoLogo.png';
 import { useNavigation } from '@react-navigation/native';
@@ -20,13 +21,38 @@ import appple from '../../assets/images/apple.png';
 import google from '../../assets/images/google.png';
 import facebook from '../../assets/images/fb.png';
 
-const { height } = Dimensions.get('window');
 export default function LoginScreen() {
     const navigation = useNavigation();
     const theme = useTheme();
+    const [imageLoaded, setImageLoaded] = React.useState(false);
+
+    // Add timeout for image loading to prevent infinite loader
+    React.useEffect(() => {
+        const timeout = setTimeout(() => {
+            if (!imageLoaded) {
+                console.log('Force showing login screen after timeout');
+                setImageLoaded(true);
+            }
+        }, 3000); // 3 seconds timeout
+
+        return () => clearTimeout(timeout);
+    }, [imageLoaded]);
 
     return (
-        <ImageBackground source={theme.images.background} style={styles.bg} resizeMode="cover">
+        <View style={styles.wrapper}>
+            {!imageLoaded && (
+                <View style={[styles.loadingContainer, { backgroundColor: theme.colors.primary }]}>
+                    <ActivityIndicator size="large" color="#fff" />
+                </View>
+            )}
+            <ImageBackground 
+                source={theme.images.background} 
+                style={styles.bg} 
+                resizeMode="cover"
+                fadeDuration={0}
+                onLoadEnd={() => setImageLoaded(true)}
+                onLoad={() => setImageLoaded(true)}
+            >
             <View style={styles.container}>
                 <SafeAreaView style={styles.safe} edges={['top']}>
                     <View style={styles.topSection}>
@@ -96,10 +122,21 @@ export default function LoginScreen() {
                 </KeyboardAvoidingView>
             </View>
         </ImageBackground>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
+    wrapper: {
+        flex: 1,
+        backgroundColor: '#2C3D5B',
+    },
+    loadingContainer: {
+        ...StyleSheet.absoluteFillObject,
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1,
+    },
     bg: {
         flex: 1,
         width: '100%',

@@ -31,9 +31,10 @@ export default function EventDetailView() {
     const [descTruncated, setDescTruncated] = useState(false);
     const descTextRef = useRef(null);
     const scrollViewRef = useRef(null);
-    const scrollX = useRef(0);
-    const [suggestionCards] = useState([1, 2, 3, 4]); // Extended array for continuous effect
-    const [isAutoScrolling, setIsAutoScrolling] = useState(true);
+    const currentIndex = useRef(1);
+    const intervalRef = useRef(null);
+    const [suggestionCards] = useState([1, 2, 3, 4]);
+    const cardWidth = 336; // 320 width + 16 gap
 
     const eventData = {
         title: 'Corporate Event',
@@ -42,6 +43,7 @@ export default function EventDetailView() {
         duration: '04',
         time: '07:00 pm',
         budget: '$1500',
+        guests: '150',
         description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do...',
         images: [img, bg1, img], // Example images for carousel
         organizer: {
@@ -74,33 +76,58 @@ export default function EventDetailView() {
         return stars;
     };
 
-    // Auto-scroll functionality for suggestion carousel
-    useEffect(() => {
-        let scrollInterval;
-        
-        if (isAutoScrolling) {
-            scrollInterval = setInterval(() => {
-                if (scrollViewRef.current) {
-                    scrollX.current += 1;
-                    scrollViewRef.current.scrollTo({
-                        x: scrollX.current,
-                        animated: false
-                    });
-                    
-                    // Reset scroll when reaching end (approximate)
-                    if (scrollX.current >= 336 * suggestionCards.length) { // 320 width + 16 gap
-                        scrollX.current = 0;
-                    }
-                }
-            }, 30); // Adjust speed here (lower = faster)
+    // Handle scroll end to create infinite loop effect
+    const handleScrollEnd = (e) => {
+        const offsetX = e.nativeEvent.contentOffset.x;
+        const slideWidth = cardWidth;
+        let idx = Math.round(offsetX / slideWidth);
+
+        // Create array with duplicated cards for infinite scroll
+        const extendedCards = suggestionCards.length + 2; // +1 at start, +1 at end
+
+        if (idx === extendedCards - 1) {
+            // At the end duplicate, jump to first real card
+            currentIndex.current = 1;
+            if (scrollViewRef.current) {
+                scrollViewRef.current.scrollTo({ x: slideWidth, animated: false });
+            }
+        } else if (idx === 0) {
+            // At the start duplicate, jump to last real card
+            currentIndex.current = suggestionCards.length;
+            if (scrollViewRef.current) {
+                scrollViewRef.current.scrollTo({ x: slideWidth * suggestionCards.length, animated: false });
+            }
+        } else {
+            currentIndex.current = idx;
         }
+    };
+
+    // Carousel auto-scroll functionality (similar to VendorCard)
+    useEffect(() => {
+        // Initial positioning to first real card
+        setTimeout(() => {
+            if (scrollViewRef.current) {
+                scrollViewRef.current.scrollTo({ x: cardWidth * 1, animated: false });
+            }
+        }, 10);
+
+        // Auto-scroll interval
+        intervalRef.current = setInterval(() => {
+            if (scrollViewRef.current) {
+                currentIndex.current += 1;
+                scrollViewRef.current.scrollTo({
+                    x: cardWidth * currentIndex.current,
+                    animated: true
+                });
+            }
+        }, 2500); // Change slide every 2.5 seconds
 
         return () => {
-            if (scrollInterval) {
-                clearInterval(scrollInterval);
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
             }
         };
-    }, [suggestionCards.length, isAutoScrolling]);
+    }, [cardWidth]);
 
     return (
         <View style={styles.container}>
@@ -121,9 +148,17 @@ export default function EventDetailView() {
                     <View style={styles.headerRow}>
                         <View style={styles.titleSection}>
                             <Text style={styles.title}>{eventData.title}</Text>
-                            <View style={styles.locationRow}>
-                                <Icon name="location-outline" size={14} color="#334462" style={{ marginRight: 4 }} />
-                                <Text style={styles.location}>{eventData.location}</Text>
+                            <View style={styles.metaRowHeader}>
+                                <View style={styles.locationRow}>
+                                    <Icon name="location-outline" size={14} color="#334462" style={{ marginRight: 4 }} />
+                                    <Text style={styles.location}>{eventData.location}</Text>
+                                </View>
+                                <View style={styles.budgetRow}>
+                                    {/* <Icon name="cash-outline" size={14} color="#334462" style={{ marginRight: 4 }} /> */}
+                                    <Text style={styles.location}>Budget: </Text>
+
+                                    <Text style={styles.budget}>{eventData.budget}</Text>
+                                </View>
                             </View>
                         </View>
                         <View style={styles.actionIcons}>
@@ -161,9 +196,9 @@ export default function EventDetailView() {
                             </View>
                         </View>
                         <View style={styles.metaColumn}>
-                            <Text style={styles.metaLabel}>Budget</Text>
+                            <Text style={styles.metaLabel}>Guests</Text>
                             <View style={styles.metaBox}>
-                                <Text style={styles.metaValue}>{eventData.budget}</Text>
+                                <Text style={styles.metaValue}>{eventData.guests}</Text>
                             </View>
                         </View>
                     </View>
@@ -236,16 +271,16 @@ export default function EventDetailView() {
                         <ScrollView
                             ref={scrollViewRef}
                             horizontal
+                            pagingEnabled
                             showsHorizontalScrollIndicator={false}
                             contentContainerStyle={styles.suggestionList}
                             scrollEventThrottle={16}
-                            onTouchStart={() => setIsAutoScrolling(false)}
-                            onTouchEnd={() => setTimeout(() => setIsAutoScrolling(true), 3000)}
-                            onScrollBeginDrag={() => setIsAutoScrolling(false)}
-                            onScrollEndDrag={() => setTimeout(() => setIsAutoScrolling(true), 3000)}
+                            onMomentumScrollEnd={handleScrollEnd}
+                            snapToInterval={cardWidth}
+                            decelerationRate="fast"
                         >
-                            {/* Duplicate cards for infinite scroll effect */}
-                            {[...suggestionCards, ...suggestionCards].map((_, index) => (
+                            {/* Add last card at beginning and first card at end for infinite scroll */}
+                            {[suggestionCards[suggestionCards.length - 1], ...suggestionCards, suggestionCards[0]].map((_, index) => (
                                 <View key={index} style={styles.suggestionCard}>
                                     {/* Close Button */}
                                     <TouchableOpacity style={styles.closeIcon}>
@@ -350,14 +385,32 @@ const styles = StyleSheet.create({
         boxShadow: '1px 1px 4px 0px #00000029',
 
     },
+    metaRowHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginTop: 4,
+    },
     locationRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 2,
         backgroundColor: '#E7F0FF80',
         paddingHorizontal: 10,
         paddingVertical: 6,
         borderRadius: 20,
+    },
+    budgetRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#E7F0FF80',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 20,
+    },
+    budget: {
+        fontSize: 14,
+        color: '#666',
+        textAlign: 'left',
     },
     headerRow: {
         flexDirection: 'row',
@@ -565,7 +618,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         padding: 16,
         borderRadius: 16,
-        marginRight: 10,
+        marginRight: 16, // Match the gap for proper spacing
         position: 'relative',
 
         // Shadow (iOS)
@@ -615,7 +668,7 @@ const styles = StyleSheet.create({
 
     nameBoxContainer: {
         width: '100%',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         paddingVertical: 12,
     },
 

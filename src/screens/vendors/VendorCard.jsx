@@ -5,11 +5,10 @@ import {
     StyleSheet,
     Image,
     TouchableOpacity,
-    ScrollView,
     Animated,
     Dimensions,
 } from 'react-native';
-import { StarIcon, MapPinIcon, Squares2X2Icon, CurrencyDollarIcon, TagIcon } from 'react-native-heroicons/solid';
+import { StarIcon, CurrencyDollarIcon, TagIcon } from 'react-native-heroicons/solid';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
 import theme from '../../theme';
@@ -90,19 +89,11 @@ export default function VendorCard({
     };
 
     const handleSeeMorePress = () => {
-        navigation.navigate('VendorAddDetail', { 
+        navigation.navigate('VendorAddDetail', {
             vendor: { initials, name, type, rating, description, images, extraCount, location },
-            scrollToOffer: true 
+            scrollToOffer: true
         });
     };
-
-    // Reusable filter item for icon+label
-    const FilterItem = ({ icon: Icon, label }) => (
-        <View style={styles.filterItemEnhanced}>
-            <Icon size={15} color={theme.colors.primary} strokeWidth={2} />
-            <Text style={[styles.filterText, { color: theme.colors.primary }]}>{label}</Text>
-        </View>
-    );
 
     return (
         <TouchableOpacity onPress={handleCardPress} style={styles.cardWrapper}>
@@ -115,10 +106,14 @@ export default function VendorCard({
                 </View>
                 <View style={styles.nameBlock}>
                     <Text style={[styles.vendorName, { color: theme.colors.primary }]}>{name}</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersRow} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
-                        <FilterItem icon={Squares2X2Icon} label={type} />
-                        {location && <FilterItem icon={MapPinIcon} label={location} />}
-                    </ScrollView>
+                    <View style={styles.tagRow}>
+                        <Text style={styles.tag}>
+                            {type === 'Photography' ? '📷' : type === 'Catering' ? '🍽️' : type === 'Music' ? '🎵' : type === 'Florist' ? '🌸' : type === 'Event Planner' ? '🎉' : type === 'Decor' ? '🎨' : type === 'Bakery' ? '🍰' : '🏷️'} {type}
+                        </Text>
+                        {location && (
+                            <Text style={styles.tag}>📍 {location}</Text>
+                        )}
+                    </View>
                 </View>
                 <View style={[styles.ratingBox, { backgroundColor: theme.colors.tabBackground }]}>
                     <StarIcon size={14} color={theme.colors.primary} />
@@ -129,18 +124,21 @@ export default function VendorCard({
             {/* Card */}
             <View style={styles.card}>
                 {/* Offer Section */}
-                <View style={styles.offerRow}>
-                    <View style={styles.offerTextContainer}>
-                        <Text style={styles.offerText}>Offer:</Text>
-                        <View style={styles.offerItem}>
-                            <Text style={[styles.offerLabel, { color: theme.colors.textSecondary }]}>Amount spent</Text>
+                <View style={styles.offerSection}>
+                    <View style={styles.offerTable}>
+                        {/* Header Row */}
+                        <View style={styles.offerHeaderRow}>
+                            <Text style={styles.offerHeaderEmpty}></Text>
+                            <Text style={[styles.offerHeaderText, { color: theme.colors.textSecondary }]}>Amount spent</Text>
+                            <Text style={[styles.offerHeaderText, { color: theme.colors.textSecondary }]}>Discount</Text>
+                        </View>
+                        {/* Values Row */}
+                        <View style={styles.offerValueRow}>
+                            <Text style={styles.offerLabel}>Offer:</Text>
                             <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
                                 <CurrencyDollarIcon size={12} color={theme.colors.primary} />
                                 <Text style={styles.offerValue}>150</Text>
                             </View>
-                        </View>
-                        <View style={styles.offerItem}>
-                            <Text style={[styles.offerLabel, { color: theme.colors.textSecondary }]}>Percentage</Text>
                             <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
                                 <TagIcon size={12} color={theme.colors.primary} />
                                 <Text style={styles.offerValue}>10%</Text>
@@ -246,7 +244,20 @@ const styles = StyleSheet.create({
     vendorName: {
         fontSize: 18,
         fontWeight: '700',
-        marginBottom: 1,
+        marginBottom: 4,
+    },
+    tagRow: {
+        flexDirection: 'row',
+        gap: 8,
+        flexWrap: 'wrap',
+    },
+    tag: {
+        backgroundColor: '#f8f9fa',
+        borderRadius: 12,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        fontSize: 12,
+        color: '#666',
     },
     filtersRow: {
         flexDirection: 'row',
@@ -376,31 +387,40 @@ const styles = StyleSheet.create({
         fontSize: 12,
     },
     // Offer Section Styles
-    offerRow: {
+    offerSection: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 12,
-        paddingBottom: 8,
+        alignItems: 'flex-start',
+        marginBottom: 6,
+        paddingBottom: 4,
     },
-    offerTextContainer: {
+    offerTable: {
+        flexDirection: 'column',
+    },
+    offerHeaderRow: {
         flexDirection: 'row',
-        gap: 10,
         alignItems: 'center',
+        marginBottom: 3,
+        gap: 6,
     },
-    offerText: {
-        fontSize: 12,
+    offerHeaderEmpty: {
+        width: 40,
+    },
+    offerHeaderText: {
+        fontSize: 8,
         fontWeight: '400',
-        color: '#344562',
-        marginRight: 4,
+        minWidth: 40,
     },
-    offerItem: {
+    offerValueRow: {
+        flexDirection: 'row',
         alignItems: 'center',
+        gap: 6,
     },
     offerLabel: {
         fontSize: 10,
         fontWeight: '400',
-        marginBottom: 6,
+        color: '#344562',
+        width: 40,
     },
     offerValueContainer: {
         backgroundColor: '#F4F4F4',
@@ -409,11 +429,12 @@ const styles = StyleSheet.create({
         gap: 4,
         justifyContent: 'center',
         alignItems: 'center',
-        paddingHorizontal: 10,
+        paddingHorizontal: 2,
         paddingVertical: 4,
+        minWidth: 50,
     },
     offerValue: {
-        fontSize: 10,
+        fontSize: 12,
         fontWeight: '500',
         color: '#2C3D5BF5',
     },
@@ -421,9 +442,10 @@ const styles = StyleSheet.create({
         height: 20,
         width: 60,
         borderRadius: 10,
-        alignSelf: 'center',
+        alignSelf: 'flex-end',
         justifyContent: 'center',
         alignItems: 'center',
+        marginTop: 4,
     },
     seeMore: {
         fontWeight: '500',
