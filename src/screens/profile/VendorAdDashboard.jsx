@@ -578,7 +578,7 @@ const styles = StyleSheet.create({
     },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'transparent',
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -597,7 +597,7 @@ const styles = StyleSheet.create({
     bottomModalOverlay: {
         flex: 1,
         justifyContent: 'flex-end',
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'transparent',
     },
     bottomModalContent: {
         backgroundColor: 'transparent',
@@ -625,7 +625,7 @@ const styles = StyleSheet.create({
     },
     modalTopSpace: {
         height: screenHeight * 0.15,  // 15% space at top
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'transparent',
     },
     modalBottomContent: {
         flex: 1,
@@ -654,7 +654,7 @@ const styles = StyleSheet.create({
     },
     fullModalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'transparent',
         justifyContent: 'flex-end',
         paddingTop: screenHeight * 0.2,
     },
