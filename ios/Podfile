@@ -31,5 +31,29 @@ target 'EVNZO' do
       :mac_catalyst_enabled => false,
       # :ccache_enabled => true
     )
+    
+    # Fix RCTThirdPartyComponentsProvider nil value crash
+    # This runs after pod install to fix the generated file
+    installer.pods_project.targets.each do |target|
+      if target.name == 'EVNZO'
+        phase_name = '[CP] Fix Third Party Components Provider'
+        unless target.build_phases.any? { |phase| phase.display_name == phase_name }
+          phase = target.new_shell_script_build_phase(phase_name)
+          phase.shell_script = <<-SCRIPT
+            echo "Fixing RCTThirdPartyComponentsProvider..."
+            if [ -f "${SRCROOT}/scripts/fix_third_party_provider.rb" ]; then
+              ruby "${SRCROOT}/scripts/fix_third_party_provider.rb"
+            fi
+          SCRIPT
+        end
+      end
+    end
+    
+    # Also run the fix immediately after pod install
+    ruby_script_path = File.join(__dir__, 'scripts', 'fix_third_party_provider.rb')
+    if File.exist?(ruby_script_path)
+      require_relative ruby_script_path
+      fix_third_party_components_provider()
+    end
   end
 end

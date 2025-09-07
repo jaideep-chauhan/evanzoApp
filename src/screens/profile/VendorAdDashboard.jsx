@@ -13,9 +13,6 @@ import {
     Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import evanzoLogo from '../../assets/images/evanzoLogo.png';
-import LinearGradient from 'react-native-linear-gradient';
 import VendorCard from '../vendors/VendorCard';
 import EventAdCard from './EventAdCard';
 import PreSavedMessage from './PreSavedMessage';
@@ -26,7 +23,6 @@ import img from '../../assets/images/dummy.png';
 import bg from '../../assets/images/profileBG.png';
 
 import { useTheme } from '../../ThemeContext';
-import theme from '../../theme';
 import vendorService from '../../services/vendorService';
 import eventService from '../../services/eventService';
 import { useAuth } from '../../context/AuthContext';
@@ -45,12 +41,23 @@ export default function VendorAdDashboard({ navigation }) {
     const [vendorAds, setVendorAds] = useState([]);
     const [eventAds, setEventAds] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [refreshing, setRefreshing] = useState(false);
 
     // Fetch ads on component mount and when tab changes
     useEffect(() => {
         fetchAds();
     }, [activeTab]);
+
+    // Debug modal states
+    useEffect(() => {
+        console.log('Modal states:', {
+            showPreSaved,
+            showChangeProfile,
+            showCreateAd,
+            showCreateAddForm,
+            createAddFormType
+        });
+    }, [showPreSaved, showChangeProfile, showCreateAd, showCreateAddForm, createAddFormType]);
+
 
     const fetchAds = async () => {
         setIsLoading(true);
@@ -76,13 +83,7 @@ export default function VendorAdDashboard({ navigation }) {
             console.error('Error fetching ads:', error);
         } finally {
             setIsLoading(false);
-            setRefreshing(false);
         }
-    };
-
-    const handleRefresh = () => {
-        setRefreshing(true);
-        fetchAds();
     };
 
     // Dummy data fallback (remove this when API is fully working)
@@ -176,12 +177,14 @@ export default function VendorAdDashboard({ navigation }) {
 
     return (
         <View style={[styles.safe, { flex: 1, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 }]}>
-            <ScrollView contentContainerStyle={[styles.container, { flexGrow: 1 }]}>
+            {/* Non-scrollable header content */}
+            <View>
                 <View style={styles.headerBox}>
                     <ImageBackground
                         source={bg}
-                        style={[StyleSheet.absoluteFill, { zIndex: 0 }]}
+                        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: -1 }}
                         resizeMode="cover"
+                        pointerEvents="none"
                     >
                     </ImageBackground>
                     <View style={styles.header}>
@@ -206,12 +209,6 @@ export default function VendorAdDashboard({ navigation }) {
                             <Text style={[styles.name, { color: theme.colors.primary }]}>
                                 {user?.full_name || 'User'}
                             </Text>
-                            {/* <TouchableOpacity
-                                style={styles.editBtn}
-                                onPress={() => setShowChangeProfile(true)}
-                            >
-                                <Icon name="create-outline" size={20} color={theme.colors.primary} />
-                            </TouchableOpacity> */}
                         </View>
                         <Text style={[styles.location, { color: theme.colors.primary }]}>Ontario, Canada</Text>
                     </View>
@@ -221,12 +218,15 @@ export default function VendorAdDashboard({ navigation }) {
                 <View style={styles.actionRow}>
                     <TouchableOpacity style={[styles.actionBtn, styles.primary, { backgroundColor: theme.colors.primary }]}>
                         <Text style={styles.primaryText}>MY ADS</Text>
-                        {/* <Icon name="options-outline" size={16} color="#fff" /> */}
                     </TouchableOpacity>
 
                     <TouchableOpacity
                         style={styles.actionBtn}
-                        onPress={() => setShowPreSaved(true)}
+                        onPress={() => {
+                            console.log('PRE SAVE MESSAGE button pressed');
+                            console.log('Setting showPreSaved to true');
+                            setShowPreSaved(true);
+                        }}
                     >
                         <Text style={[styles.secondaryText, { color: theme.colors.primary }]}>PRE SAVE MESSAGE</Text>
                     </TouchableOpacity>
@@ -237,26 +237,31 @@ export default function VendorAdDashboard({ navigation }) {
                 </View>
 
                 {/* Create New Ad Box */}
-                <View style={styles.createAdBox}>
-                    <TouchableOpacity
-                        style={styles.createAdInnerVertical}
-                        onPress={() => setShowCreateAd(true)}
-                    >
+                <TouchableOpacity 
+                    style={styles.createAdBox}
+                    onPress={() => setShowCreateAd(true)}
+                    activeOpacity={0.8}
+                >
+                    <View style={styles.createAdInnerVertical} pointerEvents="none">
                         <View style={styles.addIconOutlineBox}>
                             <Icon name="add" size={24} color={theme.colors.primary} />
                         </View>
                         <Text style={[styles.createAdTextLarge, { color: theme.colors.primary }]}>Create New Ad</Text>
-                    </TouchableOpacity>
-                </View>
+                    </View>
+                </TouchableOpacity>
 
-                {/* Tabs */}
+                {/* Tabs - Outside ScrollView */}
                 <View style={styles.tabRow}>
                     <TouchableOpacity
                         style={[
                             styles.activeTab,
                             activeTab === 'vendor' ? { backgroundColor: theme.colors.primary } : styles.inactiveTab,
                         ]}
-                        onPress={() => setActiveTab('vendor')}
+                        onPress={() => {
+                            console.log('Vendor tab pressed');
+                            setActiveTab('vendor');
+                        }}
+                        activeOpacity={0.7}
                     >
                         <Text style={activeTab === 'vendor' ? styles.activeTabText : [styles.inactiveTabText, { color: theme.colors.primary }]}>
                             Vendor Ads
@@ -267,14 +272,24 @@ export default function VendorAdDashboard({ navigation }) {
                             styles.activeTab,
                             activeTab === 'event' ? { backgroundColor: theme.colors.primary } : styles.inactiveTab,
                         ]}
-                        onPress={() => setActiveTab('event')}
+                        onPress={() => {
+                            console.log('Event tab pressed');
+                            setActiveTab('event');
+                        }}
+                        activeOpacity={0.7}
                     >
                         <Text style={activeTab === 'event' ? styles.activeTabText : [styles.inactiveTabText, { color: theme.colors.primary }]}>
                             Event Ads
                         </Text>
                     </TouchableOpacity>
                 </View>
+            </View>
 
+            {/* Scrollable content */}
+            <ScrollView 
+                contentContainerStyle={{ flexGrow: 1 }}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled">
                 {/* List */}
                 {isLoading ? (
                     <View style={styles.loadingContainer}>
@@ -310,23 +325,24 @@ export default function VendorAdDashboard({ navigation }) {
 
             {/* Popup Modal for PreSavedMessage */}
             <Modal
-                    visible={showPreSaved}
-                    animationType="slide"
-                    transparent={true}
-                    onRequestClose={() => setShowPreSaved(false)}
-                >
-                    <View style={styles.modalOverlay}>
-                        <View style={styles.modalContent}>
-                            <PreSavedMessage />
-                            <TouchableOpacity
-                                style={styles.closeBtn}
-                                onPress={() => setShowPreSaved(false)}
-                            >
-                                <Icon name="close" size={24} color={theme.colors.primary} />
-                            </TouchableOpacity>
-                        </View>
+                visible={showPreSaved}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setShowPreSaved(false)}
+                onShow={() => console.log('PreSavedMessage Modal shown')}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <PreSavedMessage />
+                        <TouchableOpacity
+                            style={styles.closeBtn}
+                            onPress={() => setShowPreSaved(false)}
+                        >
+                            <Icon name="close" size={24} color={theme.colors.primary} />
+                        </TouchableOpacity>
                     </View>
-                </Modal>
+                </View>
+            </Modal>
 
                 {/* Popup Modal for ChangeProfile */}
                 <Modal
@@ -354,18 +370,31 @@ export default function VendorAdDashboard({ navigation }) {
                     animationType="slide"
                     transparent={true}
                     onRequestClose={() => setShowCreateAd(false)}
+                    onShow={() => console.log('CreateAd Modal shown')}
                 >
-                    <View style={styles.bottomModalOverlay}>
-                        <View style={styles.bottomModalContent}>
+                    <TouchableOpacity 
+                        style={styles.transparentModalOverlay}
+                        activeOpacity={1}
+                        onPress={() => setShowCreateAd(false)}
+                    >
+                        <TouchableOpacity 
+                            style={styles.bottomModalContent}
+                            activeOpacity={1}
+                            onPress={() => {}}
+                        >
                             <CreateAd
                                 onClose={() => {
                                     setShowCreateAd(false);
                                     fetchAds(); // Refresh ads after closing
                                 }}
                                 onTabPress={(type) => {
+                                    console.log('Tab pressed in CreateAd:', type);
                                     setShowCreateAd(false);
                                     setCreateAddFormType(type);
-                                    setTimeout(() => setShowCreateAddForm(true), 300);
+                                    setTimeout(() => {
+                                        console.log('Opening CreateAddForm with type:', type);
+                                        setShowCreateAddForm(true);
+                                    }, 300);
                                 }}
                             />
                             <TouchableOpacity
@@ -374,8 +403,8 @@ export default function VendorAdDashboard({ navigation }) {
                             >
                                 <Icon name="close" size={24} color={theme.colors.primary} />
                             </TouchableOpacity>
-                        </View>
-                    </View>
+                        </TouchableOpacity>
+                    </TouchableOpacity>
                 </Modal>
 
                 {/* CreateAddForm Modal */}
@@ -384,6 +413,7 @@ export default function VendorAdDashboard({ navigation }) {
                     animationType="slide"
                     transparent={true}
                     onRequestClose={() => setShowCreateAddForm(false)}
+                    onShow={() => console.log('CreateAddForm Modal shown with type:', createAddFormType)}
                 >
                     <View style={styles.modalFullScreen}>
                         <TouchableOpacity 
@@ -427,6 +457,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         minHeight: 100,
         overflow: 'hidden',
+        zIndex: 1,
     },
     header: {
         width: '100%',
@@ -532,15 +563,15 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
-        elevation: 2,
+        elevation: 10,
         shadowColor: '#000',
         shadowOpacity: 0.16,
         shadowOffset: { width: 1, height: 1 },
         shadowRadius: 13,
         marginBottom: 20,
         marginTop: 20,
-        boxShadow: '1px 1px 10px 0px #00000019',
-
+        zIndex: 10,
+        position: 'relative',
     },
     createAdInnerVertical: {
         alignItems: 'center',
@@ -612,12 +643,18 @@ const styles = StyleSheet.create({
     bottomModalOverlay: {
         flex: 1,
         justifyContent: 'flex-end',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    transparentModalOverlay: {
+        flex: 1,
+        justifyContent: 'flex-end',
         backgroundColor: 'transparent',
     },
     bottomModalContent: {
-        backgroundColor: 'transparent',
+        backgroundColor: '#fff',
         width: '100%',
         position: 'relative',
+        minHeight: 200,
     },
     bottomModalContentLarge: {
         borderTopLeftRadius: 24,
@@ -699,13 +736,12 @@ const styles = StyleSheet.create({
     },
     addIconOutlineBox: {
         borderWidth: 1,
-        borderColor: theme.colors.primary,
+        borderColor: '#2C3D5B',
         borderRadius: 10,
         width: 60,
         height: 60,
         alignItems: 'center',
         justifyContent: 'center',
-        // backgroundColor: '#fff',
     },
     loadingContainer: {
         flex: 1,

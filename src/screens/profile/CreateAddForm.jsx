@@ -7,7 +7,6 @@ import {
     StyleSheet,
     ScrollView,
     Image,
-    Alert,
     ActivityIndicator,
     Modal,
     FlatList,
@@ -16,10 +15,13 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { launchImageLibrary } from 'react-native-image-picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../../ThemeContext';
 // import img from '../../assets/images/dummy.png'; // Removed unused import
 import vendorService from '../../services/vendorService';
 import eventService from '../../services/eventService';
+import { CustomSuccessModal } from '../../components/CustomSuccessModal';
+import { CustomToast } from '../../components/CustomToast';
 
 const CreateAddForm = ({ type, onClose }) => {
     const theme = useTheme();
@@ -29,7 +31,9 @@ const CreateAddForm = ({ type, onClose }) => {
     const [eventType, setEventType] = useState('');
     const [eventTags, setEventTags] = useState([]);
     const [location, setLocation] = useState('');
-    const [date, setDate] = useState('');
+    const [date, setDate] = useState(new Date());
+    const [showDatePicker, setShowDatePicker] = useState(false);
+    const [dateSelected, setDateSelected] = useState(false);
     const [duration, setDuration] = useState('');
     const [budget, setBudget] = useState('');
     const [description, setDescription] = useState('');
@@ -48,6 +52,8 @@ const CreateAddForm = ({ type, onClose }) => {
 
     // Loading state
     const [isLoading, setIsLoading] = useState(false);
+    const [modalState, setModalState] = useState({ visible: false, title: '', message: '', type: 'success' });
+    const [toastState, setToastState] = useState({ visible: false, message: '', type: 'error' });
 
     // Categories list
     const categories = [
@@ -186,7 +192,7 @@ const CreateAddForm = ({ type, onClose }) => {
         const hasPermission = await requestGalleryPermission();
 
         if (!hasPermission) {
-            Alert.alert('Permission Denied', 'Gallery permission is required to select photos');
+            setToastState({ visible: true, message: 'Gallery permission is required to select photos', type: 'error' });
             return;
         }
 
@@ -204,7 +210,7 @@ const CreateAddForm = ({ type, onClose }) => {
                 console.log('User cancelled image picker');
             } else if (response.errorMessage) {
                 console.log('ImagePicker Error: ', response.errorMessage);
-                Alert.alert('Error', 'Failed to select image');
+                setToastState({ visible: true, message: 'Failed to select image', type: 'error' });
             } else if (response.assets) {
                 const selectedPhotos = response.assets.map(asset => ({
                     uri: asset.uri,
@@ -227,8 +233,8 @@ const CreateAddForm = ({ type, onClose }) => {
         try {
             if (type === 'event') {
                 // Validate event fields
-                if (!service || !eventType || !location || !date) {
-                    Alert.alert('Error', 'Please fill in all required fields');
+                if (!service || !eventType || !location || !dateSelected) {
+                    setToastState({ visible: true, message: 'Please fill in all required fields', type: 'error' });
                     setIsLoading(false);
                     return;
                 }
@@ -236,7 +242,7 @@ const CreateAddForm = ({ type, onClose }) => {
                 // Validate description word count
                 const wordCount = description.trim().split(/\s+/).filter(word => word.length > 0).length;
                 if (description && wordCount < 100) {
-                    Alert.alert('Error', `Description must be at least 100 words. Current: ${wordCount} words`);
+                    setToastState({ visible: true, message: `Description must be at least 100 words. Current: ${wordCount} words`, type: 'error' });
                     setIsLoading(false);
                     return;
                 }
@@ -246,7 +252,7 @@ const CreateAddForm = ({ type, onClose }) => {
                     event_type: eventType,
                     event_tags: eventTags,
                     location,
-                    date,
+                    date: date.toISOString().split('T')[0], // Format as YYYY-MM-DD
                     duration: duration || null,
                     budget: budget ? parseFloat(budget) : null,
                     description: description || '',
@@ -256,16 +262,19 @@ const CreateAddForm = ({ type, onClose }) => {
                 const response = await eventService.createEventAd(eventData);
 
                 if (response.success) {
-                    Alert.alert('Success', 'Event ad created successfully', [
-                        { text: 'OK', onPress: () => onClose && onClose() }
-                    ]);
+                    setModalState({
+                        visible: true,
+                        title: 'Success',
+                        message: 'Event ad created successfully',
+                        type: 'success'
+                    });
                 } else {
-                    Alert.alert('Error', response.message || 'Failed to create event ad');
+                    setToastState({ visible: true, message: response.message || 'Failed to create event ad', type: 'error' });
                 }
             } else {
                 // Validate vendor fields
                 if (!category || !companyName || !vendorLocation) {
-                    Alert.alert('Error', 'Please fill in all required fields');
+                    setToastState({ visible: true, message: 'Please fill in all required fields', type: 'error' });
                     setIsLoading(false);
                     return;
                 }
@@ -273,14 +282,14 @@ const CreateAddForm = ({ type, onClose }) => {
                 // Validate description word count
                 const wordCount = vendorDescription.trim().split(/\s+/).filter(word => word.length > 0).length;
                 if (vendorDescription && wordCount < 100) {
-                    Alert.alert('Error', `Description must be at least 100 words. Current: ${wordCount} words`);
+                    setToastState({ visible: true, message: `Description must be at least 100 words. Current: ${wordCount} words`, type: 'error' });
                     setIsLoading(false);
                     return;
                 }
 
                 // Validate minimum photos for vendor
                 if (photos.length < 10) {
-                    Alert.alert('Error', `Please add at least 10 photos. Current: ${photos.length} photos`);
+                    setToastState({ visible: true, message: `Please add at least 10 photos. Current: ${photos.length} photos`, type: 'error' });
                     setIsLoading(false);
                     return;
                 }
@@ -309,16 +318,19 @@ const CreateAddForm = ({ type, onClose }) => {
                 const response = await vendorService.createVendorAd(vendorData);
 
                 if (response.success) {
-                    Alert.alert('Success', 'Vendor ad created successfully', [
-                        { text: 'OK', onPress: () => onClose && onClose() }
-                    ]);
+                    setModalState({
+                        visible: true,
+                        title: 'Success',
+                        message: 'Vendor ad created successfully',
+                        type: 'success'
+                    });
                 } else {
-                    Alert.alert('Error', response.message || 'Failed to create vendor ad');
+                    setToastState({ visible: true, message: response.message || 'Failed to create vendor ad', type: 'error' });
                 }
             }
         } catch (error) {
             console.error('Error posting ad:', error);
-            Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+            setToastState({ visible: true, message: 'An unexpected error occurred. Please try again.', type: 'error' });
         } finally {
             setIsLoading(false);
         }
@@ -403,13 +415,30 @@ const CreateAddForm = ({ type, onClose }) => {
                         <View style={styles.rowPro}>
                             <View style={[styles.fieldGroupPro, styles.halfPro]}>
                                 <Text style={styles.labelPro}>Date</Text>
-                                <TextInput
-                                    style={styles.inputPro}
-                                    value={date}
-                                    onChangeText={setDate}
-                                    placeholder="MM/DD/YYYY"
-                                    placeholderTextColor="#ffffff80"
-                                />
+                                <TouchableOpacity
+                                    style={[styles.inputPro, styles.datePickerButton]}
+                                    onPress={() => setShowDatePicker(true)}
+                                >
+                                    <Text style={dateSelected ? styles.dateText : styles.placeholderText}>
+                                        {dateSelected ? date.toLocaleDateString() : 'Select Date'}
+                                    </Text>
+                                    <Icon name="calendar" size={20} color="#ffffff80" />
+                                </TouchableOpacity>
+                                {showDatePicker && (
+                                    <DateTimePicker
+                                        value={date}
+                                        mode="date"
+                                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                                        onChange={(event, selectedDate) => {
+                                            setShowDatePicker(Platform.OS === 'android');
+                                            if (selectedDate) {
+                                                setDate(selectedDate);
+                                                setDateSelected(true);
+                                            }
+                                        }}
+                                        minimumDate={new Date()}
+                                    />
+                                )}
                             </View>
                             <View style={[styles.fieldGroupPro, styles.halfPro]}>
                                 <Text style={styles.labelPro}>Duration</Text>
@@ -877,6 +906,28 @@ const CreateAddForm = ({ type, onClose }) => {
                     </View>
                 </View>
             </Modal>
+            
+            {/* Custom Success Modal */}
+            <CustomSuccessModal
+                visible={modalState.visible}
+                title={modalState.title}
+                message={modalState.message}
+                type={modalState.type}
+                onConfirm={() => {
+                    setModalState({ ...modalState, visible: false });
+                    if (modalState.type === 'success' && onClose) {
+                        onClose();
+                    }
+                }}
+            />
+            
+            {/* Custom Toast for Errors */}
+            <CustomToast
+                visible={toastState.visible}
+                message={toastState.message}
+                type={toastState.type}
+                onHide={() => setToastState({ ...toastState, visible: false })}
+            />
         </View>
     );
 };
@@ -1290,5 +1341,18 @@ const styles = StyleSheet.create({
         marginTop: 8,
         textAlign: 'right',
         fontStyle: 'italic',
+    },
+    datePickerButton: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    dateText: {
+        color: '#ffffff',
+        fontSize: 15,
+    },
+    placeholderText: {
+        color: '#ffffff80',
+        fontSize: 15,
     },
 });

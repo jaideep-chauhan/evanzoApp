@@ -7,7 +7,9 @@
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "start": "react-native start",
-    "test": "jest"
+    "test": "jest",
+    "postinstall": "node scripts/fix-third-party-components.js && cd ios && pod install",
+    "fix-ios": "node scripts/fix-third-party-components.js"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.1.2",

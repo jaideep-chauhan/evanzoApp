@@ -32,13 +32,29 @@ const CreateAd = ({ onClose, onTabPress }) => {
                     <View style={styles.tabColumnWrap}>
                         <TouchableOpacity
                             style={[styles.tabColumnBtn, styles.activeTab, { backgroundColor: theme.colors.primary }]}
-                            onPress={() => onTabPress && onTabPress('vendor')}
+                            onPress={() => {
+                                console.log('Vendor button pressed in CreateAd');
+                                if (onTabPress) {
+                                    onTabPress('vendor');
+                                } else {
+                                    console.log('onTabPress is not defined');
+                                }
+                            }}
+                            activeOpacity={0.7}
                         >
                             <Text style={styles.activeTabText}>Vendor</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.tabColumnBtn, styles.inactiveTab, { backgroundColor: theme.colors.primary, opacity: 0.7 }]}
-                            onPress={() => onTabPress && onTabPress('event')}
+                            onPress={() => {
+                                console.log('Event button pressed in CreateAd');
+                                if (onTabPress) {
+                                    onTabPress('event');
+                                } else {
+                                    console.log('onTabPress is not defined');
+                                }
+                            }}
+                            activeOpacity={0.7}
                         >
                             <Text style={styles.inactiveTabText}>Event</Text>
                         </TouchableOpacity>

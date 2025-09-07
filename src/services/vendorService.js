@@ -440,7 +440,9 @@ class VendorService {
             id: vendor.id || vendor.vendor_ad_id,
             initials: this.getInitials(vendor.company_name || vendor.title),
             name: vendor.company_name || vendor.title,
-            type: vendor.category || vendor.services_offered?.[0] || 'Service Provider',
+            type: (typeof vendor.category === 'object' ? vendor.category?.name : vendor.category) || 
+                  vendor.services_offered?.[0] || 
+                  'Service Provider',
             rating: vendor.rating || 0,
             reviewCount: vendor.review_count || 0,
             description: vendor.description || '',
