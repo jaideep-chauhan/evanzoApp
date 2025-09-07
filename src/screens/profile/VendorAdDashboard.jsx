@@ -465,7 +465,7 @@ const styles = StyleSheet.create({
     profileInitialsText: {
         fontSize: 36,
         fontWeight: 'bold',
-        color: '#fff',
+        color: '#2C3D5B',
     },
     name: {
         fontSize: 20,

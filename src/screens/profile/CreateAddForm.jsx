@@ -285,14 +285,25 @@ const CreateAddForm = ({ type, onClose }) => {
                     return;
                 }
 
+                // Prepare offer data
+                const validOffers = offers.filter(offer => offer.amount || offer.discount);
+                const offerAmount = validOffers.length > 0 && validOffers[0].amount ? 
+                    parseFloat(validOffers[0].amount) : null;
+                const offerPercentage = validOffers.length > 0 && validOffers[0].discount ? 
+                    parseFloat(validOffers[0].discount) : null;
+
+                // For now, send without photos due to FormData issues
+                // We'll handle photo upload separately
                 const vendorData = {
+                    title: companyName,
                     category,
                     description: vendorDescription || '',
                     company_name: companyName,
                     location: vendorLocation,
-                    tags: selectedTags,
-                    offers: offers.filter(offer => offer.amount || offer.discount),
-                    attachments: [] // TODO: Handle file uploads
+                    services_offered: selectedTags,
+                    offer_amount: offerAmount,
+                    offer_percentage: offerPercentage,
+                    attachments: [] // Will handle file upload in next iteration
                 };
 
                 const response = await vendorService.createVendorAd(vendorData);

@@ -241,7 +241,7 @@ class VendorService {
                 headers['Content-Type'] = 'multipart/form-data';
             }
             
-            const response = await api.post('/vendors', vendorData, { headers });
+            const response = await api.post('/vendors/create-ad', vendorData, { headers });
             return {
                 success: true,
                 data: response.data.data,
