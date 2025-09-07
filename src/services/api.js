@@ -18,20 +18,30 @@ const api = axios.create({
 
 api.interceptors.request.use(
     async (config) => {
-        const token = await AsyncStorage.getItem('accessToken');
+        console.log('🌐 API Request:', config.method?.toUpperCase(), config.url);
+        console.log('🌐 Request data:', config.data);
+        
+        const token = await AsyncStorage.getItem('authToken');
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
+            console.log('🔑 Token added to request');
         }
         return config;
     },
     (error) => {
+        console.error('🌐 Request error:', error);
         return Promise.reject(error);
     }
 );
 
 api.interceptors.response.use(
-    (response) => response,
+    (response) => {
+        console.log('✅ API Response:', response.config.url, response.status);
+        return response;
+    },
     async (error) => {
+        console.error('❌ API Error:', error.config?.url, error.response?.status);
+        console.error('❌ Error details:', error.response?.data);
         const originalRequest = error.config;
         
         if (error.response?.status === 401 && !originalRequest._retry) {
@@ -40,7 +50,7 @@ api.interceptors.response.use(
             try {
                 const refreshToken = await AsyncStorage.getItem('refreshToken');
                 if (!refreshToken) {
-                    await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'user']);
+                    await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'userData']);
                     return Promise.reject(error);
                 }
                 
@@ -50,14 +60,14 @@ api.interceptors.response.use(
                 
                 const { accessToken, refreshToken: newRefreshToken } = response.data.tokens;
                 
-                await AsyncStorage.setItem('accessToken', accessToken);
+                await AsyncStorage.setItem('authToken', accessToken);
                 await AsyncStorage.setItem('refreshToken', newRefreshToken);
                 
                 originalRequest.headers.Authorization = `Bearer ${accessToken}`;
                 
                 return api(originalRequest);
             } catch (refreshError) {
-                await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'user']);
+                await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'userData']);
                 return Promise.reject(refreshError);
             }
         }

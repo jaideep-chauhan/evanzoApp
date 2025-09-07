@@ -8,26 +8,53 @@ import {
     TouchableOpacity,
     KeyboardAvoidingView,
     Platform,
+    ActivityIndicator,
 } from 'react-native';
 import { useTheme } from '../../ThemeContext';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { useAuth } from '../../context/AuthContext';
 import Icon from 'react-native-vector-icons/Ionicons';
+import CustomToast from '../../components/CustomToast';
+import CustomModal from '../../components/CustomModal';
 
 export default function OTPVerify() {
     const navigation = useNavigation();
+    const route = useRoute();
     const theme = useTheme();
+    const { verifyOTPAndRegister, resendOTP } = useAuth();
+    
+    const { email, phone, fromScreen } = route.params || {};
+    
     const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
     const [error, setError] = useState('');
     const [activeIndex, setActiveIndex] = useState(0);
     const [resendDisabled, setResendDisabled] = useState(false);
     const [timer, setTimer] = useState(30);
+    const [isLoading, setIsLoading] = useState(false);
     const timerRef = useRef();
+    
+    // Toast states
+    const [toastVisible, setToastVisible] = useState(false);
+    const [toastMessage, setToastMessage] = useState('');
+    const [toastType, setToastType] = useState('success');
+    
+    // Modal state
+    const [modalVisible, setModalVisible] = useState(false);
+    const [modalConfig, setModalConfig] = useState({});
 
-    // Simulate mobile number
-    const mobileMasked = '********123';
+    // Mask the email for display
+    const maskedEmail = email ? 
+        email.substring(0, 3) + '****@' + email.split('@')[1] : 
+        'your email';
 
     // Ref for inputs
     const inputsRef = Array(6).fill(null).map(() => React.createRef());
+    
+    const showToast = (message, type = 'info') => {
+        setToastMessage(message);
+        setToastType(type);
+        setToastVisible(true);
+    };
 
     useEffect(() => {
         if (resendDisabled) {
@@ -46,7 +73,28 @@ export default function OTPVerify() {
     }, [resendDisabled]);
 
     const handleChange = (text, idx) => {
-        if (/^\d?$/.test(text)) {
+        // Handle paste of complete OTP
+        if (text.length > 1) {
+            // User pasted multiple characters
+            const pastedOtp = text.replace(/\D/g, '').slice(0, 6); // Get only digits, max 6
+            if (pastedOtp.length > 0) {
+                const newDigits = pastedOtp.split('').concat(Array(6).fill('')).slice(0, 6);
+                setOtpDigits(newDigits);
+                
+                // Focus last filled input or last input if all filled
+                const lastFilledIndex = Math.min(pastedOtp.length - 1, 5);
+                if (inputsRef[lastFilledIndex].current) {
+                    inputsRef[lastFilledIndex].current.focus();
+                    setActiveIndex(lastFilledIndex);
+                }
+                
+                // Auto-submit if 6 digits were pasted
+                if (pastedOtp.length === 6) {
+                    setTimeout(() => handleVerify(), 100);
+                }
+            }
+        } else if (/^\d?$/.test(text)) {
+            // Single digit input
             const newDigits = [...otpDigits];
             newDigits[idx] = text;
             setOtpDigits(newDigits);
@@ -57,23 +105,79 @@ export default function OTPVerify() {
             if (!text && idx > 0) {
                 setActiveIndex(idx - 1);
             }
+            
+            // Check if all 6 digits are filled for auto-submit
+            if (idx === 5 && text) {
+                const fullOtp = [...newDigits];
+                fullOtp[5] = text;
+                if (fullOtp.every(digit => digit !== '')) {
+                    setTimeout(() => handleVerify(), 100);
+                }
+            }
         }
     };
 
-    const handleVerify = () => {
+    const handleVerify = async () => {
         const otp = otpDigits.join('');
-        if (otp.length === 6) {
-            setError('');
-            navigation.navigate('Home'); // Change to your home/main screen
-        } else {
+        if (otp.length !== 6) {
             setError('Please enter a valid 6-digit OTP');
+            return;
+        }
+        
+        setIsLoading(true);
+        setError('');
+        
+        try {
+            const result = await verifyOTPAndRegister(otp);
+            
+            if (result.success) {
+                // Show success toast then navigate
+                showToast('Registration successful! Welcome to Evanzo!', 'success');
+                
+                // Navigate to Main (TabNavigator) after a short delay
+                setTimeout(() => {
+                    navigation.reset({
+                        index: 0,
+                        routes: [{ name: 'Main' }],
+                    });
+                }, 1500);
+            } else {
+                setError('');
+                showToast(result.error || 'Invalid OTP. Please try again.', 'error');
+                // Clear OTP fields on error
+                setOtpDigits(['', '', '', '', '', '']);
+                inputsRef[0].current?.focus();
+            }
+        } catch (error) {
+            setError('');
+            showToast('Something went wrong. Please try again.', 'error');
+        } finally {
+            setIsLoading(false);
         }
     };
 
-    const handleResend = () => {
-        setResendDisabled(true);
-        setTimer(30);
-        // Simulate resend logic
+    const handleResend = async () => {
+        if (resendDisabled) return;
+        
+        setIsLoading(true);
+        try {
+            const result = await resendOTP();
+            
+            if (result.success) {
+                showToast(result.message || 'A new OTP has been sent to your email.', 'success');
+                setResendDisabled(true);
+                setTimer(30);
+                // Clear OTP fields
+                setOtpDigits(['', '', '', '', '', '']);
+                inputsRef[0].current?.focus();
+            } else {
+                showToast(result.error || 'Could not resend OTP. Please try again.', 'error');
+            }
+        } catch (error) {
+            showToast('Something went wrong. Please try again.', 'error');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -88,8 +192,8 @@ export default function OTPVerify() {
                         <Icon name="arrow-back" size={28} color={theme.colors.primary} />
                     </TouchableOpacity>
                     <View style={styles.contentWrap}>
-                        <Text style={[styles.header, { color: theme.colors.primary }]}>Verify Account</Text>
-                        <Text style={[styles.subtitle, { color: theme.colors.primary }]}>Please enter the 6 digit code sent to your mobile number <Text style={styles.mobile}>{mobileMasked}</Text> for verification</Text>
+                        <Text style={[styles.header, { color: theme.colors.primary }]}>Verify Your Email</Text>
+                        <Text style={[styles.subtitle, { color: theme.colors.primary }]}>Please enter the 6 digit code sent to <Text style={styles.mobile}>{maskedEmail}</Text> for verification</Text>
                         <View style={styles.otpRow}>
                             {otpDigits.map((digit, idx) => (
                                 <TextInput
@@ -108,12 +212,30 @@ export default function OTPVerify() {
                                     placeholder=""
                                     placeholderTextColor="#aaa"
                                     returnKeyType={idx === 5 ? 'done' : 'next'}
+                                    selectTextOnFocus
+                                    autoComplete="one-time-code"
+                                    textContentType="oneTimeCode"
                                 />
                             ))}
                         </View>
                         {error ? <Text style={styles.error}>{error}</Text> : null}
-                        <TouchableOpacity style={[styles.verifyBtn, { backgroundColor: theme.colors.primary, shadowColor: theme.colors.primary }]} onPress={handleVerify}>
-                            <Text style={styles.verifyText}>Verify</Text>
+                        <TouchableOpacity 
+                            style={[
+                                styles.verifyBtn, 
+                                { 
+                                    backgroundColor: theme.colors.primary, 
+                                    shadowColor: theme.colors.primary,
+                                    opacity: isLoading ? 0.7 : 1
+                                }
+                            ]} 
+                            onPress={handleVerify}
+                            disabled={isLoading}
+                        >
+                            {isLoading ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                                <Text style={styles.verifyText}>Verify</Text>
+                            )}
                         </TouchableOpacity>
                         <View style={styles.resendSection}>
                             <View style={styles.resendRow}>
@@ -121,7 +243,7 @@ export default function OTPVerify() {
                                 <TouchableOpacity
                                     style={styles.resendBtn}
                                     onPress={handleResend}
-                                    disabled={resendDisabled}
+                                    disabled={resendDisabled || isLoading}
                                 >
                                     <Text style={[styles.resendText, resendDisabled ? styles.resendTextDisabled : { color: theme.colors.primary }]}>
                                         Resend Again
@@ -135,6 +257,13 @@ export default function OTPVerify() {
                     </View>
                 </View>
             </KeyboardAvoidingView>
+            
+            <CustomToast
+                visible={toastVisible}
+                message={toastMessage}
+                type={toastType}
+                onHide={() => setToastVisible(false)}
+            />
         </SafeAreaView>
     );
 }

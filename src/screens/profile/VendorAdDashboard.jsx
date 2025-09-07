@@ -4,7 +4,6 @@ import {
     Text,
     StyleSheet,
     TouchableOpacity,
-    Image,
     ScrollView,
     Modal,
     ImageBackground,
@@ -16,7 +15,6 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import evanzoLogo from '../../assets/images/evanzoLogo.png';
-import profilePic from '../../assets/images/dummy.png';
 import LinearGradient from 'react-native-linear-gradient';
 import VendorCard from '../vendors/VendorCard';
 import EventAdCard from './EventAdCard';
@@ -31,11 +29,13 @@ import { useTheme } from '../../ThemeContext';
 import theme from '../../theme';
 import vendorService from '../../services/vendorService';
 import eventService from '../../services/eventService';
+import { useAuth } from '../../context/AuthContext';
 
 const { height: screenHeight } = Dimensions.get('window');
 
 export default function VendorAdDashboard({ navigation }) {
     const theme = useTheme();
+    const { user } = useAuth();
     const [activeTab, setActiveTab] = useState('vendor');
     const [showPreSaved, setShowPreSaved] = useState(false);
     const [showChangeProfile, setShowChangeProfile] = useState(false);
@@ -195,9 +195,17 @@ export default function VendorAdDashboard({ navigation }) {
                     </View>
                     {/* Profile Info inside blue box */}
                     <View style={styles.profileSection}>
-                        <Image source={profilePic} style={styles.profileImage} />
+                        <View style={styles.profileImage}>
+                            <Text style={styles.profileInitialsText}>
+                                {user?.full_name ? (
+                                    user.full_name.split(' ').map(name => name[0]).slice(0, 2).join('').toUpperCase()
+                                ) : 'U'}
+                            </Text>
+                        </View>
                         <View style={styles.nameRow}>
-                            <Text style={[styles.name, { color: theme.colors.primary }]}>Tushar Dhania</Text>
+                            <Text style={[styles.name, { color: theme.colors.primary }]}>
+                                {user?.full_name || 'User'}
+                            </Text>
                             {/* <TouchableOpacity
                                 style={styles.editBtn}
                                 onPress={() => setShowChangeProfile(true)}
@@ -451,6 +459,13 @@ const styles = StyleSheet.create({
         backgroundColor: '#D9D9D9',
         borderWidth: 2,
         borderColor: '#fff',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    profileInitialsText: {
+        fontSize: 36,
+        fontWeight: 'bold',
+        color: '#fff',
     },
     name: {
         fontSize: 20,

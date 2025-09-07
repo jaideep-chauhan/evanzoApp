@@ -6,12 +6,17 @@ import {
     SafeAreaView,
     TouchableOpacity,
     ScrollView,
+    Alert,
+    ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { useAuth } from '../../context/AuthContext';
 
 export default function Settings() {
     const navigation = useNavigation();
+    const { logout, user } = useAuth();
+    const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
     const settingsSections = [
         {
@@ -40,11 +45,44 @@ export default function Settings() {
 
     const handleItemPress = (item) => {
         if (item.action === 'logout') {
-            // Handle logout logic
-            navigation.navigate('Login');
+            handleLogout();
         } else if (item.screen) {
             navigation.navigate(item.screen);
         }
+    };
+
+    const handleLogout = () => {
+        Alert.alert(
+            'Logout',
+            'Are you sure you want to logout?',
+            [
+                {
+                    text: 'Cancel',
+                    style: 'cancel',
+                },
+                {
+                    text: 'Logout',
+                    style: 'destructive',
+                    onPress: async () => {
+                        setIsLoggingOut(true);
+                        try {
+                            await logout();
+                            // Navigate to login screen and reset navigation stack
+                            navigation.reset({
+                                index: 0,
+                                routes: [{ name: 'Login' }],
+                            });
+                        } catch (error) {
+                            console.error('Logout error:', error);
+                            Alert.alert('Error', 'Failed to logout. Please try again.');
+                        } finally {
+                            setIsLoggingOut(false);
+                        }
+                    },
+                },
+            ],
+            { cancelable: true }
+        );
     };
 
     const renderSection = (section) => (
@@ -78,6 +116,14 @@ export default function Settings() {
             <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
                 {settingsSections.map(renderSection)}
             </ScrollView>
+            
+            {/* Loading Overlay */}
+            {isLoggingOut && (
+                <View style={styles.loadingOverlay}>
+                    <ActivityIndicator size="large" color="#fff" />
+                    <Text style={styles.loadingText}>Logging out...</Text>
+                </View>
+            )}
         </SafeAreaView>
     );
 }
@@ -179,6 +225,18 @@ const styles = StyleSheet.create({
     arrow: {
         color: '#B0B8C1',
         fontSize: 16,
+        fontWeight: '600',
+    },
+    loadingOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loadingText: {
+        color: '#fff',
+        fontSize: 16,
+        marginTop: 12,
         fontWeight: '600',
     },
 });

@@ -10,57 +10,71 @@ import {
     KeyboardAvoidingView,
     Platform,
     ActivityIndicator,
+    Alert,
 } from 'react-native';
+import { Formik } from 'formik';
+import * as Yup from 'yup';
+import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../../ThemeContext';
 import { useNavigation } from '@react-navigation/native';
-import Toast from 'react-native-toast-message';
-import AuthService from '../../services/authService';
-import { forgotPasswordSchema, validateForm } from '../../utils/validationSchemas';
-import Icon from 'react-native-vector-icons/Feather';
+import { useAuth } from '../../context/AuthContext';
+
+// Validation schema for email or phone
+const forgotPasswordSchema = Yup.object().shape({
+    emailOrPhone: Yup.string()
+        .required('Email or phone number is required')
+        .test('email-or-phone', 'Enter a valid email or phone number', function(value) {
+            if (!value) return false;
+            // Check if it's an email
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            // Check if it's a phone number (10+ digits)
+            const phoneRegex = /^[\d\s\-\+\(\)]+$/;
+            const cleanPhone = value.replace(/[\s\-\(\)\+]/g, '');
+            
+            return emailRegex.test(value) || (phoneRegex.test(value) && cleanPhone.length >= 10);
+        }),
+});
 
 export default function ForgotPasswordScreen() {
     const navigation = useNavigation();
     const theme = useTheme();
-    const [username, setUsername] = useState('');
+    const { forgotPassword } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
 
-    const handleSendOTP = async () => {
-        // Validate form using Yup
-        const validation = await validateForm(forgotPasswordSchema, { username });
-        
-        if (!validation.isValid) {
-            Toast.show({
-                type: 'error',
-                text1: 'Invalid Input',
-                text2: validation.errors.username || 'Please enter a valid email or phone number',
-            });
-            return;
-        }
-
+    const handleSendOTP = async (values) => {
         setIsLoading(true);
         try {
-            const result = await AuthService.requestPasswordReset(username);
+            // Determine if it's email or phone
+            const isEmail = values.emailOrPhone.includes('@');
+            const identifier = values.emailOrPhone;
+            
+            const result = await forgotPassword(isEmail ? identifier : identifier);
             
             if (result.success) {
-                Toast.show({
-                    type: 'success',
-                    text1: 'OTP Sent',
-                    text2: result.message || 'Please check your email/SMS for the OTP',
-                });
-                navigation.navigate('ResetPassword', { username });
+                Alert.alert(
+                    'OTP Sent',
+                    result.message || 'Please check your email/SMS for the OTP',
+                    [{ 
+                        text: 'OK',
+                        onPress: () => navigation.navigate('OTPVerify', { 
+                            emailOrPhone: values.emailOrPhone,
+                            fromScreen: 'ForgotPassword'
+                        })
+                    }]
+                );
             } else {
-                Toast.show({
-                    type: 'error',
-                    text1: 'Error',
-                    text2: result.message || 'Failed to send OTP. Please try again.',
-                });
+                Alert.alert(
+                    'Error',
+                    result.error || 'Failed to send OTP. Please try again.',
+                    [{ text: 'OK' }]
+                );
             }
         } catch (error) {
-            Toast.show({
-                type: 'error',
-                text1: 'Error',
-                text2: 'Something went wrong. Please try again.',
-            });
+            Alert.alert(
+                'Error',
+                'Something went wrong. Please try again later.',
+                [{ text: 'OK' }]
+            );
         } finally {
             setIsLoading(false);
         }
@@ -74,7 +88,7 @@ export default function ForgotPasswordScreen() {
                     onPress={() => navigation.goBack()}
                     disabled={isLoading}
                 >
-                    <Icon name="arrow-left" size={24} color={theme.colors.primary} />
+                    <Icon name="arrow-back" size={24} color={theme.colors.primary} />
                 </TouchableOpacity>
                 <Text style={[styles.headerTitle, { color: theme.colors.primary }]}>Forgot Password</Text>
                 <View style={styles.backButton} />
@@ -85,63 +99,81 @@ export default function ForgotPasswordScreen() {
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
             >
-                <ScrollView
-                    contentContainerStyle={styles.scroll}
-                    keyboardShouldPersistTaps="handled"
-                    showsVerticalScrollIndicator={false}
+                <Formik
+                    initialValues={{ emailOrPhone: '' }}
+                    validationSchema={forgotPasswordSchema}
+                    onSubmit={handleSendOTP}
                 >
-                    <View style={styles.iconContainer}>
-                        <Icon name="lock" size={60} color={theme.colors.primary} />
-                    </View>
+                    {({ handleChange, handleBlur, handleSubmit, values, errors, touched }) => (
+                        <ScrollView
+                            contentContainerStyle={styles.scroll}
+                            keyboardShouldPersistTaps="handled"
+                            showsVerticalScrollIndicator={false}
+                        >
+                            <View style={styles.iconContainer}>
+                                <View style={[styles.iconCircle, { backgroundColor: theme.colors.primary + '20' }]}>
+                                    <Icon name="lock-closed-outline" size={50} color={theme.colors.primary} />
+                                </View>
+                            </View>
 
-                    <Text style={[styles.title, { color: theme.colors.primary }]}>Reset Your Password</Text>
-                    <Text style={[styles.subtitle, { color: '#666' }]}>
-                        Enter your email address or phone number and we'll send you an OTP to reset your password.
-                    </Text>
+                            <Text style={[styles.title, { color: theme.colors.primary }]}>Reset Your Password</Text>
+                            <Text style={[styles.subtitle, { color: '#666' }]}>
+                                Enter your email address or phone number and we'll send you an OTP to reset your password.
+                            </Text>
 
-                    <View style={styles.inputGroup}>
-                        <Text style={[styles.label, { color: theme.colors.primary }]}>Email or Phone Number</Text>
-                        <TextInput
-                            style={[styles.input, { color: theme.colors.primary }]}
-                            placeholder="Enter your email or phone number"
-                            placeholderTextColor="#aaa"
-                            value={username}
-                            onChangeText={setUsername}
-                            autoCapitalize="none"
-                            keyboardType="default"
-                            editable={!isLoading}
-                        />
-                    </View>
+                            <View style={styles.inputGroup}>
+                                <Text style={[styles.label, { color: theme.colors.primary }]}>Email or Phone Number</Text>
+                                <TextInput
+                                    style={[
+                                        styles.input,
+                                        { color: theme.colors.primary },
+                                        touched.emailOrPhone && errors.emailOrPhone && styles.inputError
+                                    ]}
+                                    placeholder="Enter your email or phone number"
+                                    placeholderTextColor="#aaa"
+                                    value={values.emailOrPhone}
+                                    onChangeText={handleChange('emailOrPhone')}
+                                    onBlur={handleBlur('emailOrPhone')}
+                                    autoCapitalize="none"
+                                    keyboardType="default"
+                                    editable={!isLoading}
+                                />
+                                {touched.emailOrPhone && errors.emailOrPhone && (
+                                    <Text style={styles.errorText}>{errors.emailOrPhone}</Text>
+                                )}
+                            </View>
 
-                    <TouchableOpacity 
-                        style={[
-                            styles.sendBtn, 
-                            { 
-                                backgroundColor: theme.colors.primary,
-                                shadowColor: theme.colors.primary,
-                                opacity: isLoading ? 0.7 : 1
-                            }
-                        ]} 
-                        onPress={handleSendOTP}
-                        disabled={isLoading}
-                    >
-                        {isLoading ? (
-                            <ActivityIndicator color="#fff" size="small" />
-                        ) : (
-                            <Text style={styles.sendText}>Send OTP</Text>
-                        )}
-                    </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={[
+                                    styles.sendBtn, 
+                                    { 
+                                        backgroundColor: theme.colors.primary,
+                                        shadowColor: theme.colors.primary,
+                                        opacity: isLoading ? 0.7 : 1
+                                    }
+                                ]} 
+                                onPress={handleSubmit}
+                                disabled={isLoading}
+                            >
+                                {isLoading ? (
+                                    <ActivityIndicator color="#fff" size="small" />
+                                ) : (
+                                    <Text style={styles.sendText}>Send OTP</Text>
+                                )}
+                            </TouchableOpacity>
 
-                    <TouchableOpacity 
-                        style={styles.backToLogin}
-                        onPress={() => navigation.navigate('Login')}
-                        disabled={isLoading}
-                    >
-                        <Text style={[styles.backToLoginText, { color: theme.colors.primary }]}>
-                            Back to Login
-                        </Text>
-                    </TouchableOpacity>
-                </ScrollView>
+                            <TouchableOpacity 
+                                style={styles.backToLogin}
+                                onPress={() => navigation.navigate('Login')}
+                                disabled={isLoading}
+                            >
+                                <Text style={[styles.backToLoginText, { color: theme.colors.primary }]}>
+                                    Back to Login
+                                </Text>
+                            </TouchableOpacity>
+                        </ScrollView>
+                    )}
+                </Formik>
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
@@ -181,6 +213,13 @@ const styles = StyleSheet.create({
         marginBottom: 32,
         marginTop: 40,
     },
+    iconCircle: {
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     title: {
         fontSize: 24,
         fontWeight: 'bold',
@@ -210,6 +249,16 @@ const styles = StyleSheet.create({
         fontSize: 15,
         borderWidth: 1,
         borderColor: '#E5EAF2',
+    },
+    inputError: {
+        borderColor: '#ff4444',
+        borderWidth: 1,
+    },
+    errorText: {
+        color: '#ff4444',
+        fontSize: 12,
+        marginTop: 4,
+        marginLeft: 4,
     },
     sendBtn: {
         paddingVertical: 16,
