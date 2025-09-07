@@ -7,9 +7,16 @@ import {
     StyleSheet,
     ScrollView,
     Image,
+    Alert,
+    ActivityIndicator,
+    Modal,
+    FlatList,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../../ThemeContext';
 import img from '../../assets/images/dummy.png'; // Adjust the path as necessary
+import vendorService from '../../services/vendorService';
+import eventService from '../../services/eventService';
 
 const CreateAddForm = ({ type, onClose }) => {
     const theme = useTheme();
@@ -17,30 +24,221 @@ const CreateAddForm = ({ type, onClose }) => {
     // Event Ad fields
     const [service, setService] = useState('');
     const [eventType, setEventType] = useState('');
+    const [eventTags, setEventTags] = useState([]);
     const [location, setLocation] = useState('');
     const [date, setDate] = useState('');
     const [duration, setDuration] = useState('');
     const [budget, setBudget] = useState('');
     const [description, setDescription] = useState('');
+    const [showServiceDropdown, setShowServiceDropdown] = useState(false);
+    const [showEventTypeDropdown, setShowEventTypeDropdown] = useState(false);
 
     // Vendor Ad fields
-    const [category, setCategory] = useState('');
+    const [category, setCategory] = useState('Photographer');
     const [vendorDescription, setVendorDescription] = useState('');
     const [companyName, setCompanyName] = useState('');
-    const [vendorLocation, setVendorLocation] = useState('');
-    const [offerAmount, setOfferAmount] = useState('');
-    const [offerPercentage, setOfferPercentage] = useState('');
+    const [vendorLocation, setVendorLocation] = useState('Ontario, Canada');
+    const [selectedTags, setSelectedTags] = useState([]);
+    const [offers, setOffers] = useState([{ amount: '', discount: '' }]);
     const [photos, setPhotos] = useState([]);
-
-    const handlePost = () => {
-        if (type === 'event') {
-            console.log('Posting Event Ad:', {
-                service, eventType, location, date, duration, budget, description,
-            });
+    const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+    
+    // Loading state
+    const [isLoading, setIsLoading] = useState(false);
+    
+    // Categories list
+    const categories = [
+        'Photographer',
+        'Videographer',
+        'Caterer',
+        'Decorator',
+        'DJ',
+        'Event Planner',
+        'Florist',
+        'Makeup Artist',
+        'Venue',
+        'Transport',
+    ];
+    
+    // Tags list for vendor
+    const tagOptions = [
+        'Birthday party',
+        'Corporate',
+        'Event',
+        'Candid',
+        'Wedding',
+        'Pre Wedding',
+        'Concert',
+        'Maternity',
+        'Photobooth',
+    ];
+    
+    // Service options for events
+    const serviceOptions = [
+        'Photographer',
+        'Videographer',
+        'Caterer',
+        'Decorator',
+        'DJ',
+        'Event Planner',
+        'Florist',
+        'Makeup Artist',
+        'Venue',
+        'Transport',
+        'Security',
+        'Sound System',
+        'Lighting',
+        'Entertainment',
+    ];
+    
+    // Event type options
+    const eventTypeOptions = [
+        'Wedding',
+        'Birthday Party',
+        'Corporate Event',
+        'Conference',
+        'Concert',
+        'Exhibition',
+        'Workshop',
+        'Seminar',
+        'Product Launch',
+        'Anniversary',
+        'Graduation',
+        'Baby Shower',
+        'Engagement',
+        'Festival',
+        'Charity Event',
+    ];
+    
+    // Event type tags
+    const eventTypeTagOptions = [
+        'Indoor',
+        'Outdoor',
+        'Formal',
+        'Casual',
+        'Small Gathering',
+        'Large Event',
+        'Day Event',
+        'Evening Event',
+        'Weekend',
+        'Weekday',
+    ];
+    
+    const toggleTag = (tag) => {
+        if (selectedTags.includes(tag)) {
+            setSelectedTags(selectedTags.filter(t => t !== tag));
         } else {
-            console.log('Posting Vendor Ad:', {
-                category, vendorDescription, companyName, vendorLocation, offerAmount, offerPercentage, photos,
-            });
+            setSelectedTags([...selectedTags, tag]);
+        }
+    };
+    
+    const toggleEventTag = (tag) => {
+        if (eventTags.includes(tag)) {
+            setEventTags(eventTags.filter(t => t !== tag));
+        } else {
+            setEventTags([...eventTags, tag]);
+        }
+    };
+    
+    const addOffer = () => {
+        setOffers([...offers, { amount: '', discount: '' }]);
+    };
+    
+    const removeOffer = (index) => {
+        if (offers.length > 1) {
+            const newOffers = offers.filter((_, i) => i !== index);
+            setOffers(newOffers);
+        }
+    };
+    
+    const updateOffer = (index, field, value) => {
+        const newOffers = [...offers];
+        newOffers[index][field] = value;
+        setOffers(newOffers);
+    };
+
+    const handlePost = async () => {
+        setIsLoading(true);
+        
+        try {
+            if (type === 'event') {
+                // Validate event fields
+                if (!service || !eventType || !location || !date) {
+                    Alert.alert('Error', 'Please fill in all required fields');
+                    setIsLoading(false);
+                    return;
+                }
+                
+                // Validate description word count
+                const wordCount = description.trim().split(/\s+/).filter(word => word.length > 0).length;
+                if (description && wordCount < 100) {
+                    Alert.alert('Error', `Description must be at least 100 words. Current: ${wordCount} words`);
+                    setIsLoading(false);
+                    return;
+                }
+                
+                const eventData = {
+                    service_needed: service,
+                    event_type: eventType,
+                    event_tags: eventTags,
+                    location,
+                    date,
+                    duration: duration || null,
+                    budget: budget ? parseFloat(budget) : null,
+                    description: description || '',
+                    attachments: [] // TODO: Handle file uploads
+                };
+                
+                const response = await eventService.createEventAd(eventData);
+                
+                if (response.success) {
+                    Alert.alert('Success', 'Event ad created successfully', [
+                        { text: 'OK', onPress: () => onClose && onClose() }
+                    ]);
+                } else {
+                    Alert.alert('Error', response.message || 'Failed to create event ad');
+                }
+            } else {
+                // Validate vendor fields
+                if (!category || !companyName || !vendorLocation) {
+                    Alert.alert('Error', 'Please fill in all required fields');
+                    setIsLoading(false);
+                    return;
+                }
+                
+                // Validate description word count
+                const wordCount = vendorDescription.trim().split(/\s+/).filter(word => word.length > 0).length;
+                if (vendorDescription && wordCount < 100) {
+                    Alert.alert('Error', `Description must be at least 100 words. Current: ${wordCount} words`);
+                    setIsLoading(false);
+                    return;
+                }
+                
+                const vendorData = {
+                    category,
+                    description: vendorDescription || '',
+                    company_name: companyName,
+                    location: vendorLocation,
+                    tags: selectedTags,
+                    offers: offers.filter(offer => offer.amount || offer.discount),
+                    attachments: [] // TODO: Handle file uploads
+                };
+                
+                const response = await vendorService.createVendorAd(vendorData);
+                
+                if (response.success) {
+                    Alert.alert('Success', 'Vendor ad created successfully', [
+                        { text: 'OK', onPress: () => onClose && onClose() }
+                    ]);
+                } else {
+                    Alert.alert('Error', response.message || 'Failed to create vendor ad');
+                }
+            }
+        } catch (error) {
+            console.error('Error posting ad:', error);
+            Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -59,30 +257,59 @@ const CreateAddForm = ({ type, onClose }) => {
                     {type === 'event' ? 'Find the perfect service for your event' : 'Showcase your services to potential clients'}
                 </Text>
             </View>
-            <View style={styles.formContentWrap}>
-                <ScrollView style={styles.scrollViewPro} contentContainerStyle={styles.containerPro} showsVerticalScrollIndicator={false}>
+            <ScrollView 
+                style={styles.scrollViewPro} 
+                contentContainerStyle={styles.containerPro} 
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled={true}
+            >
                     {type === 'event' ? (
                         <>
                             <View style={styles.fieldGroupPro}>
-                                <Text style={styles.labelPro}>What service do you need?</Text>
-                                <TextInput
-                                    style={styles.inputPro}
-                                    value={service}
-                                    onChangeText={setService}
-                                    placeholder="Select a service"
-                                    placeholderTextColor="#ffffff80"
-                                />
+                                <Text style={styles.labelPro}>What service you need?</Text>
+                                <TouchableOpacity
+                                    style={[styles.inputPro, styles.dropdownButton]}
+                                    onPress={() => setShowServiceDropdown(true)}
+                                >
+                                    <Text style={styles.dropdownText}>{service || 'Select a service'}</Text>
+                                    <Icon name="chevron-down" size={20} color="#ffffff80" />
+                                </TouchableOpacity>
                             </View>
+                            
                             <View style={styles.fieldGroupPro}>
                                 <Text style={styles.labelPro}>Event Type</Text>
-                                <TextInput
-                                    style={styles.inputPro}
-                                    value={eventType}
-                                    onChangeText={setEventType}
-                                    placeholder="Select event type"
-                                    placeholderTextColor="#ffffff80"
-                                />
+                                <TouchableOpacity
+                                    style={[styles.inputPro, styles.dropdownButton]}
+                                    onPress={() => setShowEventTypeDropdown(true)}
+                                >
+                                    <Text style={styles.dropdownText}>{eventType || 'Select event type'}</Text>
+                                    <Icon name="chevron-down" size={20} color="#ffffff80" />
+                                </TouchableOpacity>
+                                
+                                {/* Event Type Tags */}
+                                {eventType && (
+                                    <View style={styles.tagsContainer}>
+                                        {eventTypeTagOptions.map((tag) => (
+                                            <TouchableOpacity
+                                                key={tag}
+                                                style={[
+                                                    styles.tagButton,
+                                                    eventTags.includes(tag) && styles.tagButtonSelected
+                                                ]}
+                                                onPress={() => toggleEventTag(tag)}
+                                            >
+                                                <Text style={[
+                                                    styles.tagText,
+                                                    eventTags.includes(tag) && styles.tagTextSelected
+                                                ]}>
+                                                    {tag}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                )}
                             </View>
+                            
                             <View style={styles.fieldGroupPro}>
                                 <Text style={styles.labelPro}>Location</Text>
                                 <TextInput
@@ -93,6 +320,7 @@ const CreateAddForm = ({ type, onClose }) => {
                                     placeholderTextColor="#ffffff80"
                                 />
                             </View>
+                            
                             <View style={styles.rowPro}>
                                 <View style={[styles.fieldGroupPro, styles.halfPro]}>
                                     <Text style={styles.labelPro}>Date</Text>
@@ -115,6 +343,7 @@ const CreateAddForm = ({ type, onClose }) => {
                                     />
                                 </View>
                             </View>
+                            
                             <View style={styles.fieldGroupPro}>
                                 <Text style={styles.labelPro}>Budget (optional)</Text>
                                 <TextInput
@@ -126,17 +355,24 @@ const CreateAddForm = ({ type, onClose }) => {
                                     keyboardType="numeric"
                                 />
                             </View>
+                            
                             <View style={styles.fieldGroupPro}>
-                                <Text style={styles.labelPro}>Description (optional)</Text>
+                                <Text style={styles.labelPro}>Description (optional, min. 100 words if provided)</Text>
                                 <TextInput
                                     style={[styles.inputPro, styles.textAreaPro, { backgroundColor: theme.colors.primary }]}
                                     value={description}
                                     onChangeText={setDescription}
-                                    placeholder="Describe your need..."
+                                    placeholder="Describe your needs in detail (minimum 100 words if provided)..."
                                     placeholderTextColor="#ffffff80"
                                     multiline
                                 />
+                                {description && (
+                                    <Text style={styles.wordCount}>
+                                        {description.trim().split(/\s+/).filter(word => word.length > 0).length} / 100 words
+                                    </Text>
+                                )}
                             </View>
+                            
                             <View style={styles.fieldGroupPro}>
                                 <Text style={styles.labelPro}>📎 Attachments</Text>
                                 <View style={styles.attachmentRowPro}>
@@ -156,24 +392,61 @@ const CreateAddForm = ({ type, onClose }) => {
                         <>
                             <View style={styles.fieldGroupPro}>
                                 <Text style={styles.labelPro}>Category</Text>
-                                <TextInput
-                                    style={styles.inputPro}
-                                    value={category}
-                                    onChangeText={setCategory}
-                                    placeholder="Enter category"
-                                    placeholderTextColor="#ffffff80"
-                                />
+                                <TouchableOpacity
+                                    style={[styles.inputPro, styles.dropdownButton]}
+                                    onPress={() => setShowCategoryDropdown(true)}
+                                >
+                                    <Text style={styles.dropdownText}>{category || 'Select Category'}</Text>
+                                    <Icon name="chevron-down" size={20} color="#ffffff80" />
+                                </TouchableOpacity>
                             </View>
                             <View style={styles.fieldGroupPro}>
-                                <Text style={styles.labelPro}>Description</Text>
+                                <Text style={styles.labelPro}>Description (min. 100 words)</Text>
                                 <TextInput
                                     style={[styles.inputPro, styles.textAreaPro, { backgroundColor: theme.colors.primary }]}
                                     value={vendorDescription}
                                     onChangeText={setVendorDescription}
-                                    placeholder="Describe your service"
+                                    placeholder="Describe your services in detail (minimum 100 words)..."
                                     placeholderTextColor="#ffffff80"
                                     multiline
                                 />
+                                {vendorDescription && (
+                                    <Text style={styles.wordCount}>
+                                        {vendorDescription.trim().split(/\s+/).filter(word => word.length > 0).length} / 100 words
+                                    </Text>
+                                )}
+                            </View>
+                            
+                            <View style={styles.fieldGroupPro}>
+                                <Text style={styles.labelPro}>Tags (Optional)</Text>
+                                <View style={styles.tagsInputContainer}>
+                                    <ScrollView 
+                                        horizontal={false}
+                                        style={styles.tagsScrollView}
+                                        showsVerticalScrollIndicator={false}
+                                        nestedScrollEnabled={true}
+                                    >
+                                        <View style={styles.tagsContainer}>
+                                            {tagOptions.map((tag) => (
+                                                <TouchableOpacity
+                                                    key={tag}
+                                                    style={[
+                                                        styles.tagButton,
+                                                        selectedTags.includes(tag) && styles.tagButtonSelected
+                                                    ]}
+                                                    onPress={() => toggleTag(tag)}
+                                                >
+                                                    <Text style={[
+                                                        styles.tagText,
+                                                        selectedTags.includes(tag) && styles.tagTextSelected
+                                                    ]}>
+                                                        {tag}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    </ScrollView>
+                                </View>
                             </View>
                             <View style={styles.fieldGroupPro}>
                                 <Text style={styles.labelPro}>Vendor Company Name</Text>
@@ -181,7 +454,7 @@ const CreateAddForm = ({ type, onClose }) => {
                                     style={styles.inputPro}
                                     value={companyName}
                                     onChangeText={setCompanyName}
-                                    placeholder="Enter company name"
+                                    placeholder="text field..."
                                     placeholderTextColor="#ffffff80"
                                 />
                             </View>
@@ -191,36 +464,60 @@ const CreateAddForm = ({ type, onClose }) => {
                                     style={styles.inputPro}
                                     value={vendorLocation}
                                     onChangeText={setVendorLocation}
-                                    placeholder="Enter location"
+                                    placeholder="text field..."
                                     placeholderTextColor="#ffffff80"
                                 />
                             </View>
-                            <View style={styles.rowPro}>
-                                <View style={[styles.fieldGroupPro, styles.halfPro]}>
-                                    <Text style={styles.labelPro}>Amount</Text>
-                                    <TextInput
-                                        style={styles.inputPro}
-                                        value={offerAmount}
-                                        onChangeText={setOfferAmount}
-                                        placeholder="Enter amount"
-                                        placeholderTextColor="#ffffff80"
-                                        keyboardType="numeric"
-                                    />
-                                </View>
-                                <View style={[styles.fieldGroupPro, styles.halfPro]}>
-                                    <Text style={styles.labelPro}>Percentage</Text>
-                                    <TextInput
-                                        style={styles.inputPro}
-                                        value={offerPercentage}
-                                        onChangeText={setOfferPercentage}
-                                        placeholder="Enter percentage"
-                                        placeholderTextColor="#ffffff80"
-                                        keyboardType="numeric"
-                                    />
-                                </View>
+                            
+                            <View style={styles.fieldGroupPro}>
+                                <Text style={styles.labelPro}>Offer (Optional)</Text>
+                                {offers.map((offer, index) => (
+                                    <View key={index} style={styles.offerRow}>
+                                        <View style={styles.offerInputContainer}>
+                                            <Text style={styles.offerLabel}>Amount</Text>
+                                            <TextInput
+                                                style={[styles.inputPro, styles.offerInput]}
+                                                value={offer.amount}
+                                                onChangeText={(value) => updateOffer(index, 'amount', value)}
+                                                placeholder="$1000"
+                                                placeholderTextColor="#ffffff80"
+                                                keyboardType="numeric"
+                                            />
+                                        </View>
+                                        <View style={styles.offerInputContainer}>
+                                            <Text style={styles.offerLabel}>Discount</Text>
+                                            <TextInput
+                                                style={[styles.inputPro, styles.offerInput]}
+                                                value={offer.discount}
+                                                onChangeText={(value) => updateOffer(index, 'discount', value)}
+                                                placeholder="10%"
+                                                placeholderTextColor="#ffffff80"
+                                                keyboardType="numeric"
+                                            />
+                                        </View>
+                                        <View style={styles.offerButtons}>
+                                            {index === offers.length - 1 && (
+                                                <TouchableOpacity
+                                                    style={styles.offerButton}
+                                                    onPress={addOffer}
+                                                >
+                                                    <Icon name="add-circle" size={24} color="#ffffff" />
+                                                </TouchableOpacity>
+                                            )}
+                                            {offers.length > 1 && (
+                                                <TouchableOpacity
+                                                    style={styles.offerButton}
+                                                    onPress={() => removeOffer(index)}
+                                                >
+                                                    <Icon name="remove-circle" size={24} color="#ffffff80" />
+                                                </TouchableOpacity>
+                                            )}
+                                        </View>
+                                    </View>
+                                ))}
                             </View>
                             <View style={styles.fieldGroupPro}>
-                                <Text style={styles.labelPro}>Photos</Text>
+                                <Text style={styles.labelPro}>In Photos</Text>
                                 <View style={styles.attachmentRowPro}>
                                     {photos.length === 0 && (
                                         <View style={styles.attachmentPro}>
@@ -237,16 +534,128 @@ const CreateAddForm = ({ type, onClose }) => {
                             </View>
                         </>
                     )}
-                </ScrollView>
-            </View>
+            </ScrollView>
             <View style={styles.buttonRowFixedPro}>
                 <TouchableOpacity style={[styles.buttonPro, styles.cancelButtonPro]} onPress={handleCancel}>
                     <Text style={styles.cancelTextPro}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.buttonPro, styles.postButtonPro]} onPress={handlePost}>
-                    <Text style={styles.postTextPro}>Post</Text>
+                <TouchableOpacity 
+                    style={[styles.buttonPro, styles.postButtonPro, isLoading && styles.disabledButton]} 
+                    onPress={handlePost}
+                    disabled={isLoading}
+                >
+                    {isLoading ? (
+                        <ActivityIndicator size="small" color="#2C3D5B" />
+                    ) : (
+                        <Text style={styles.postTextPro}>Post</Text>
+                    )}
                 </TouchableOpacity>
             </View>
+            
+            {/* Category Dropdown Modal */}
+            <Modal
+                visible={showCategoryDropdown}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowCategoryDropdown(false)}
+            >
+                <TouchableOpacity 
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setShowCategoryDropdown(false)}
+                >
+                    <View style={styles.dropdownModal}>
+                        <FlatList
+                            data={categories}
+                            keyExtractor={(item) => item}
+                            renderItem={({ item }) => (
+                                <TouchableOpacity
+                                    style={styles.dropdownItem}
+                                    onPress={() => {
+                                        setCategory(item);
+                                        setShowCategoryDropdown(false);
+                                    }}
+                                >
+                                    <Text style={styles.dropdownItemText}>{item}</Text>
+                                    {category === item && (
+                                        <Icon name="checkmark" size={20} color="#ffffff" />
+                                    )}
+                                </TouchableOpacity>
+                            )}
+                        />
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+            
+            {/* Service Dropdown Modal for Events */}
+            <Modal
+                visible={showServiceDropdown}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowServiceDropdown(false)}
+            >
+                <TouchableOpacity 
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setShowServiceDropdown(false)}
+                >
+                    <View style={styles.dropdownModal}>
+                        <FlatList
+                            data={serviceOptions}
+                            keyExtractor={(item) => item}
+                            renderItem={({ item }) => (
+                                <TouchableOpacity
+                                    style={styles.dropdownItem}
+                                    onPress={() => {
+                                        setService(item);
+                                        setShowServiceDropdown(false);
+                                    }}
+                                >
+                                    <Text style={styles.dropdownItemText}>{item}</Text>
+                                    {service === item && (
+                                        <Icon name="checkmark" size={20} color="#ffffff" />
+                                    )}
+                                </TouchableOpacity>
+                            )}
+                        />
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+            
+            {/* Event Type Dropdown Modal */}
+            <Modal
+                visible={showEventTypeDropdown}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowEventTypeDropdown(false)}
+            >
+                <TouchableOpacity 
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setShowEventTypeDropdown(false)}
+                >
+                    <View style={styles.dropdownModal}>
+                        <FlatList
+                            data={eventTypeOptions}
+                            keyExtractor={(item) => item}
+                            renderItem={({ item }) => (
+                                <TouchableOpacity
+                                    style={styles.dropdownItem}
+                                    onPress={() => {
+                                        setEventType(item);
+                                        setShowEventTypeDropdown(false);
+                                    }}
+                                >
+                                    <Text style={styles.dropdownItemText}>{item}</Text>
+                                    {eventType === item && (
+                                        <Icon name="checkmark" size={20} color="#ffffff" />
+                                    )}
+                                </TouchableOpacity>
+                            )}
+                        />
+                    </View>
+                </TouchableOpacity>
+            </Modal>
         </View>
     );
 };
@@ -255,22 +664,15 @@ export default CreateAddForm;
 
 const styles = StyleSheet.create({
     modalBorderWrapPro: {
-        borderWidth: 0,
-        borderRadius: 28,
-        backgroundColor: '#2C3D5B',
         flex: 1,
-        overflow: 'hidden',
-        shadowColor: '#000',
-        shadowOpacity: 0.25,
-        shadowRadius: 32,
-        shadowOffset: { width: 0, height: 12 },
-        elevation: 20,
+        backgroundColor: 'transparent',
+        position: 'relative',
     },
     headerPro: {
         backgroundColor: 'transparent',
         width: '100%',
-        paddingTop: 10,
-        paddingBottom: 12,
+        paddingTop: 5,
+        paddingBottom: 10,
         paddingHorizontal: 0,
         borderBottomWidth: 0,
     },
@@ -289,18 +691,14 @@ const styles = StyleSheet.create({
         lineHeight: 18,
         letterSpacing: 0.1,
     },
-    formContentWrap: {
-        flex: 1,
-        paddingBottom: 90,
-    },
     scrollViewPro: {
         flex: 1,
-        backgroundColor: '#2C3D5B',
+        marginBottom: 90,
     },
     containerPro: {
         paddingHorizontal: 16,
         paddingTop: 10,
-        paddingBottom: 16,
+        paddingBottom: 20,
     },
     fieldGroupPro: {
         marginBottom: 14,
@@ -391,8 +789,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         padding: 16,
+        paddingBottom: 24,
         borderTopWidth: 1,
         borderTopColor: '#ffffff20',
+        backgroundColor: '#2C3D5B',
         position: 'absolute',
         left: 0,
         right: 0,
@@ -439,5 +839,121 @@ const styles = StyleSheet.create({
         fontSize: 15,
         fontWeight: '700',
         letterSpacing: 0.3,
+    },
+    disabledButton: {
+        opacity: 0.6,
+    },
+    dropdownButton: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    dropdownText: {
+        color: '#ffffff',
+        fontSize: 15,
+    },
+    tagsInputContainer: {
+        backgroundColor: '#41547A',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#ffffff30',
+        height: 100,
+        shadowColor: '#000',
+        shadowOpacity: 0.10,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 3,
+    },
+    tagsScrollView: {
+        flex: 1,
+        padding: 10,
+    },
+    tagsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+    },
+    tagButton: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 14,
+        backgroundColor: '#2C3D5B',
+        borderWidth: 1,
+        borderColor: '#ffffff20',
+        marginBottom: 4,
+    },
+    tagButtonSelected: {
+        backgroundColor: '#ffffff',
+        borderColor: '#ffffff',
+    },
+    tagText: {
+        color: '#ffffff',
+        fontSize: 13,
+        fontWeight: '500',
+    },
+    tagTextSelected: {
+        color: '#2C3D5B',
+        fontWeight: '600',
+    },
+    offerRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        marginBottom: 12,
+        gap: 8,
+    },
+    offerInputContainer: {
+        flex: 1,
+    },
+    offerLabel: {
+        color: '#ffffff',
+        fontSize: 13,
+        marginBottom: 4,
+        fontWeight: '500',
+    },
+    offerInput: {
+        marginBottom: 0,
+    },
+    offerButtons: {
+        flexDirection: 'row',
+        gap: 4,
+        paddingBottom: 2,
+    },
+    offerButton: {
+        padding: 4,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    dropdownModal: {
+        backgroundColor: '#2C3D5B',
+        borderRadius: 12,
+        width: '80%',
+        maxHeight: 300,
+        borderWidth: 1,
+        borderColor: '#ffffff30',
+    },
+    dropdownItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#ffffff20',
+    },
+    dropdownItemText: {
+        color: '#ffffff',
+        fontSize: 15,
+        fontWeight: '500',
+    },
+    wordCount: {
+        color: '#ffffff80',
+        fontSize: 12,
+        marginTop: 4,
+        textAlign: 'right',
+        fontStyle: 'italic',
     },
 });

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -10,6 +10,8 @@ import {
     ImageBackground,
     Platform,
     StatusBar,
+    ActivityIndicator,
+    Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -27,6 +29,10 @@ import bg from '../../assets/images/profileBG.png';
 
 import { useTheme } from '../../ThemeContext';
 import theme from '../../theme';
+import vendorService from '../../services/vendorService';
+import eventService from '../../services/eventService';
+
+const { height: screenHeight } = Dimensions.get('window');
 
 export default function VendorAdDashboard({ navigation }) {
     const theme = useTheme();
@@ -36,8 +42,51 @@ export default function VendorAdDashboard({ navigation }) {
     const [showCreateAd, setShowCreateAd] = useState(false);
     const [showCreateAddForm, setShowCreateAddForm] = useState(false);
     const [createAddFormType, setCreateAddFormType] = useState('vendor');
+    const [vendorAds, setVendorAds] = useState([]);
+    const [eventAds, setEventAds] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
 
-    const vendors = [
+    // Fetch ads on component mount and when tab changes
+    useEffect(() => {
+        fetchAds();
+    }, [activeTab]);
+
+    const fetchAds = async () => {
+        setIsLoading(true);
+        try {
+            if (activeTab === 'vendor') {
+                const response = await vendorService.getMyVendorAds();
+                if (response.success) {
+                    const formattedVendors = response.data.map(vendor => 
+                        vendorService.formatVendorForDisplay(vendor)
+                    );
+                    setVendorAds(formattedVendors);
+                }
+            } else {
+                const response = await eventService.getMyEventAds();
+                if (response.success) {
+                    const formattedEvents = response.data.map(event => 
+                        eventService.formatEventForDisplay(event)
+                    );
+                    setEventAds(formattedEvents);
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching ads:', error);
+        } finally {
+            setIsLoading(false);
+            setRefreshing(false);
+        }
+    };
+
+    const handleRefresh = () => {
+        setRefreshing(true);
+        fetchAds();
+    };
+
+    // Dummy data fallback (remove this when API is fully working)
+    const dummyVendors = [
         {
             initials: '4S',
             name: '4x90 Studio',
@@ -112,7 +161,7 @@ export default function VendorAdDashboard({ navigation }) {
         },
     ];
 
-    const eventAds = [
+    const dummyEventAds = [
         {
             id: 1,
             attachments: [img, img],
@@ -219,8 +268,13 @@ export default function VendorAdDashboard({ navigation }) {
                 </View>
 
                 {/* List */}
-                {activeTab === 'vendor' ? (
-                    vendors.map((vendor, idx) => (
+                {isLoading ? (
+                    <View style={styles.loadingContainer}>
+                        <ActivityIndicator size="large" color={theme.colors.primary} />
+                        <Text style={[styles.loadingText, { color: theme.colors.primary }]}>Loading ads...</Text>
+                    </View>
+                ) : activeTab === 'vendor' ? (
+                    (vendorAds.length > 0 ? vendorAds : dummyVendors).map((vendor, idx) => (
                         <VendorCard
                             key={idx}
                             initials={vendor.initials}
@@ -236,7 +290,7 @@ export default function VendorAdDashboard({ navigation }) {
                         />
                     ))
                 ) : (
-                    eventAds.map((event) => (
+                    (eventAds.length > 0 ? eventAds : dummyEventAds).map((event) => (
                         <EventAdCard
                             key={event.id}
                             attachments={event.attachments}
@@ -244,9 +298,10 @@ export default function VendorAdDashboard({ navigation }) {
                         />
                     ))
                 )}
+            </ScrollView>
 
-                {/* Popup Modal for PreSavedMessage */}
-                <Modal
+            {/* Popup Modal for PreSavedMessage */}
+            <Modal
                     visible={showPreSaved}
                     animationType="slide"
                     transparent={true}
@@ -295,7 +350,10 @@ export default function VendorAdDashboard({ navigation }) {
                     <View style={styles.bottomModalOverlay}>
                         <View style={styles.bottomModalContent}>
                             <CreateAd
-                                onClose={() => setShowCreateAd(false)}
+                                onClose={() => {
+                                    setShowCreateAd(false);
+                                    fetchAds(); // Refresh ads after closing
+                                }}
                                 onTabPress={(type) => {
                                     setShowCreateAd(false);
                                     setCreateAddFormType(type);
@@ -319,22 +377,29 @@ export default function VendorAdDashboard({ navigation }) {
                     transparent={true}
                     onRequestClose={() => setShowCreateAddForm(false)}
                 >
-                    <View style={styles.bottomModalOverlay}>
-                        <View style={[styles.bottomModalContentLarge, { backgroundColor: theme.colors.primary }]}>
+                    <View style={styles.modalFullScreen}>
+                        <TouchableOpacity 
+                            style={styles.modalTopSpace}
+                            activeOpacity={1}
+                            onPress={() => setShowCreateAddForm(false)}
+                        />
+                        <View style={[styles.modalBottomContent, { backgroundColor: theme.colors.primary }]}>
                             <CreateAddForm
                                 type={createAddFormType}
-                                onClose={() => setShowCreateAddForm(false)}
+                                onClose={() => {
+                                    setShowCreateAddForm(false);
+                                    fetchAds(); // Refresh ads after creating new ad
+                                }}
                             />
                             <TouchableOpacity
-                                style={styles.closeBtn}
+                                style={styles.modalCloseBtnNew}
                                 onPress={() => setShowCreateAddForm(false)}
                             >
-                                <Icon name="close" size={24} color={theme.colors.primary} />
+                                <Icon name="close" size={24} color="#fff" />
                             </TouchableOpacity>
                         </View>
                     </View>
                 </Modal>
-            </ScrollView>
         </View>
     );
 }
@@ -546,6 +611,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingBottom: 24,
         width: '100%',
+        maxHeight: '90%',
         elevation: 10,
         shadowColor: '#000',
         shadowOpacity: 0.15,
@@ -553,13 +619,67 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: -4 },
         position: 'relative',
     },
+    modalFullScreen: {
+        flex: 1,
+        backgroundColor: 'transparent',
+    },
+    modalTopSpace: {
+        height: screenHeight * 0.15,  // 15% space at top
+        backgroundColor: 'rgba(0,0,0,0.5)',
+    },
+    modalBottomContent: {
+        flex: 1,
+        maxHeight: screenHeight * 0.85,  // Maximum 85% of screen
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        paddingTop: 20,
+        paddingHorizontal: 20,
+        paddingBottom: 20,
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: -4 },
+        overflow: 'hidden',
+    },
+    modalCloseBtnNew: {
+        position: 'absolute',
+        top: 15,
+        right: 15,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        borderRadius: 20,
+        padding: 8,
+        zIndex: 100,
+        elevation: 5,
+    },
+    fullModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+        paddingTop: screenHeight * 0.2,
+    },
+    fullModalContent: {
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        paddingTop: 20,
+        paddingHorizontal: 20,
+        paddingBottom: 20,
+        width: '100%',
+        flex: 1,
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: -4 },
+        overflow: 'hidden',
+    },
     closeBtn: {
         position: 'absolute',
-        top: -10,
-        right: -10,
-        backgroundColor: '#F4F4F4',
+        top: 10,
+        right: 10,
+        backgroundColor: 'rgba(255,255,255,0.2)',
         borderRadius: 20,
-        padding: 6,
+        padding: 8,
         zIndex: 10,
     },
     addIconOutlineBox: {
@@ -571,5 +691,16 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         // backgroundColor: '#fff',
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 50,
+    },
+    loadingText: {
+        marginTop: 10,
+        fontSize: 14,
+        fontWeight: '500',
     },
 });
