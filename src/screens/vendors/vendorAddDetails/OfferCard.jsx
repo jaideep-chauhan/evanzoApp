@@ -21,20 +21,7 @@ const OfferCard = ({ amount = 150, percent = 10 }) => {
             <View style={styles.row}>
                 <Text style={styles.label}></Text>
                 <Text style={styles.columnTitle}>Amount spent</Text>
-                <Text style={styles.columnTitle}>Percentage</Text>
-            </View>
-            <View style={styles.row}>
-                <View style={styles.valueBox1}>
-                    <Text style={{ color: "#344562", fontSize: 8 }}>Offer:</Text>
-                </View>
-                <View style={styles.valueBox}>
-                    <Image source={dollar} style={{ width: 12, height: 12, resizeMode: 'contain' }} />
-                    <Text style={styles.valueText}>{amount}</Text>
-                </View>
-                <View style={styles.valueBox}>
-                    <Image source={percentage} style={{ width: 12, height: 12, resizeMode: 'contain' }} />
-                    <Text style={styles.valueText}>{percent}%</Text>
-                </View>
+                <Text style={styles.columnTitle}>Discount</Text>
             </View>
             <View style={styles.row}>
                 <View style={styles.valueBox1}>
@@ -53,12 +40,38 @@ const OfferCard = ({ amount = 150, percent = 10 }) => {
     );
 };
 
-const OfferGrid = () => {
+const OfferGrid = ({ offers = [] }) => {
+    console.log('OfferGrid - Received offers:', offers);
+    console.log('OfferGrid - Offers type:', typeof offers);
+    console.log('OfferGrid - Offers length:', offers?.length);
+    
+    // If no offers, show default cards
+    if (!offers || offers.length === 0) {
+        console.log('OfferGrid - No offers, showing default cards');
+        return (
+            <View style={styles.container}>
+                <OfferCard amount={0} percent={0} />
+                <OfferCard amount={0} percent={0} />
+            </View>
+        );
+    }
+
+    // Display actual offers
+    console.log('OfferGrid - Displaying offers:', offers);
     return (
         <View style={styles.container}>
-            <OfferCard />
-            <OfferCard />
-
+            {offers.slice(0, 2).map((offer, index) => {
+                console.log(`OfferGrid - Offer ${index}:`, offer);
+                console.log(`OfferGrid - Amount: ${offer.amount}, Discount: ${offer.discount}`);
+                return (
+                    <OfferCard 
+                        key={index} 
+                        amount={offer.amount || 0} 
+                        percent={offer.discount || 0} 
+                    />
+                );
+            })}
+            {offers.length === 1 && <OfferCard amount={0} percent={0} />}
         </View>
     );
 };

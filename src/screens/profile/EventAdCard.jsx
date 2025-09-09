@@ -17,6 +17,11 @@ export default function EventAdCard({
     location = 'Ontario, Canada',
     duration = '2 hours',
     date = 'October 30, 2023',
+    time,
+    budget,
+    guests,
+    service_needed,
+    event_type,
     status = 'LIVE',
     statusColor = '#2ECC71',
     profile = {
@@ -38,6 +43,11 @@ export default function EventAdCard({
             location,
             duration,
             date,
+            time,
+            budget,
+            guests,
+            service_needed,
+            event_type,
             status,
             statusColor,
             profile,
@@ -105,7 +115,7 @@ export default function EventAdCard({
                                 source={typeof imageItem === 'string' ? { uri: imageItem } : imageItem}
                                 style={styles.attachmentImage}
                                 defaultSource={img} // Fallback image
-                                onError={() => console.log('Failed to load event image:', imageItem)}
+                                onError={() => {}}
                             />
                         ))}
                     </ScrollView>

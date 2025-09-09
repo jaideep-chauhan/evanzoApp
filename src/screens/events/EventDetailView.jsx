@@ -12,7 +12,7 @@ import {
     ImageBackground,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import img from '../../assets/images/dummy.png';
 import bg1 from '../../assets/images/smallHeader.jpg';
 import { useTheme } from '../../ThemeContext';
@@ -23,6 +23,7 @@ const AVATAR_SIZE = 60;
 
 export default function EventDetailView() {
     const navigation = useNavigation();
+    const route = useRoute();
     const theme = useTheme();
 
     const [quoteText, setQuoteText] = useState('');
@@ -30,28 +31,82 @@ export default function EventDetailView() {
     const [showFullDesc, setShowFullDesc] = useState(false);
     const [descTruncated, setDescTruncated] = useState(false);
     const descTextRef = useRef(null);
+    const [textMeasured, setTextMeasured] = useState(false);
     const scrollViewRef = useRef(null);
     const currentIndex = useRef(1);
     const intervalRef = useRef(null);
     const [suggestionCards] = useState([1, 2, 3, 4]);
     const cardWidth = 336; // 320 width + 16 gap
 
+    // Get event data from navigation params
+    const eventFromParams = route.params?.event || {};
+    
+    // Parse additional fields from event data
+    const parseDuration = (duration) => {
+        if (!duration) return '2';
+        const match = duration.match(/(\d+)/);
+        return match ? match[1] : '2';
+    };
+    
+    const parseDate = (date) => {
+        if (!date) return 'Date TBD';
+        // If it's already formatted, return as is
+        if (typeof date === 'string' && !date.includes('-')) return date;
+        // Parse ISO date or date string
+        try {
+            const dateObj = new Date(date);
+            return dateObj.toLocaleDateString('en-US', { 
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+            });
+        } catch (e) {
+            return date;
+        }
+    };
+
+    // Parse budget to display format
+    const parseBudget = (budget) => {
+        if (!budget) return 'Budget TBD';
+        if (typeof budget === 'string') return budget;
+        if (typeof budget === 'number') {
+            return `$${budget.toLocaleString()}`;
+        }
+        return 'Budget TBD';
+    };
+
     const eventData = {
-        title: 'Corporate Event',
-        location: 'Ontario, Canada',
-        date: '30 May 2025',
-        duration: '04',
-        time: '07:00 pm',
-        budget: '$1500',
-        guests: '150',
-        description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do...',
-        images: [img, bg1, img], // Example images for carousel
-        organizer: {
-            name: 'Tushar Dhania',
+        title: eventFromParams.title || 'Event',
+        location: eventFromParams.location || 'Location TBD',
+        date: parseDate(eventFromParams.date),
+        duration: parseDuration(eventFromParams.duration),
+        time: eventFromParams.time || '07:00 pm',
+        budget: parseBudget(eventFromParams.budget),
+        guests: eventFromParams.guests || eventFromParams.guests_count || '50',
+        description: eventFromParams.description || 'Event description not available.',
+        service_needed: eventFromParams.service_needed,
+        event_type: eventFromParams.event_type,
+        images: eventFromParams.attachments && eventFromParams.attachments.length > 0 
+            ? eventFromParams.attachments.map(att => {
+                // Handle different attachment formats
+                if (typeof att === 'string') {
+                    return att.startsWith('http') ? { uri: att } : att;
+                } else if (att.url) {
+                    return { uri: att.url };
+                } else if (att.path) {
+                    return { uri: `http://localhost:3000${att.path}` };
+                }
+                return img;
+            })
+            : [img, bg1, img], // Fallback images
+        organizer: eventFromParams.profile || {
+            name: 'Event Organizer',
             avatar: img,
             rating: 5.0,
-            reviewCount: 10,
+            reviewCount: 0,
         },
+        status: eventFromParams.status || 'ACTIVE',
+        statusColor: eventFromParams.statusColor || '#2ECC71',
     };
 
     const handleSendQuote = () => {
@@ -101,6 +156,18 @@ export default function EventDetailView() {
             currentIndex.current = idx;
         }
     };
+
+    // Reset text measurement when event changes and check description length
+    useEffect(() => {
+        setTextMeasured(false);
+        setShowFullDesc(false);
+        // Simple check: if description is longer than ~150 characters, it's likely more than 3 lines
+        if (eventData.description && eventData.description.length > 150) {
+            setDescTruncated(true);
+        } else {
+            setDescTruncated(false);
+        }
+    }, [eventFromParams.description, eventData.description]);
 
     // Carousel auto-scroll functionality (similar to VendorCard)
     useEffect(() => {
@@ -229,22 +296,27 @@ export default function EventDetailView() {
                             numberOfLines={showFullDesc ? undefined : 3}
                             ellipsizeMode="tail"
                             ref={descTextRef}
-                            onTextLayout={e => {
-                                if (!showFullDesc && e.nativeEvent.lines.length > 3 && !descTruncated) {
-                                    setDescTruncated(true);
+                            onTextLayout={(e) => {
+                                // Check if text is truncated (more than 3 lines)
+                                if (!textMeasured) {
+                                    const { lines } = e.nativeEvent;
+                                    if (lines.length > 3) {
+                                        setDescTruncated(true);
+                                    }
+                                    setTextMeasured(true);
                                 }
                             }}
                         >
                             {eventData.description}
                         </Text>
                         {descTruncated && !showFullDesc && (
-                            <TouchableOpacity onPress={() => setShowFullDesc(true)}>
-                                <Text style={styles.readMoreText}>Read more</Text>
+                            <TouchableOpacity onPress={() => setShowFullDesc(true)} style={{ marginTop: 4, alignSelf: 'flex-end' }}>
+                                <Text style={styles.seeMoreText}>See more</Text>
                             </TouchableOpacity>
                         )}
                         {showFullDesc && descTruncated && (
-                            <TouchableOpacity onPress={() => setShowFullDesc(false)}>
-                                <Text style={styles.readMoreText}>Show less</Text>
+                            <TouchableOpacity onPress={() => setShowFullDesc(false)} style={{ marginTop: 4, alignSelf: 'flex-end' }}>
+                                <Text style={styles.seeMoreText}>See less</Text>
                             </TouchableOpacity>
                         )}
 
@@ -254,7 +326,14 @@ export default function EventDetailView() {
                     <View style={styles.userInfo}>
                         <View style={styles.userInfoContent}>
                             <View style={styles.leftSection}>
-                                <Image source={eventData.organizer.avatar} style={styles.avatar} />
+                                <Image 
+                                    source={
+                                        typeof eventData.organizer.avatar === 'string' && eventData.organizer.avatar.startsWith('http')
+                                            ? { uri: eventData.organizer.avatar }
+                                            : eventData.organizer.avatar
+                                    } 
+                                    style={styles.avatar} 
+                                />
                                 <Text style={styles.organizerName}>{eventData.organizer.name}</Text>
                             </View>
                             <View style={styles.rating}>
@@ -526,19 +605,10 @@ const styles = StyleSheet.create({
         color: '#2C3D5B',
         lineHeight: 18,
     },
-    readMoreText: {
+    seeMoreText: {
         color: '#334462',
         fontWeight: '600',
-        marginTop: 4,
         fontSize: 13,
-        alignSelf: 'flex-start',
-    },
-    readMoreText: {
-        color: '#334462',
-        fontWeight: '600',
-        marginTop: 4,
-        fontSize: 13,
-        alignSelf: 'flex-start',
     },
     userInfo: {
         borderRadius: 10,

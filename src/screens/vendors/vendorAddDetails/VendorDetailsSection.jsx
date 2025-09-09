@@ -46,7 +46,9 @@ export default function VendorDetailsSection({
     description = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do ds ds ds d sdsjhhs hdsi dsiucds ud hdsic dsiguc cudicgdsuc sguicds csbui chduicgdsuicds gcudis cdusicgdisucgdsug cdsgchddchd",
     reviews = [],
     hideMessageSection = false,
+    offers = [],
 }) {
+    console.log('VendorDetailsSection - Received offers:', offers);
     const [descExpanded, setDescExpanded] = useState(false);
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -63,11 +65,18 @@ export default function VendorDetailsSection({
                         style={styles.carousel}
                         contentContainerStyle={{ alignItems: 'center' }}
                     >
-                        {photos.map((photo, idx) => (
-                            <View key={idx} style={styles.photoWrapper}>
-                                <Image source={photo} style={styles.photo} />
-                            </View>
-                        ))}
+                        {photos.map((photo, idx) => {
+                            // Convert photo to proper format for React Native Image
+                            let imageSource = photo;
+                            if (typeof photo === 'string') {
+                                imageSource = { uri: photo };
+                            }
+                            return (
+                                <View key={idx} style={styles.photoWrapper}>
+                                    <Image source={imageSource} style={styles.photo} />
+                                </View>
+                            );
+                        })}
                     </ScrollView>
                     {/* Description below images */}
                     <View style={styles.descContainer}>
@@ -91,7 +100,7 @@ export default function VendorDetailsSection({
                     </View>
                 </View>
 
-                <OfferGrid />
+                <OfferGrid offers={offers} />
 
                 <ProfileCardCarousel />
 

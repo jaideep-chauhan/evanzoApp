@@ -250,6 +250,37 @@ const CreateAddForm = ({ type, onClose }) => {
                 // Create FormData for file upload
                 const formData = new FormData();
                 
+                // Prepare complete payload for logging
+                const eventPayload = {
+                    service_needed: service,
+                    event_type: eventType,
+                    event_tags: eventTags,
+                    location: location,
+                    date: date.toISOString().split('T')[0], // Format as YYYY-MM-DD
+                    duration: duration || '',
+                    budget: budget || '',
+                    description: description || '',
+                    photos_count: photos.length,
+                    photos: photos.map((photo, index) => ({
+                        uri: photo.uri,
+                        type: photo.type || 'image/jpeg',
+                        name: photo.name || `attachment_${index}.jpg`,
+                    }))
+                };
+                
+                console.log('=== EVENT AD CREATION PAYLOAD ===');
+                console.log('Complete Event Ad Payload:', JSON.stringify(eventPayload, null, 2));
+                console.log('Service Needed:', service);
+                console.log('Event Type:', eventType);
+                console.log('Event Tags:', eventTags);
+                console.log('Location:', location);
+                console.log('Date:', date.toISOString().split('T')[0]);
+                console.log('Duration:', duration || 'Not specified');
+                console.log('Budget:', budget || 'Not specified');
+                console.log('Description:', description || 'No description');
+                console.log('Photos Count:', photos.length);
+                console.log('================================');
+                
                 // Add text fields
                 formData.append('service_needed', service);
                 formData.append('event_type', eventType);
@@ -272,6 +303,15 @@ const CreateAddForm = ({ type, onClose }) => {
                 console.log('Uploading event ad with', photos.length, 'photos');
 
                 const response = await eventService.createEventAd(formData);
+                
+                console.log('=== EVENT AD CREATION RESPONSE ===');
+                console.log('Response:', response);
+                console.log('Success:', response.success);
+                console.log('Message:', response.message);
+                if (response.data) {
+                    console.log('Created Event Ad Data:', response.data);
+                }
+                console.log('==================================');
 
                 if (response.success) {
                     setModalState({

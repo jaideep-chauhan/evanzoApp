@@ -55,25 +55,19 @@ export default function VendorAdDashboard({ navigation }) {
         try {
             if (activeTab === 'vendor') {
                 const response = await vendorService.getMyVendorAds();
-                console.log('Vendor ads response:', response);
-                console.log('Raw vendor data before formatting:', response.data);
                 if (response.success) {
                     const formattedVendors = response.data.map(vendor => {
                         const formatted = vendorService.formatVendorForDisplay(vendor);
-                        console.log('Single formatted vendor:', formatted);
                         return formatted;
                     });
-                    console.log('All formatted vendor ads:', formattedVendors);
                     setVendorAds(formattedVendors);
                 }
             } else {
                 const response = await eventService.getMyEventAds();
-                console.log('Event ads response:', response);
                 if (response.success) {
                     const formattedEvents = response.data.map(event => 
                         eventService.formatEventForDisplay(event)
                     );
-                    console.log('Formatted event ads:', formattedEvents);
                     setEventAds(formattedEvents);
                 }
             }
@@ -164,88 +158,93 @@ export default function VendorAdDashboard({ navigation }) {
         {
             id: 1,
             attachments: [img, img],
-            onComplete: () => console.log("Marked Complete"),
+            onComplete: () => {},
         },
         {
             id: 2,
             attachments: [img],
-            onComplete: () => console.log("Marked Complete"),
+            onComplete: () => {},
         },
     ];
 
     return (
         <View style={[styles.safe, { flex: 1, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 }]}>
-            {/* Non-scrollable header content */}
-            <View>
+            {/* Entire scrollable content */}
+            <ScrollView 
+                contentContainerStyle={{ flexGrow: 1 }}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+            >
+                {/* Header and all content before tabs */}
                 <View style={styles.headerBox}>
-                    <ImageBackground
-                        source={bg}
-                        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: -1 }}
-                        resizeMode="cover"
-                        pointerEvents="none"
-                    >
-                    </ImageBackground>
-                    <View style={styles.header}>
-                        <TouchableOpacity>
-                            <Icon name="settings-outline" size={30} color="#fff" />
+                        <ImageBackground
+                            source={bg}
+                            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: -1 }}
+                            resizeMode="cover"
+                            pointerEvents="none"
+                        >
+                        </ImageBackground>
+                        <View style={styles.header}>
+                            <TouchableOpacity>
+                                <Icon name="settings-outline" size={30} color="#fff" />
+                            </TouchableOpacity>
+                            <View style={{ width: 32 }} />
+                            <TouchableOpacity>
+                                <Icon name="chatbubble-ellipses-outline" size={30} color="#fff" />
+                            </TouchableOpacity>
+                        </View>
+                        {/* Profile Info inside blue box */}
+                        <View style={styles.profileSection}>
+                            <View style={styles.profileImage}>
+                                <Text style={styles.profileInitialsText}>
+                                    {user?.full_name ? (
+                                        user.full_name.split(' ').map(name => name[0]).slice(0, 2).join('').toUpperCase()
+                                    ) : 'U'}
+                                </Text>
+                            </View>
+                            <View style={styles.nameRow}>
+                                <Text style={[styles.name, { color: theme.colors.primary }]}>
+                                    {user?.full_name || 'User'}
+                                </Text>
+                            </View>
+                            <Text style={[styles.location, { color: theme.colors.primary }]}>Ontario, Canada</Text>
+                        </View>
+                    </View>
+
+                    {/* Action Buttons */}
+                    <View style={styles.actionRow}>
+                        <TouchableOpacity style={[styles.actionBtn, styles.primary, { backgroundColor: theme.colors.primary }]}>
+                            <Text style={styles.primaryText}>MY ADS</Text>
                         </TouchableOpacity>
-                        <View style={{ width: 32 }} />
-                        <TouchableOpacity>
-                            <Icon name="chatbubble-ellipses-outline" size={30} color="#fff" />
+
+                        <TouchableOpacity
+                            style={styles.actionBtn}
+                            onPress={() => setShowPreSaved(true)}
+                        >
+                            <Text style={[styles.secondaryText, { color: theme.colors.primary }]}>PRE SAVE MESSAGE</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.bellBtn}>
+                            <Icon name="notifications-outline" size={18} color={theme.colors.primary} />
                         </TouchableOpacity>
                     </View>
-                    {/* Profile Info inside blue box */}
-                    <View style={styles.profileSection}>
-                        <View style={styles.profileImage}>
-                            <Text style={styles.profileInitialsText}>
-                                {user?.full_name ? (
-                                    user.full_name.split(' ').map(name => name[0]).slice(0, 2).join('').toUpperCase()
-                                ) : 'U'}
-                            </Text>
-                        </View>
-                        <View style={styles.nameRow}>
-                            <Text style={[styles.name, { color: theme.colors.primary }]}>
-                                {user?.full_name || 'User'}
-                            </Text>
-                        </View>
-                        <Text style={[styles.location, { color: theme.colors.primary }]}>Ontario, Canada</Text>
-                    </View>
-                </View>
 
-                {/* Action Buttons */}
-                <View style={styles.actionRow}>
-                    <TouchableOpacity style={[styles.actionBtn, styles.primary, { backgroundColor: theme.colors.primary }]}>
-                        <Text style={styles.primaryText}>MY ADS</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={styles.actionBtn}
-                        onPress={() => setShowPreSaved(true)}
+                    {/* Create New Ad Box */}
+                    <TouchableOpacity 
+                        style={styles.createAdBox}
+                        onPress={() => setShowCreateAd(true)}
+                        activeOpacity={0.8}
                     >
-                        <Text style={[styles.secondaryText, { color: theme.colors.primary }]}>PRE SAVE MESSAGE</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.bellBtn}>
-                        <Icon name="notifications-outline" size={18} color={theme.colors.primary} />
-                    </TouchableOpacity>
-                </View>
-
-                {/* Create New Ad Box */}
-                <TouchableOpacity 
-                    style={styles.createAdBox}
-                    onPress={() => setShowCreateAd(true)}
-                    activeOpacity={0.8}
-                >
-                    <View style={styles.createAdInnerVertical} pointerEvents="none">
-                        <View style={styles.addIconOutlineBox}>
-                            <Icon name="add" size={24} color={theme.colors.primary} />
+                        <View style={styles.createAdInnerVertical} pointerEvents="none">
+                            <View style={styles.addIconOutlineBox}>
+                                <Icon name="add" size={24} color={theme.colors.primary} />
+                            </View>
+                            <Text style={[styles.createAdTextLarge, { color: theme.colors.primary }]}>Create New Ad</Text>
                         </View>
-                        <Text style={[styles.createAdTextLarge, { color: theme.colors.primary }]}>Create New Ad</Text>
-                    </View>
-                </TouchableOpacity>
+                    </TouchableOpacity>
 
-                {/* Tabs - Outside ScrollView */}
-                <View style={styles.tabRow}>
+                {/* Tabs */}
+                <View style={[styles.tabRow, { backgroundColor: theme.colors.background }]}>
                     <TouchableOpacity
                         style={[
                             styles.activeTab,
@@ -271,13 +270,8 @@ export default function VendorAdDashboard({ navigation }) {
                         </Text>
                     </TouchableOpacity>
                 </View>
-            </View>
 
-            {/* Scrollable content */}
-            <ScrollView 
-                contentContainerStyle={{ flexGrow: 1 }}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled">
+                {/* List content */}
                 {/* List */}
                 {isLoading ? (
                     <View style={styles.loadingContainer}>
@@ -287,8 +281,6 @@ export default function VendorAdDashboard({ navigation }) {
                 ) : activeTab === 'vendor' ? (
                     vendorAds.length > 0 ? (
                         vendorAds.map((vendor, idx) => {
-                            console.log('Vendor data in VendorAdDashboard:', vendor);
-                            console.log('Vendor offers:', vendor.offers);
                             return (
                                 <VendorCard
                                     key={vendor.id || idx}
@@ -326,6 +318,11 @@ export default function VendorAdDashboard({ navigation }) {
                                     day: 'numeric', 
                                     year: 'numeric' 
                                 }) : 'Date TBD'}
+                                time={event.time}
+                                budget={event.budget}
+                                guests={event.guests_count || event.guests}
+                                service_needed={event.service_needed}
+                                event_type={event.event_type}
                                 status={event.status === 'active' ? 'LIVE' : event.status.toUpperCase()}
                                 statusColor={event.status === 'active' ? '#2ECC71' : '#FFA500'}
                                 description={event.description}
@@ -334,7 +331,7 @@ export default function VendorAdDashboard({ navigation }) {
                                     name: user?.full_name || 'User',
                                     image: img
                                 }}
-                                onComplete={() => console.log("Event completed:", event.id)}
+                                onComplete={() => {}}
                             />
                         ))
                     ) : (

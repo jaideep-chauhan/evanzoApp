@@ -32,9 +32,6 @@ export default function VendorCard({
 }) {
     const navigation = useNavigation();
     const theme = useTheme();
-    
-    console.log('VendorCard offers:', offers);
-    console.log('VendorCard name:', name);
 
     // Carousel logic for infinite auto-scroll
     // Use fallback image if no images available
@@ -111,12 +108,34 @@ export default function VendorCard({
     };
 
     const handleCardPress = () => {
-        navigation.navigate('VendorAddDetail', { vendor: { initials, name, type, rating, description, images, extraCount, location } });
+        navigation.navigate('VendorAddDetail', { 
+            vendor: { 
+                initials, 
+                name, 
+                type, 
+                rating, 
+                description, 
+                images, 
+                extraCount, 
+                location,
+                offers 
+            } 
+        });
     };
 
     const handleSeeMorePress = () => {
         navigation.navigate('VendorAddDetail', {
-            vendor: { initials, name, type, rating, description, images, extraCount, location },
+            vendor: { 
+                initials, 
+                name, 
+                type, 
+                rating, 
+                description, 
+                images, 
+                extraCount, 
+                location,
+                offers 
+            },
             scrollToOffer: true
         });
     };

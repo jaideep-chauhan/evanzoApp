@@ -39,6 +39,28 @@ export default function VendorChat({ navigation }) {
 
     const scrollToOffer = route.params?.scrollToOffer;
     const vendor = route.params?.vendor;
+    
+    // Debug: Log vendor data
+    console.log('VendorAddDetail - Full vendor data:', vendor);
+    console.log('VendorAddDetail - Vendor offers:', vendor?.offers);
+    
+    // Format images to ensure they're in the correct format
+    const formattedImages = vendor?.images?.map(image => {
+        // If it's already an object with uri, use it as is
+        if (typeof image === 'object' && image.uri) {
+            return image.uri;
+        }
+        // If it's a string URL, return it as is
+        if (typeof image === 'string' && image.startsWith('http')) {
+            return image;
+        }
+        // If it's a local image (number from require), return it as is
+        if (typeof image === 'number') {
+            return image;
+        }
+        // Default fallback
+        return img;
+    }) || [img, img, img, img, img];
 
     const handleSendQuote = () => {
         console.log('Sending quote:', quoteText);
@@ -62,7 +84,7 @@ export default function VendorChat({ navigation }) {
                     contentContainerStyle={{ paddingBottom: 200 }}
                 >
                     <VendorProfileCard
-                        logo={vendor?.images?.[0] || img}
+                        logo={formattedImages[0] || img}
                         name={vendor?.name || "4x90 Studio"}
                         category={vendor?.type || "Photography"}
                         location={vendor?.location || "Ontario, Canada"}
@@ -72,11 +94,12 @@ export default function VendorChat({ navigation }) {
                     />
                     <View style={{ marginTop: 130 }} ref={offerSectionRef}>
                         <VendorDetailsSection
-                            photos={vendor?.images || [img, img, img, img, img]}
+                            photos={formattedImages}
                             description={vendor?.description || "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do"}
                             onSend={() => console.log('Send button pressed')}
                             reviews={dummyReviews}
                             hideMessageSection={true}
+                            offers={vendor?.offers || []}
                         />
                     </View>
                 </ScrollView>
