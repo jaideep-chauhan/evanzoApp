@@ -47,16 +47,7 @@ export default function VendorAdDashboard({ navigation }) {
         fetchAds();
     }, [activeTab]);
 
-    // Debug modal states
-    useEffect(() => {
-        console.log('Modal states:', {
-            showPreSaved,
-            showChangeProfile,
-            showCreateAd,
-            showCreateAddForm,
-            createAddFormType
-        });
-    }, [showPreSaved, showChangeProfile, showCreateAd, showCreateAddForm, createAddFormType]);
+
 
 
     const fetchAds = async () => {
@@ -64,18 +55,25 @@ export default function VendorAdDashboard({ navigation }) {
         try {
             if (activeTab === 'vendor') {
                 const response = await vendorService.getMyVendorAds();
+                console.log('Vendor ads response:', response);
+                console.log('Raw vendor data before formatting:', response.data);
                 if (response.success) {
-                    const formattedVendors = response.data.map(vendor => 
-                        vendorService.formatVendorForDisplay(vendor)
-                    );
+                    const formattedVendors = response.data.map(vendor => {
+                        const formatted = vendorService.formatVendorForDisplay(vendor);
+                        console.log('Single formatted vendor:', formatted);
+                        return formatted;
+                    });
+                    console.log('All formatted vendor ads:', formattedVendors);
                     setVendorAds(formattedVendors);
                 }
             } else {
                 const response = await eventService.getMyEventAds();
+                console.log('Event ads response:', response);
                 if (response.success) {
                     const formattedEvents = response.data.map(event => 
                         eventService.formatEventForDisplay(event)
                     );
+                    console.log('Formatted event ads:', formattedEvents);
                     setEventAds(formattedEvents);
                 }
             }
@@ -222,11 +220,7 @@ export default function VendorAdDashboard({ navigation }) {
 
                     <TouchableOpacity
                         style={styles.actionBtn}
-                        onPress={() => {
-                            console.log('PRE SAVE MESSAGE button pressed');
-                            console.log('Setting showPreSaved to true');
-                            setShowPreSaved(true);
-                        }}
+                        onPress={() => setShowPreSaved(true)}
                     >
                         <Text style={[styles.secondaryText, { color: theme.colors.primary }]}>PRE SAVE MESSAGE</Text>
                     </TouchableOpacity>
@@ -257,10 +251,7 @@ export default function VendorAdDashboard({ navigation }) {
                             styles.activeTab,
                             activeTab === 'vendor' ? { backgroundColor: theme.colors.primary } : styles.inactiveTab,
                         ]}
-                        onPress={() => {
-                            console.log('Vendor tab pressed');
-                            setActiveTab('vendor');
-                        }}
+                        onPress={() => setActiveTab('vendor')}
                         activeOpacity={0.7}
                     >
                         <Text style={activeTab === 'vendor' ? styles.activeTabText : [styles.inactiveTabText, { color: theme.colors.primary }]}>
@@ -272,10 +263,7 @@ export default function VendorAdDashboard({ navigation }) {
                             styles.activeTab,
                             activeTab === 'event' ? { backgroundColor: theme.colors.primary } : styles.inactiveTab,
                         ]}
-                        onPress={() => {
-                            console.log('Event tab pressed');
-                            setActiveTab('event');
-                        }}
+                        onPress={() => setActiveTab('event')}
                         activeOpacity={0.7}
                     >
                         <Text style={activeTab === 'event' ? styles.activeTabText : [styles.inactiveTabText, { color: theme.colors.primary }]}>
@@ -297,29 +285,64 @@ export default function VendorAdDashboard({ navigation }) {
                         <Text style={[styles.loadingText, { color: theme.colors.primary }]}>Loading ads...</Text>
                     </View>
                 ) : activeTab === 'vendor' ? (
-                    (vendorAds.length > 0 ? vendorAds : dummyVendors).map((vendor, idx) => (
-                        <VendorCard
-                            key={idx}
-                            initials={vendor.initials}
-                            name={vendor.name}
-                            type={vendor.type}
-                            rating={vendor.rating}
-                            description={vendor.description}
-                            images={vendor.images}
-                            extraCount={vendor.extraCount}
-                            onChatPress={() => navigation && navigation.navigate ? navigation.navigate('Chat') : null}
-                            isFirst={idx === 0}
-                            isChat={false}
-                        />
-                    ))
+                    vendorAds.length > 0 ? (
+                        vendorAds.map((vendor, idx) => {
+                            console.log('Vendor data in VendorAdDashboard:', vendor);
+                            console.log('Vendor offers:', vendor.offers);
+                            return (
+                                <VendorCard
+                                    key={vendor.id || idx}
+                                    initials={vendor.initials}
+                                    name={vendor.name}
+                                    type={vendor.type}
+                                    rating={vendor.rating}
+                                    description={vendor.description}
+                                    images={vendor.images}
+                                    extraCount={vendor.extraCount}
+                                    location={vendor.location}
+                                    offers={vendor.offers}
+                                    onChatPress={() => navigation && navigation.navigate ? navigation.navigate('Chat') : null}
+                                    isFirst={idx === 0}
+                                    isChat={false}
+                                />
+                            );
+                        })
+                    ) : (
+                        <View style={styles.emptyContainer}>
+                            <Text style={[styles.emptyText, { color: theme.colors.primary }]}>No vendor ads yet</Text>
+                            <Text style={[styles.emptySubText, { color: theme.colors.textSecondary }]}>Create your first vendor ad to get started</Text>
+                        </View>
+                    )
                 ) : (
-                    (eventAds.length > 0 ? eventAds : dummyEventAds).map((event) => (
-                        <EventAdCard
-                            key={event.id}
-                            attachments={event.attachments}
-                            onComplete={event.onComplete}
-                        />
-                    ))
+                    eventAds.length > 0 ? (
+                        eventAds.map((event) => (
+                            <EventAdCard
+                                key={event.id}
+                                title={event.title}
+                                location={event.location}
+                                duration={event.duration}
+                                date={event.date ? new Date(event.date).toLocaleDateString('en-US', { 
+                                    month: 'long', 
+                                    day: 'numeric', 
+                                    year: 'numeric' 
+                                }) : 'Date TBD'}
+                                status={event.status === 'active' ? 'LIVE' : event.status.toUpperCase()}
+                                statusColor={event.status === 'active' ? '#2ECC71' : '#FFA500'}
+                                description={event.description}
+                                attachments={event.attachments || event.images}
+                                profile={{
+                                    name: user?.full_name || 'User',
+                                    image: img
+                                }}
+                                onComplete={() => console.log("Event completed:", event.id)}
+                            />
+                        ))
+                    ) : (
+                        <View style={styles.emptyContainer}>
+                            <Text style={[styles.emptyText, { color: theme.colors.primary }]}>No event ads yet</Text>
+                            <Text style={[styles.emptySubText, { color: theme.colors.textSecondary }]}>Create your first event ad to get started</Text>
+                        </View>
+                    )
                 )}
             </ScrollView>
 
@@ -329,7 +352,6 @@ export default function VendorAdDashboard({ navigation }) {
                 animationType="slide"
                 transparent={true}
                 onRequestClose={() => setShowPreSaved(false)}
-                onShow={() => console.log('PreSavedMessage Modal shown')}
             >
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
@@ -370,38 +392,39 @@ export default function VendorAdDashboard({ navigation }) {
                     animationType="slide"
                     transparent={true}
                     onRequestClose={() => setShowCreateAd(false)}
-                    onShow={() => console.log('CreateAd Modal shown')}
                 >
                     <TouchableOpacity 
-                        style={styles.transparentModalOverlay}
+                        style={{flex: 1, justifyContent: 'flex-end', backgroundColor: 'transparent'}}
                         activeOpacity={1}
                         onPress={() => setShowCreateAd(false)}
                     >
                         <TouchableOpacity 
-                            style={styles.bottomModalContent}
+                            style={{backgroundColor: theme.colors.primary, padding: 22, borderTopLeftRadius: 24, borderTopRightRadius: 24}}
                             activeOpacity={1}
                             onPress={() => {}}
                         >
-                            <CreateAd
-                                onClose={() => {
-                                    setShowCreateAd(false);
-                                    fetchAds(); // Refresh ads after closing
-                                }}
-                                onTabPress={(type) => {
-                                    console.log('Tab pressed in CreateAd:', type);
-                                    setShowCreateAd(false);
-                                    setCreateAddFormType(type);
-                                    setTimeout(() => {
-                                        console.log('Opening CreateAddForm with type:', type);
-                                        setShowCreateAddForm(true);
-                                    }, 300);
-                                }}
-                            />
+                            <Text style={{fontSize: 20, fontWeight: '700', marginBottom: 24, textAlign: 'center', color: '#fff'}}>Create Ad</Text>
+                            
                             <TouchableOpacity
-                                style={styles.closeBtn}
-                                onPress={() => setShowCreateAd(false)}
+                                style={{borderWidth: 2, borderColor: '#fff', padding: 18, borderRadius: 14, marginBottom: 14}}
+                                onPress={() => {
+                                    setCreateAddFormType('vendor');
+                                    setShowCreateAddForm(true);
+                                    setShowCreateAd(false);
+                                }}
                             >
-                                <Icon name="close" size={24} color={theme.colors.primary} />
+                                <Text style={{color: '#fff', textAlign: 'center', fontSize: 16, fontWeight: '700'}}>Vendor</Text>
+                            </TouchableOpacity>
+                            
+                            <TouchableOpacity
+                                style={{borderWidth: 2, borderColor: '#fff', padding: 18, borderRadius: 14, opacity: 0.7}}
+                                onPress={() => {
+                                    setCreateAddFormType('event');
+                                    setShowCreateAddForm(true);
+                                    setShowCreateAd(false);
+                                }}
+                            >
+                                <Text style={{color: '#fff', textAlign: 'center', fontSize: 16, fontWeight: '600'}}>Event</Text>
                             </TouchableOpacity>
                         </TouchableOpacity>
                     </TouchableOpacity>
@@ -413,7 +436,6 @@ export default function VendorAdDashboard({ navigation }) {
                     animationType="slide"
                     transparent={true}
                     onRequestClose={() => setShowCreateAddForm(false)}
-                    onShow={() => console.log('CreateAddForm Modal shown with type:', createAddFormType)}
                 >
                     <View style={styles.modalFullScreen}>
                         <TouchableOpacity 
@@ -648,7 +670,7 @@ const styles = StyleSheet.create({
     transparentModalOverlay: {
         flex: 1,
         justifyContent: 'flex-end',
-        backgroundColor: 'transparent',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
     },
     bottomModalContent: {
         backgroundColor: '#fff',
@@ -753,5 +775,22 @@ const styles = StyleSheet.create({
         marginTop: 10,
         fontSize: 14,
         fontWeight: '500',
+    },
+    emptyContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 60,
+        paddingHorizontal: 20,
+    },
+    emptyText: {
+        fontSize: 18,
+        fontWeight: '600',
+        marginBottom: 8,
+    },
+    emptySubText: {
+        fontSize: 14,
+        textAlign: 'center',
+        opacity: 0.7,
     },
 });

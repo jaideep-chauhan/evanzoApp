@@ -1,6 +1,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { logout } from './navigationService';
 
 const BASE_URL = Platform.select({
     ios: 'http://localhost:3000/api',
@@ -11,7 +12,6 @@ const api = axios.create({
     baseURL: BASE_URL,
     timeout: 30000,
     headers: {
-        'Content-Type': 'application/json',
         'X-Client-Type': 'mobile',
     },
 });
@@ -20,6 +20,17 @@ api.interceptors.request.use(
     async (config) => {
         console.log('🌐 API Request:', config.method?.toUpperCase(), config.url);
         console.log('🌐 Request data:', config.data);
+        
+        // Check if the data is FormData
+        if (config.data instanceof FormData) {
+            // For FormData, let axios set the Content-Type with boundary
+            // Remove any preset Content-Type to allow multipart/form-data with boundary
+            delete config.headers['Content-Type'];
+            console.log('📤 Sending FormData - multipart/form-data');
+        } else {
+            // For regular JSON data, set Content-Type to application/json
+            config.headers['Content-Type'] = 'application/json';
+        }
         
         const token = await AsyncStorage.getItem('authToken');
         if (token) {
@@ -44,31 +55,52 @@ api.interceptors.response.use(
         console.error('❌ Error details:', error.response?.data);
         const originalRequest = error.config;
         
+        // Check if token expired
+        const errorMessage = error.response?.data?.message || '';
+        const isTokenExpired = errorMessage.includes('expired') || 
+                              errorMessage.includes('authenticate') ||
+                              error.response?.data?.info?.message === 'jwt expired';
+        
         if (error.response?.status === 401 && !originalRequest._retry) {
             originalRequest._retry = true;
             
-            try {
-                const refreshToken = await AsyncStorage.getItem('refreshToken');
-                if (!refreshToken) {
-                    await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'userData']);
-                    return Promise.reject(error);
+            // If token expired, try to refresh
+            if (isTokenExpired) {
+                try {
+                    const refreshToken = await AsyncStorage.getItem('refreshToken');
+                    if (!refreshToken) {
+                        console.log('🔒 No refresh token, logging out...');
+                        await logout();
+                        return Promise.reject({
+                            ...error,
+                            shouldLogout: true,
+                            message: 'Session expired. Please login again.'
+                        });
+                    }
+                    
+                    console.log('🔄 Attempting to refresh token...');
+                    const response = await axios.post(`${BASE_URL}/auth/refresh-tokens`, {
+                        refreshToken: refreshToken
+                    });
+                    
+                    const { accessToken, refreshToken: newRefreshToken } = response.data.tokens;
+                    
+                    console.log('✅ Token refreshed successfully');
+                    await AsyncStorage.setItem('authToken', accessToken);
+                    await AsyncStorage.setItem('refreshToken', newRefreshToken);
+                    
+                    originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+                    
+                    return api(originalRequest);
+                } catch (refreshError) {
+                    console.log('❌ Token refresh failed, logging out...');
+                    await logout();
+                    return Promise.reject({
+                        ...refreshError,
+                        shouldLogout: true,
+                        message: 'Session expired. Please login again.'
+                    });
                 }
-                
-                const response = await axios.post(`${BASE_URL}/auth/refresh-tokens`, {
-                    refreshToken: refreshToken
-                });
-                
-                const { accessToken, refreshToken: newRefreshToken } = response.data.tokens;
-                
-                await AsyncStorage.setItem('authToken', accessToken);
-                await AsyncStorage.setItem('refreshToken', newRefreshToken);
-                
-                originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-                
-                return api(originalRequest);
-            } catch (refreshError) {
-                await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'userData']);
-                return Promise.reject(refreshError);
             }
         }
         

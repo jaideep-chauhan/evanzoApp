@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Platform, Modal, Pressable } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Platform, Modal, Pressable, ActivityIndicator, Alert } from 'react-native';
 import { useTheme } from '../../ThemeContext';
 import DatePicker from 'react-native-date-picker';
+import preSavedMessageService from '../../services/preSavedMessageService';
 
 const PreSavedMessage = () => {
     const theme = useTheme();
@@ -14,6 +15,121 @@ const PreSavedMessage = () => {
     const [time, setTime] = useState('');
     const [duration, setDuration] = useState('');
     const [description, setDescription] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [existingMessage, setExistingMessage] = useState(null);
+
+    // Load existing message on component mount
+    useEffect(() => {
+        loadPreSavedMessage();
+    }, []);
+
+    const loadPreSavedMessage = async () => {
+        setIsLoading(true);
+        try {
+            const response = await preSavedMessageService.getPreSavedMessage();
+            if (response.success && response.data) {
+                const message = response.data;
+                setExistingMessage(message);
+                setEventName(message.event_name || '');
+                setLocation(message.location || '');
+                setCategory(message.category || '');
+                setTime(message.time || '');
+                setDuration(message.duration || '');
+                setDescription(message.description || '');
+                if (message.event_date) {
+                    setDate(new Date(message.event_date));
+                }
+            }
+        } catch (error) {
+            console.error('Error loading pre-saved message:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleSave = async () => {
+        if (!eventName.trim()) {
+            Alert.alert('Error', 'Please enter an event name');
+            return;
+        }
+
+        setIsSaving(true);
+        try {
+            const formData = {
+                event_name: eventName,
+                location,
+                category,
+                event_date: date.toISOString(),
+                time,
+                duration,
+                description,
+            };
+
+            // Generate message template
+            const messageTemplate = preSavedMessageService.generateMessageTemplate({
+                eventName,
+                location,
+                category,
+                date: date.toLocaleDateString(),
+                time,
+                duration,
+                description
+            });
+
+            const messageData = {
+                ...formData,
+                message_template: messageTemplate,
+                title: `${eventName} - Template`
+            };
+
+            const response = await preSavedMessageService.savePreSavedMessage(messageData);
+            
+            if (response.success) {
+                setExistingMessage(response.data);
+                Alert.alert('Success', 'Pre-saved message saved successfully!');
+            } else {
+                Alert.alert('Error', response.message);
+            }
+        } catch (error) {
+            console.error('Error saving pre-saved message:', error);
+            Alert.alert('Error', 'Failed to save pre-saved message');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleClear = () => {
+        Alert.alert(
+            'Clear Form',
+            'Are you sure you want to clear all fields?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Clear',
+                    style: 'destructive',
+                    onPress: () => {
+                        setEventName('');
+                        setLocation('');
+                        setCategory('');
+                        setTime('');
+                        setDuration('');
+                        setDescription('');
+                        setDate(new Date());
+                    }
+                }
+            ]
+        );
+    };
+
+    if (isLoading) {
+        return (
+            <View style={[styles.container, styles.centered]}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+                <Text style={[styles.loadingText, { color: theme.colors.primary }]}>Loading...</Text>
+            </View>
+        );
+    }
 
     return (
         <View style={styles.container}>
@@ -109,11 +225,25 @@ const PreSavedMessage = () => {
             </View>
 
             <View style={styles.buttonRow}>
-                <TouchableOpacity style={[styles.button, styles.editButton, { backgroundColor: theme.colors.primary }]}>
-                    <Text style={styles.editText}>Edit</Text>
+                <TouchableOpacity 
+                    style={[styles.button, styles.clearButton, { borderColor: theme.colors.primary + '50' }]}
+                    onPress={handleClear}
+                    disabled={isSaving}
+                >
+                    <Text style={[styles.clearText, { color: theme.colors.primary }]}>Clear</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.button, styles.saveButton, { borderColor: theme.colors.primary + '50' }]}>
-                    <Text style={[styles.saveText, { color: theme.colors.primary }]}>Save</Text>
+                <TouchableOpacity 
+                    style={[styles.button, styles.saveButton, { backgroundColor: theme.colors.primary }]}
+                    onPress={handleSave}
+                    disabled={isSaving}
+                >
+                    {isSaving ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                        <Text style={styles.saveText}>
+                            {existingMessage ? 'Update' : 'Save'}
+                        </Text>
+                    )}
                 </TouchableOpacity>
             </View>
         </View>
@@ -174,19 +304,29 @@ const styles = StyleSheet.create({
         flex: 1,
         alignItems: 'center',
     },
-    editButton: {
+    clearButton: {
         marginRight: 10,
-    },
-    saveButton: {
         borderWidth: 1,
     },
-    editText: {
-        color: '#fff',
+    saveButton: {
+        // backgroundColor will be set dynamically
+    },
+    clearText: {
         fontWeight: '600',
         fontSize: 15,
     },
     saveText: {
+        color: '#fff',
         fontWeight: '600',
         fontSize: 15,
+    },
+    centered: {
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loadingText: {
+        marginTop: 10,
+        fontSize: 16,
+        fontWeight: '500',
     },
 });

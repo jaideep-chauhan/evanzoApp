@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { NavigationContainer } from '@react-navigation/native';
 import { Image, AppState } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { navigationRef, setAuthLogout } from '../services/navigationService';
 // Screens
 import SplashScreen from '../screens/SplashScreen';
 import LoginScreen from '../screens/auth/Login';
@@ -35,10 +36,15 @@ import Review from '../screens/vendors/Review';
 const Stack = createNativeStackNavigator();
 
 const MainNavigator = () => {
-    const { isLoading: authLoading, isAuthenticated } = useAuth();
+    const { isLoading: authLoading, isAuthenticated, logout } = useAuth();
     const [isReady, setIsReady] = useState(false);
     const [splashTimerDone, setSplashTimerDone] = useState(false);
     const [appState, setAppState] = useState(AppState.currentState);
+
+    // Set the logout function for navigation service
+    useEffect(() => {
+        setAuthLogout(logout);
+    }, [logout]);
 
     // Handle app state changes
     useEffect(() => {
@@ -135,7 +141,7 @@ const MainNavigator = () => {
     console.log('🚀 App ready! Authenticated:', isAuthenticated);
 
     return (
-        <NavigationContainer>
+        <NavigationContainer ref={navigationRef}>
             <Stack.Navigator 
                 screenOptions={{ 
                     headerShown: false,

@@ -117,7 +117,11 @@ export const CustomSuccessModal = ({
                     
                     <TouchableOpacity
                         style={[styles.button, { backgroundColor: getIconColor() }]}
-                        onPress={onConfirm}
+                        onPress={() => {
+                            if (onConfirm) {
+                                onConfirm();
+                            }
+                        }}
                         activeOpacity={0.8}
                     >
                         <Text style={styles.buttonText}>{confirmText}</Text>

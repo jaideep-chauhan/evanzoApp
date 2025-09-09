@@ -434,20 +434,187 @@ class VendorService {
         }
     }
 
+    async createVendorAd(vendorData) {
+        try {
+            const response = await api.post('/vendor_ad', vendorData);
+            return {
+                success: true,
+                message: 'Vendor ad created successfully',
+                data: response.data.data
+            };
+        } catch (error) {
+            console.error('Create vendor ad error:', error);
+            return {
+                success: false,
+                message: error.response?.data?.message || 'Failed to create vendor ad',
+                data: null
+            };
+        }
+    }
+
+    async getMyVendorAds() {
+        try {
+            const response = await api.get('/vendor_ad/my-ads');
+            console.log('Raw vendor ads response from API:', response.data);
+            
+            // Handle different response structures
+            const vendorAds = response.data.data || response.data || [];
+            console.log('Extracted vendor ads:', vendorAds);
+            
+            return {
+                success: true,
+                data: vendorAds
+            };
+        } catch (error) {
+            console.error('Get my vendor ads error:', error);
+            console.error('Error response:', error.response?.data);
+            return {
+                success: false,
+                message: error.response?.data?.message || 'Failed to fetch vendor ads',
+                data: []
+            };
+        }
+    }
+
+    async getAllVendorAds(options = {}) {
+        try {
+            const params = new URLSearchParams();
+            if (options.page) params.append('page', options.page);
+            if (options.limit) params.append('limit', options.limit);
+            if (options.sortBy) params.append('sortBy', options.sortBy);
+            
+            const queryString = params.toString();
+            const url = `/vendor_ad/all${queryString ? `?${queryString}` : ''}`;
+            
+            const response = await api.get(url);
+            
+            // Extract the results array from the nested structure
+            const vendorAds = response.data.data?.results || response.data.data || [];
+            
+            return {
+                success: true,
+                data: vendorAds.map(vendor => this.formatVendorForDisplay(vendor))
+            };
+        } catch (error) {
+            console.error('Get all vendor ads error:', error);
+            return {
+                success: false,
+                message: error.response?.data?.message || 'Failed to fetch vendor ads',
+                data: []
+            };
+        }
+    }
+
     // Helper method to format vendor data for display
     formatVendorForDisplay(vendor) {
+        console.log('Formatting vendor:', vendor);
+        
+        // Parse photos if it's a JSON string or use attachments
+        let photos = [];
+        if (vendor.photos) {
+            if (typeof vendor.photos === 'string' && vendor.photos !== '[]') {
+                try {
+                    const parsed = JSON.parse(vendor.photos);
+                    photos = parsed.map(photo => {
+                        // If photo has url property, use it directly
+                        if (photo.url) {
+                            return photo.url;
+                        }
+                        // If photo has path property, use it with base URL
+                        if (photo.path) {
+                            return `http://localhost:3000${photo.path}`;
+                        }
+                        // If it's already a URL string
+                        if (typeof photo === 'string' && photo.startsWith('http')) {
+                            return photo;
+                        }
+                        // If it's a relative path
+                        if (typeof photo === 'string' && photo.startsWith('/')) {
+                            return `http://localhost:3000${photo}`;
+                        }
+                        return null;
+                    }).filter(Boolean);
+                } catch (e) {
+                    console.log('Failed to parse photos:', e);
+                }
+            } else if (Array.isArray(vendor.photos) && vendor.photos.length > 0) {
+                photos = vendor.photos.map(photo => {
+                    if (typeof photo === 'object' && photo.url) {
+                        return photo.url;
+                    }
+                    if (typeof photo === 'object' && photo.path) {
+                        return `http://localhost:3000${photo.path}`;
+                    }
+                    if (typeof photo === 'string' && photo.startsWith('http')) {
+                        return photo;
+                    }
+                    if (typeof photo === 'string' && photo.startsWith('/')) {
+                        return `http://localhost:3000${photo}`;
+                    }
+                    return photo;
+                }).filter(Boolean);
+            }
+        }
+        
+        // Fallback to attachments if no photos
+        if (photos.length === 0 && vendor.attachments) {
+            if (Array.isArray(vendor.attachments)) {
+                photos = vendor.attachments.filter(att => 
+                    typeof att === 'string' && (att.startsWith('http') || att.startsWith('/'))
+                ).map(att => att.startsWith('/') ? `http://localhost:3000${att}` : att);
+            }
+        }
+        
+        // Use dummy images as last fallback
+        if (photos.length === 0) {
+            // Import dummy image properly
+            const dummyImage = require('../assets/images/dummy.png');
+            photos = [dummyImage, dummyImage, dummyImage];
+        }
+        
+        // Parse services_offered if it's a string
+        let services = [];
+        if (vendor.services_offered) {
+            if (typeof vendor.services_offered === 'string') {
+                try {
+                    services = JSON.parse(vendor.services_offered);
+                } catch (e) {
+                    services = [vendor.services_offered];
+                }
+            } else if (Array.isArray(vendor.services_offered)) {
+                services = vendor.services_offered;
+            }
+        }
+        
+        // Parse offers if available
+        let offers = vendor.offers || [];
+        if (typeof offers === 'string') {
+            try {
+                offers = JSON.parse(offers);
+            } catch (e) {
+                console.log('Failed to parse offers:', e);
+                offers = [];
+            }
+        }
+        
+        console.log('Raw vendor data:', vendor);
+        console.log('Formatted photos:', photos);
+        console.log('Formatted offers:', offers);
+        console.log('Formatted services:', services);
+        
         return {
             id: vendor.id || vendor.vendor_ad_id,
-            initials: this.getInitials(vendor.company_name || vendor.title),
+            initials: vendor.initials || this.getInitials(vendor.company_name || vendor.title),
             name: vendor.company_name || vendor.title,
-            type: (typeof vendor.category === 'object' ? vendor.category?.name : vendor.category) || 
-                  vendor.services_offered?.[0] || 
+            type: vendor.category_name || 
+                  (typeof vendor.category === 'object' ? vendor.category?.name : vendor.category) || 
+                  services[0] || 
                   'Service Provider',
             rating: vendor.rating || 0,
             reviewCount: vendor.review_count || 0,
             description: vendor.description || '',
-            images: this.extractImages(vendor.attachments || vendor.portfolio_url),
-            extraCount: vendor.attachments?.length || 0,
+            images: photos,
+            extraCount: photos.length > 3 ? photos.length - 3 : 0,
             location: vendor.location || vendor.service_areas?.[0] || 'Unknown',
             price: vendor.price_amount || vendor.price_range,
             currency: vendor.currency || 'USD',
@@ -455,6 +622,8 @@ class VendorService {
             featured: vendor.featured || false,
             boosted: vendor.is_boosted || false,
             availability: vendor.availability || [],
+            services: services,
+            offers: offers,
             contact: {
                 phone: vendor.contact_number,
                 email: vendor.contact_email,

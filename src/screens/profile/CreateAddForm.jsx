@@ -247,19 +247,31 @@ const CreateAddForm = ({ type, onClose }) => {
                     return;
                 }
 
-                const eventData = {
-                    service_needed: service,
-                    event_type: eventType,
-                    event_tags: eventTags,
-                    location,
-                    date: date.toISOString().split('T')[0], // Format as YYYY-MM-DD
-                    duration: duration || null,
-                    budget: budget ? parseFloat(budget) : null,
-                    description: description || '',
-                    attachments: [] // TODO: Handle file uploads
-                };
+                // Create FormData for file upload
+                const formData = new FormData();
+                
+                // Add text fields
+                formData.append('service_needed', service);
+                formData.append('event_type', eventType);
+                formData.append('event_tags', JSON.stringify(eventTags));
+                formData.append('location', location);
+                formData.append('date', date.toISOString().split('T')[0]); // Format as YYYY-MM-DD
+                if (duration) formData.append('duration', duration);
+                if (budget) formData.append('budget', budget);
+                formData.append('description', description || '');
 
-                const response = await eventService.createEventAd(eventData);
+                // Add photo files (backend expects 'attachments' field name for events)
+                photos.forEach((photo, index) => {
+                    formData.append('attachments', {
+                        uri: photo.uri,
+                        type: photo.type || 'image/jpeg',
+                        name: photo.name || `attachment_${index}.jpg`,
+                    });
+                });
+
+                console.log('Uploading event ad with', photos.length, 'photos');
+
+                const response = await eventService.createEventAd(formData);
 
                 if (response.success) {
                     setModalState({
@@ -294,28 +306,33 @@ const CreateAddForm = ({ type, onClose }) => {
                     return;
                 }
 
-                // Prepare offer data
+                // Prepare offer data - send as array of objects matching database structure
                 const validOffers = offers.filter(offer => offer.amount || offer.discount);
-                const offerAmount = validOffers.length > 0 && validOffers[0].amount ? 
-                    parseFloat(validOffers[0].amount) : null;
-                const offerPercentage = validOffers.length > 0 && validOffers[0].discount ? 
-                    parseFloat(validOffers[0].discount) : null;
 
-                // For now, send without photos due to FormData issues
-                // We'll handle photo upload separately
-                const vendorData = {
-                    title: companyName,
-                    category,
-                    description: vendorDescription || '',
-                    company_name: companyName,
-                    location: vendorLocation,
-                    services_offered: selectedTags,
-                    offer_amount: offerAmount,
-                    offer_percentage: offerPercentage,
-                    attachments: [] // Will handle file upload in next iteration
-                };
+                // Create FormData for file upload
+                const formData = new FormData();
+                
+                // Add text fields
+                formData.append('title', companyName);
+                formData.append('category', category);
+                formData.append('description', vendorDescription || '');
+                formData.append('company_name', companyName);
+                formData.append('location', vendorLocation);
+                formData.append('services_offered', JSON.stringify(selectedTags));
+                formData.append('offers', JSON.stringify(validOffers));
 
-                const response = await vendorService.createVendorAd(vendorData);
+                // Add photo files (backend expects 'photos' field name)
+                photos.forEach((photo, index) => {
+                    formData.append('photos', {
+                        uri: photo.uri,
+                        type: photo.type || 'image/jpeg',
+                        name: photo.name || `photo_${index}.jpg`,
+                    });
+                });
+
+                console.log('Uploading vendor ad with', photos.length, 'photos');
+
+                const response = await vendorService.createVendorAd(formData);
 
                 if (response.success) {
                     setModalState({
@@ -914,9 +931,11 @@ const CreateAddForm = ({ type, onClose }) => {
                 message={modalState.message}
                 type={modalState.type}
                 onConfirm={() => {
-                    setModalState({ ...modalState, visible: false });
+                    setModalState({ visible: false, title: '', message: '', type: 'success' });
                     if (modalState.type === 'success' && onClose) {
-                        onClose();
+                        setTimeout(() => {
+                            onClose();
+                        }, 100);
                     }
                 }}
             />

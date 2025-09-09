@@ -99,8 +99,14 @@ export default function EventAdCard({
                         <Text style={[styles.attachmentTitle, { color: theme.colors.primary }]}>Attachments</Text>
                     </View>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                        {safeAttachments.map((img, index) => (
-                            <Image key={index} source={img} style={styles.attachmentImage} />
+                        {safeAttachments.map((imageItem, index) => (
+                            <Image 
+                                key={index} 
+                                source={typeof imageItem === 'string' ? { uri: imageItem } : imageItem}
+                                style={styles.attachmentImage}
+                                defaultSource={img} // Fallback image
+                                onError={() => console.log('Failed to load event image:', imageItem)}
+                            />
                         ))}
                     </ScrollView>
                 </View>

@@ -13,7 +13,6 @@ import {
     Dimensions,
     ImageBackground,
     ActivityIndicator,
-    Alert,
 } from 'react-native';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
@@ -52,6 +51,7 @@ export default function LoginScreen() {
     const [imageLoaded, setImageLoaded] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [errorMessage, setErrorMessage] = useState('');
 
     // Add timeout for image loading to prevent infinite loader
     React.useEffect(() => {
@@ -100,6 +100,7 @@ export default function LoginScreen() {
                                 onSubmit={async (values, { setSubmitting, setFieldError }) => {
                                     console.log('🔵 Form values:', values);
                                     setIsLoading(true);
+                                    setErrorMessage(''); // Clear previous errors
                                     try {
                                         // Pass emailOrPhone directly to login function
                                         console.log('🔵 Calling login with:', values.emailOrPhone, 'and password');
@@ -114,18 +115,10 @@ export default function LoginScreen() {
                                             });
                                         } else {
                                             // Show error message
-                                            Alert.alert(
-                                                'Login Failed',
-                                                result.error || 'Invalid credentials. Please try again.',
-                                                [{ text: 'OK' }]
-                                            );
+                                            setErrorMessage(result.error || 'Invalid credentials. Please try again.');
                                         }
                                     } catch (error) {
-                                        Alert.alert(
-                                            'Error',
-                                            'Something went wrong. Please try again later.',
-                                            [{ text: 'OK' }]
-                                        );
+                                        setErrorMessage('Something went wrong. Please try again later.');
                                     } finally {
                                         setIsLoading(false);
                                         setSubmitting(false);
@@ -140,6 +133,13 @@ export default function LoginScreen() {
                                     >
                                         <Text style={[styles.loginTitle, { color: theme.colors.primary }]}>Login</Text>
                                         <Text style={[styles.subtitle, { color: theme.colors.primary }]}>Welcome back, you've been missed!</Text>
+                                        
+                                        {errorMessage ? (
+                                            <View style={styles.errorContainer}>
+                                                <Icon name="alert-circle-outline" size={20} color="#FF6B6B" />
+                                                <Text style={styles.errorMessage}>{errorMessage}</Text>
+                                            </View>
+                                        ) : null}
                                         
                                         <View style={styles.inputGroup}>
                                             <Text style={[styles.label, { color: theme.colors.primary }]}>Phone Number or Email</Text>
@@ -354,6 +354,24 @@ const styles = StyleSheet.create({
         fontSize: 12,
         marginTop: 4,
         marginLeft: 4,
+    },
+    errorContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFF5F5',
+        padding: 12,
+        borderRadius: 10,
+        marginTop: 12,
+        marginBottom: 8,
+        borderWidth: 1,
+        borderColor: '#FFE0E0',
+    },
+    errorMessage: {
+        color: '#D32F2F',
+        fontSize: 14,
+        marginLeft: 8,
+        flex: 1,
+        lineHeight: 18,
     },
     loginTitle: {
         fontSize: 28,

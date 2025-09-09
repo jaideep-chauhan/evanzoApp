@@ -28,10 +28,12 @@ class EventService {
     // Get my event ads
     async getMyEventAds() {
         try {
-            const response = await api.get('/events/my-ads');
+            const response = await api.get('/event_ad/my-ads');
+            // The backend returns data with structure: { results: [...], page, limit, etc }
+            const eventAds = response.data.data?.results || response.data.data || [];
             return {
                 success: true,
-                data: response.data.data || []
+                data: eventAds
             };
         } catch (error) {
             return {
@@ -148,33 +150,81 @@ class EventService {
         }
     }
 
+    // Enhanced method to extract images from attachments (similar to vendor service)
+    extractImages(attachments) {
+        if (!attachments) return [];
+        
+        try {
+            // If attachments is a JSON string, parse it
+            const parsed = typeof attachments === 'string' 
+                ? JSON.parse(attachments) 
+                : attachments;
+            
+            if (Array.isArray(parsed)) {
+                return parsed
+                    .filter(item => {
+                        // Check if it's an image file object or URL
+                        if (typeof item === 'string') {
+                            return item.includes('.jpg') || item.includes('.jpeg') || 
+                                   item.includes('.png') || item.includes('.gif') ||
+                                   item.includes('.webp') || item.startsWith('http');
+                        } else if (typeof item === 'object' && item.url) {
+                            // Handle file objects with url property
+                            return item.mimetype && item.mimetype.startsWith('image/');
+                        }
+                        return false;
+                    })
+                    .map(item => {
+                        // Return just the URL string for image rendering
+                        if (typeof item === 'string') {
+                            return item;
+                        } else if (typeof item === 'object' && item.url) {
+                            return item.url;
+                        }
+                        return null;
+                    })
+                    .filter(Boolean); // Remove null values
+            }
+        } catch (e) {
+            console.error('Error parsing event attachments:', e);
+        }
+        
+        return [];
+    }
+
     // Helper method to format event data for display
     formatEventForDisplay(event) {
+        const extractedImages = this.extractImages(event.attachments);
         return {
             id: event.id || event.event_ad_id,
-            service: event.service_needed || event.service,
-            eventType: event.event_type,
-            location: event.location,
+            title: event.title || `${event.event_type || 'Event'} - ${event.service_needed || ''}`,
+            service_needed: event.service_needed,
+            event_type: event.event_type,
+            event_tags: event.event_tags || [],
+            location: event.location || 'Unknown',
             date: event.date,
             duration: event.duration,
             budget: event.budget,
-            description: event.description,
-            attachments: this.extractImages(event.attachments),
+            description: event.description || '',
+            attachments: extractedImages, // For backward compatibility
+            images: extractedImages, // For new usage
             status: event.status || 'active',
-            createdAt: event.created_at,
-            userId: event.user_id
+            visibility: event.visibility || 'public',
+            is_urgent: event.is_urgent || false,
+            views_count: event.views_count || 0,
+            responses_count: event.responses_count || 0,
+            boosted: event.boosted || false,
+            created_at: event.created_at,
+            updated_at: event.updated_at
         };
     }
 
-    extractImages(data) {
+    extractAttachments(data) {
         if (!data) return [];
         
-        // If it's already an array of images
+        // If it's already an array
         if (Array.isArray(data)) {
-            return data.filter(item => 
-                typeof item === 'string' && 
-                (item.startsWith('http') || item.startsWith('data:'))
-            );
+            return data;
         }
         
         // If it's a JSON string
@@ -182,13 +232,10 @@ class EventService {
             try {
                 const parsed = JSON.parse(data);
                 if (Array.isArray(parsed)) {
-                    return this.extractImages(parsed);
+                    return parsed;
                 }
             } catch (e) {
-                // If it's a single URL
-                if (data.startsWith('http') || data.startsWith('data:')) {
-                    return [data];
-                }
+                return [];
             }
         }
         

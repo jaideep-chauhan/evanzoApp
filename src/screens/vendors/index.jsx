@@ -16,11 +16,12 @@ import VendorCard from './VendorCard';
 import LocationSearchModal from './LocationSearchModal';
 import CategorySelectionModal from './CategorySelectionModal';
 import PreSavedMessage from '../profile/PreSavedMessage';
-import img from '../../assets/images/dummy.png';
+import img from '../../assets/images/dummy.png'; // Fallback image
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
 import CatererCard from './CatererCard';
 import Icon from 'react-native-vector-icons/Ionicons';
+import vendorService from '../../services/vendorService';
 
 export default function Vendor() {
     const navigation = useNavigation();
@@ -36,89 +37,37 @@ export default function Vendor() {
     const [activeTab, setActiveTab] = useState(null); // No tab active by default
     const [refreshing, setRefreshing] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [vendors, setVendors] = useState([]);
 
-    const vendors = [
-        {
-            initials: '4S',
-            name: '4x90 Studio',
-            type: 'Photography',
-            rating: 5,
-            description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do',
-            images: [img, img, img],
-            extraCount: 10,
-            location: 'Toronto, ON',
-        },
-        {
-            initials: 'AB',
-            name: 'Alpha Bakers',
-            type: 'Bakery',
-            rating: 4.5,
-            description: 'Freshly baked goods for every occasion.',
-            images: [img, img, img],
-            extraCount: 5,
-            location: 'Vancouver, BC',
-        },
-        {
-            initials: 'DJ',
-            name: 'DJ Max',
-            type: 'Music',
-            rating: 4.8,
-            description: 'Professional DJ services for weddings and parties.',
-            images: [img, img, img],
-            extraCount: 7,
-            location: 'Toronto, ON',
-        },
-        {
-            initials: 'FL',
-            name: 'Floral Lane',
-            type: 'Florist',
-            rating: 4.7,
-            description: 'Beautiful flower arrangements and bouquets.',
-            images: [img, img, img],
-            extraCount: 3,
-            location: 'Montreal, QC',
-        },
-        {
-            initials: 'CT',
-            name: 'Catering Time',
-            type: 'Catering',
-            rating: 4.9,
-            description: 'Delicious food and excellent service for your events.',
-            images: [img, img, img],
-            extraCount: 8,
-            location: 'Calgary, AB',
-        },
-        {
-            initials: 'EV',
-            name: 'Eventify',
-            type: 'Event Planner',
-            rating: 5,
-            description: 'Making your events memorable and stress-free.',
-            images: [img, img, img],
-            extraCount: 12,
-            location: 'Toronto, ON',
-        },
-        {
-            initials: 'PH',
-            name: 'PhotoHub',
-            type: 'Photography',
-            rating: 4.6,
-            description: 'Capturing moments that last a lifetime.',
-            images: [img, img, img],
-            extraCount: 6,
-            location: 'Vancouver, BC',
-        },
-        {
-            initials: 'DS',
-            name: 'Decor Studio',
-            type: 'Decor',
-            rating: 4.4,
-            description: 'Creative decor solutions for all occasions.',
-            images: [img, img, img],
-            extraCount: 4,
-            location: 'Ottawa, ON',
-        },
-    ];
+    // Fetch vendors from API
+    const fetchVendors = async () => {
+        try {
+            setIsLoading(true);
+            const response = await vendorService.getAllVendorAds({
+                limit: 50,
+                sortBy: 'created_at:desc'
+            });
+            
+            if (response.success) {
+                setVendors(response.data);
+            } else {
+                console.error('Failed to fetch vendors:', response.message);
+                // Keep empty array if fetch fails
+                setVendors([]);
+            }
+        } catch (error) {
+            console.error('Error fetching vendors:', error);
+            setVendors([]);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Fetch vendors on component mount
+    useEffect(() => {
+        fetchVendors();
+    }, []);
+
 
     // Filter vendors based on selected location and category
     const filteredVendors = useMemo(() => {

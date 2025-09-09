@@ -12,6 +12,7 @@ import { StarIcon, CurrencyDollarIcon, TagIcon } from 'react-native-heroicons/so
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
 import theme from '../../theme';
+import img from '../../assets/images/dummy.png'; // Fallback image
 
 const { width } = Dimensions.get('window');
 
@@ -24,15 +25,40 @@ export default function VendorCard({
     images,
     extraCount,
     location,
+    offers = [],
     onChatPress,
     isChat = true,
     isFocused = false
 }) {
     const navigation = useNavigation();
     const theme = useTheme();
+    
+    console.log('VendorCard offers:', offers);
+    console.log('VendorCard name:', name);
 
     // Carousel logic for infinite auto-scroll
-    const extendedImages = [images[images.length - 1], ...images, images[0]];
+    // Use fallback image if no images available
+    const safeImages = images && images.length > 0 ? images : [img, img, img];
+    
+    // Convert image URLs to proper format for React Native Image component
+    const formattedImages = safeImages.map(image => {
+        // If it's already an object with uri, use it as is
+        if (typeof image === 'object' && image.uri) {
+            return image;
+        }
+        // If it's a string URL, convert to {uri: url} format
+        if (typeof image === 'string' && image.startsWith('http')) {
+            return { uri: image };
+        }
+        // If it's a local image (number from require), use it directly
+        if (typeof image === 'number') {
+            return image;
+        }
+        // Default fallback
+        return img;
+    });
+    
+    const extendedImages = [formattedImages[formattedImages.length - 1], ...formattedImages, formattedImages[0]];
     const scrollRef = useRef(null);
     const currentIndex = useRef(1);
     const intervalRef = useRef(null);
@@ -132,16 +158,20 @@ export default function VendorCard({
                             <Text style={[styles.offerHeaderText, { color: theme.colors.textSecondary }]}>Amount spent</Text>
                             <Text style={[styles.offerHeaderText, { color: theme.colors.textSecondary }]}>Discount</Text>
                         </View>
-                        {/* Values Row */}
+                        {/* Values Row - Show first offer or default values */}
                         <View style={styles.offerValueRow}>
                             <Text style={styles.offerLabel}>Offer:</Text>
                             <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
                                 <CurrencyDollarIcon size={12} color={theme.colors.primary} />
-                                <Text style={styles.offerValue}>150</Text>
+                                <Text style={styles.offerValue}>
+                                    {offers && offers.length > 0 && offers[0].amount ? offers[0].amount : '0'}
+                                </Text>
                             </View>
                             <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
                                 <TagIcon size={12} color={theme.colors.primary} />
-                                <Text style={styles.offerValue}>10%</Text>
+                                <Text style={styles.offerValue}>
+                                    {offers && offers.length > 0 && offers[0].discount ? `${offers[0].discount}%` : '0%'}
+                                </Text>
                             </View>
                         </View>
                     </View>
@@ -176,9 +206,9 @@ export default function VendorCard({
                         </Animated.ScrollView>
                     </View>
                     <View style={styles.smallImages}>
-                        <Image source={images[1]} style={styles.smallImage} />
+                        <Image source={formattedImages[1] || img} style={styles.smallImage} />
                         <View style={styles.overlayWrapper}>
-                            <Image source={images[2]} style={styles.smallImage} />
+                            <Image source={formattedImages[2] || img} style={styles.smallImage} />
                             {extraCount > 0 && (
                                 <View style={[styles.overlay, { backgroundColor: theme.colors.primary + '99' }]}>
                                     <Text style={styles.overlayText}>{`+${extraCount}`}</Text>
@@ -396,6 +426,12 @@ const styles = StyleSheet.create({
     },
     offerTable: {
         flexDirection: 'column',
+    },
+    noOffersText: {
+        fontSize: 12,
+        fontStyle: 'italic',
+        textAlign: 'center',
+        padding: 8,
     },
     offerHeaderRow: {
         flexDirection: 'row',
