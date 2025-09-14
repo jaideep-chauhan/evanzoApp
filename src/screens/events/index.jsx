@@ -41,11 +41,17 @@ export default function Events() {
     const fetchEvents = async () => {
         try {
             setIsLoading(true);
-            console.log('Fetching all event ads...');
-            const response = await eventService.getAllEventAds();
-            console.log('Event ads response:', response);
+            console.log('🚀 Fetching public event ads (excluding current user)...');
+            const response = await eventService.getPublicEventAds();
+            console.log('📦 Public events response:', {
+                success: response.success,
+                dataType: typeof response.data,
+                isArray: Array.isArray(response.data),
+                dataLength: response.data?.length,
+                data: response.data
+            });
             
-            if (response.success && response.data && response.data.length > 0) {
+            if (response.success && response.data && Array.isArray(response.data) && response.data.length > 0) {
                 // Format events using the same method as profile
                 const formattedEvents = response.data.map(event => {
                     const formatted = eventService.formatEventForDisplay(event);

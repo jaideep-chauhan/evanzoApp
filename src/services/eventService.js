@@ -26,17 +26,22 @@ class EventService {
         }
     }
 
-    // Get my event ads
+    // Get my event ads (for profile screen - current user's ads only)
     async getMyEventAds() {
         try {
             const response = await api.get('/event_ad/my-ads');
-            // The backend returns data with structure: { results: [...], page, limit, etc }
+            console.log('📱 My event ads response received');
+            
+            // Backend returns data directly or with results structure
             const eventAds = response.data.data?.results || response.data.data || [];
+            console.log(`✅ Found ${eventAds.length} event ads for current user`);
+            
             return {
                 success: true,
                 data: eventAds
             };
         } catch (error) {
+            console.error('❌ Get my event ads error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Failed to fetch your event ads',
@@ -78,27 +83,44 @@ class EventService {
         }
     }
 
-    // Get all event ads (for events screen - excludes current user)
-    async getAllEventAds() {
+    // Get public event ads (for events tab - excludes current user)
+    async getPublicEventAds() {
         try {
             const response = await api.get('/event_ad');
-            console.log('All event ads response:', response.data);
+            console.log('🌐 Public event ads response received');
+            
+            // Check if response.data exists and has the expected structure
+            if (!response.data || !response.data.data) {
+                console.error('❌ Unexpected Event API response structure');
+                return {
+                    success: false,
+                    message: 'Invalid API response structure',
+                    data: []
+                };
+            }
             
             // Extract the results array from the paginated response
             const eventAds = response.data.data?.results || [];
+            console.log(`✅ Found ${eventAds.length} public event ads`);
             
             return {
                 success: true,
                 data: eventAds  // Return the array directly
             };
         } catch (error) {
-            console.error('Get all event ads error:', error);
+            console.error('❌ Get public event ads error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Failed to fetch event ads',
                 data: []
             };
         }
+    }
+    
+    // Deprecated: Keep for backward compatibility, redirects to getPublicEventAds
+    async getAllEventAds() {
+        console.warn('⚠️ getAllEventAds is deprecated. Use getPublicEventAds instead.');
+        return this.getPublicEventAds();
     }
 
     // Search event ads

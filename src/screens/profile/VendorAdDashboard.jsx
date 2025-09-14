@@ -34,12 +34,6 @@ export default function VendorAdDashboard({ navigation }) {
     const theme = useTheme();
     const { user } = useAuth();
     const [activeTab, setActiveTab] = useState('vendor');
-    
-    // Debug: Log current user info
-    console.log('=== PROFILE SCREEN DEBUG ===');
-    console.log('Current user from AuthContext:', user);
-    console.log('User ID:', user?.user_id || user?.id);
-    console.log('User Name:', user?.full_name);
     const [showPreSaved, setShowPreSaved] = useState(false);
     const [showChangeProfile, setShowChangeProfile] = useState(false);
     const [showCreateAd, setShowCreateAd] = useState(false);
@@ -52,19 +46,7 @@ export default function VendorAdDashboard({ navigation }) {
     // Fetch ads on component mount and when tab changes
     useEffect(() => {
         fetchAds();
-        // Test: Check who is logged in
-        testCurrentUser();
     }, [activeTab]);
-    
-    const testCurrentUser = async () => {
-        try {
-            const whoAmI = await profileService.whoAmI();
-            console.log('=== WHO AM I TEST ===');
-            console.log('Server says current user is:', whoAmI);
-        } catch (error) {
-            console.error('Failed to get current user from server:', error);
-        }
-    };
 
 
 
@@ -74,6 +56,7 @@ export default function VendorAdDashboard({ navigation }) {
         try {
             if (activeTab === 'vendor') {
                 const response = await vendorService.getMyVendorAds();
+                
                 if (response.success) {
                     const formattedVendors = response.data.map(vendor => {
                         const formatted = vendorService.formatVendorForDisplay(vendor);
@@ -96,95 +79,6 @@ export default function VendorAdDashboard({ navigation }) {
             setIsLoading(false);
         }
     };
-
-    // Dummy data fallback (remove this when API is fully working)
-    const dummyVendors = [
-        {
-            initials: '4S',
-            name: '4x90 Studio',
-            type: 'Photography',
-            rating: 5,
-            description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do',
-            images: [img, img, img],
-            extraCount: 10,
-        },
-        {
-            initials: 'AB',
-            name: 'Alpha Bakers',
-            type: 'Bakery',
-            rating: 4.5,
-            description: 'Freshly baked goods for every occasion.',
-            images: [img, img, img],
-            extraCount: 5,
-        },
-        {
-            initials: 'DJ',
-            name: 'DJ Max',
-            type: 'Music',
-            rating: 4.8,
-            description: 'Professional DJ services for weddings and parties.',
-            images: [img, img, img],
-            extraCount: 7,
-        },
-        {
-            initials: 'FL',
-            name: 'Floral Lane',
-            type: 'Florist',
-            rating: 4.7,
-            description: 'Beautiful flower arrangements and bouquets.',
-            images: [img, img, img],
-            extraCount: 3,
-        },
-        {
-            initials: 'CT',
-            name: 'Catering Time',
-            type: 'Catering',
-            rating: 4.9,
-            description: 'Delicious food and excellent service for your events.',
-            images: [img, img, img],
-            extraCount: 8,
-        },
-        {
-            initials: 'EV',
-            name: 'Eventify',
-            type: 'Event Planner',
-            rating: 5,
-            description: 'Making your events memorable and stress-free.',
-            images: [img, img, img],
-            extraCount: 12,
-        },
-        {
-            initials: 'PH',
-            name: 'PhotoHub',
-            type: 'Photography',
-            rating: 4.6,
-            description: 'Capturing moments that last a lifetime.',
-            images: [img, img, img],
-            extraCount: 6,
-        },
-        {
-            initials: 'DS',
-            name: 'Decor Studio',
-            type: 'Decor',
-            rating: 4.4,
-            description: 'Creative decor solutions for all occasions.',
-            images: [img, img, img],
-            extraCount: 4,
-        },
-    ];
-
-    const dummyEventAds = [
-        {
-            id: 1,
-            attachments: [img, img],
-            onComplete: () => {},
-        },
-        {
-            id: 2,
-            attachments: [img],
-            onComplete: () => {},
-        },
-    ];
 
     return (
         <View style={[styles.safe, { flex: 1, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 }]}>

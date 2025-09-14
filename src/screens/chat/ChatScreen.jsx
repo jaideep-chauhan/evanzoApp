@@ -64,7 +64,20 @@ export default function ChatScreen({ route, navigation }) {
             
             // Get current user ID
             const userId = await AsyncStorage.getItem('userId');
-            setCurrentUserId(userId);
+            console.log('Current user ID from storage:', userId);
+            if (!userId) {
+                console.warn('No userId found in storage, trying to get from userData');
+                const userData = await AsyncStorage.getItem('userData');
+                if (userData) {
+                    const user = JSON.parse(userData);
+                    const extractedUserId = String(user?.user_id || user?.id);
+                    setCurrentUserId(extractedUserId);
+                    // Store it for next time
+                    await AsyncStorage.setItem('userId', extractedUserId);
+                }
+            } else {
+                setCurrentUserId(userId);
+            }
 
             // Connect to socket if not connected
             if (!socketService.isSocketConnected()) {

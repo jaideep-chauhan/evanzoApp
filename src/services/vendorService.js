@@ -1,5 +1,4 @@
 import api from './api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import dummyImage from '../assets/images/dummy.png';
 
 class VendorService {
@@ -25,13 +24,13 @@ class VendorService {
         }
     }
 
-    // Get my vendor ads (for profile)
+    // Get my vendor ads (for profile screen - current user's ads only)
     async getMyVendorAds() {
         try {
             const response = await api.get('/vendor_ad/my-ads');
-            console.log('My vendor ads response:', response.data);
             
-            const vendorAds = response.data.data || response.data || [];
+            // Backend returns simple array for my-ads
+            const vendorAds = response.data.data || [];
             
             return {
                 success: true,
@@ -41,33 +40,51 @@ class VendorService {
             console.error('Get my vendor ads error:', error);
             return {
                 success: false,
-                message: error.response?.data?.message || 'Failed to fetch vendor ads',
+                message: error.response?.data?.message || 'Failed to fetch your vendor ads',
                 data: []
             };
         }
     }
 
-    // Get all vendor ads (for vendors screen - excludes current user)
-    async getAllVendorAds() {
+    // Get public vendor ads (for vendors tab - excludes current user)
+    async getPublicVendorAds() {
         try {
             const response = await api.get('/vendor_ad/all');
-            console.log('All vendor ads response:', response.data);
             
-            // Extract the results array from the paginated response
-            const vendorAds = response.data.data?.results || [];
+            // Handle different response structures
+            let vendorAds = [];
+            
+            // Check if response has the paginated structure
+            if (response.data?.data?.results) {
+                vendorAds = response.data.data.results;
+            }
+            // Check if data is directly an array (non-paginated)
+            else if (Array.isArray(response.data?.data)) {
+                vendorAds = response.data.data;
+            }
+            // Check if results are at the top level
+            else if (Array.isArray(response.data)) {
+                vendorAds = response.data;
+            }
             
             return {
                 success: true,
-                data: vendorAds  // Return the array directly
+                data: vendorAds
             };
         } catch (error) {
-            console.error('Get all vendor ads error:', error);
+            console.error('Get public vendor ads error:', error);
+            
             return {
                 success: false,
                 message: error.response?.data?.message || 'Failed to fetch vendor ads',
                 data: []
             };
         }
+    }
+    
+    // Deprecated: Keep for backward compatibility, redirects to getPublicVendorAds
+    async getAllVendorAds() {
+        return this.getPublicVendorAds();
     }
 
     // Create vendor ad
@@ -80,10 +97,7 @@ class VendorService {
                 headers['Content-Type'] = 'multipart/form-data';
             }
 
-            console.log('Creating vendor ad with data:', vendorData);
-            const response = await api.post('/vendor_ad/create', vendorData, { headers });
-            
-            console.log('Create vendor ad response:', response.data);
+            const response = await api.post('/vendor_ad', vendorData, { headers });
             
             return {
                 success: true,
@@ -144,12 +158,10 @@ class VendorService {
 
     // Helper method to format vendor data for display
     formatVendorForDisplay(vendor) {
-        console.log('Formatting vendor:', vendor);
-        
         // Parse photos if it's a JSON string or use attachments
         let photos = [];
         if (vendor.photos) {
-            if (typeof vendor.photos === 'string' && vendor.photos !== '[]') {
+            if (typeof vendor.photos === 'string' && vendor.photos !== '[]' && vendor.photos !== '') {
                 try {
                     const parsed = JSON.parse(vendor.photos);
                     photos = parsed.map(photo => {
@@ -175,7 +187,7 @@ class VendorService {
                     console.error('Error parsing photos:', e);
                     photos = [];
                 }
-            } else if (Array.isArray(vendor.photos)) {
+            } else if (Array.isArray(vendor.photos) && vendor.photos.length > 0) {
                 photos = vendor.photos.map(photo => {
                     if (typeof photo === 'object' && photo.url) {
                         return photo.url;
@@ -189,7 +201,10 @@ class VendorService {
                     return photo;
                 });
             }
-        } else if (vendor.attachments) {
+        }
+        
+        // If no photos found yet, try attachments
+        if (photos.length === 0 && vendor.attachments) {
             // Handle attachments field
             if (typeof vendor.attachments === 'string' && vendor.attachments !== '[]') {
                 try {
@@ -214,8 +229,6 @@ class VendorService {
                 });
             }
         }
-
-        console.log('Parsed photos:', photos);
 
         // Calculate initials from company name or title
         const displayName = vendor.company_name || vendor.title || 'Vendor';

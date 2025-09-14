@@ -8,6 +8,8 @@ const BASE_URL = Platform.select({
     android: 'http://10.0.2.2:3000/api',
 });
 
+export const API_BASE_URL = BASE_URL; // Export for socket service
+
 const api = axios.create({
     baseURL: BASE_URL,
     timeout: 30000,

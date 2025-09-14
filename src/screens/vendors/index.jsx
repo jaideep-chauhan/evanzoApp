@@ -17,7 +17,7 @@ import LocationSearchModal from './LocationSearchModal';
 import CategorySelectionModal from './CategorySelectionModal';
 import PreSavedMessage from '../profile/PreSavedMessage';
 import img from '../../assets/images/dummy.png'; // Fallback image
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
 import CatererCard from './CatererCard';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -43,20 +43,20 @@ export default function Vendor() {
     const fetchVendors = async () => {
         try {
             setIsLoading(true);
-            console.log('Fetching all vendor ads...');
-            const response = await vendorService.getAllVendorAds();
-            console.log('Vendor ads response:', response);
             
-            if (response.success && response.data && response.data.length > 0) {
-                // Format vendors using the same method as profile
-                const formattedVendors = response.data.map(vendor => {
-                    const formatted = vendorService.formatVendorForDisplay(vendor);
-                    return formatted;
-                });
-                console.log('Formatted vendors:', formattedVendors);
-                setVendors(formattedVendors);
+            const response = await vendorService.getPublicVendorAds();
+            
+            if (response.success && response.data && Array.isArray(response.data)) {
+                if (response.data.length > 0) {
+                    // Format vendors using the same method as profile
+                    const formattedVendors = response.data.map(vendor => 
+                        vendorService.formatVendorForDisplay(vendor)
+                    );
+                    setVendors(formattedVendors);
+                } else {
+                    setVendors([]);
+                }
             } else {
-                console.log('No vendor ads found or empty response');
                 setVendors([]);
             }
         } catch (error) {
@@ -69,29 +69,45 @@ export default function Vendor() {
 
     // Fetch vendors on component mount
     useEffect(() => {
+        // Fetch vendors immediately
         fetchVendors();
+        
+        // Failsafe: Stop loading after 10 seconds if still loading
+        const failsafeTimeout = setTimeout(() => {
+            if (isLoading) {
+                setIsLoading(false);
+            }
+        }, 10000);
+        
+        return () => clearTimeout(failsafeTimeout);
     }, []);
+    
+    // Refetch vendors when screen comes into focus
+    useFocusEffect(
+        React.useCallback(() => {
+            // Only fetch if we don't have vendors yet
+            if (vendors.length === 0 && !isLoading) {
+                fetchVendors();
+            }
+        }, [vendors.length, isLoading])
+    );
 
 
-    // Filter vendors based on selected location and category
-    const filteredVendors = useMemo(() => {
-        let filtered = vendors;
-
-        // Filter by location
-        if (selectedLocation && selectedLocation !== 'Current Location') {
-            filtered = filtered.filter(vendor => vendor.location === selectedLocation);
-        }
-
-        // Filter by category
-        if (selectedCategory) {
-            filtered = filtered.filter(vendor =>
-                vendor.type.toLowerCase().includes(selectedCategory.toLowerCase()) ||
-                selectedCategory.toLowerCase().includes(vendor.type.toLowerCase())
-            );
-        }
-
-        return filtered;
-    }, [selectedLocation, selectedCategory]);
+    // Note: Filtering is disabled for now to ensure vendors always show
+    // Can be re-enabled later if needed
+    // const filteredVendors = useMemo(() => {
+    //     let filtered = vendors;
+    //     if (selectedLocation && selectedLocation !== 'Current Location') {
+    //         filtered = filtered.filter(vendor => vendor.location === selectedLocation);
+    //     }
+    //     if (selectedCategory) {
+    //         filtered = filtered.filter(vendor =>
+    //             vendor.type.toLowerCase().includes(selectedCategory.toLowerCase()) ||
+    //             selectedCategory.toLowerCase().includes(vendor.type.toLowerCase())
+    //         );
+    //     }
+    //     return filtered;
+    // }, [selectedLocation, selectedCategory]);
 
     const handleTabPress = (tabLabel, tabIndex) => {
         setActiveTab(tabIndex);
@@ -125,8 +141,6 @@ export default function Vendor() {
         extrapolate: 'clamp',
     });
 
-    // Removed duplicate loading effect - fetchVendors already handles loading state
-
     const onRefresh = React.useCallback(async () => {
         setRefreshing(true);
         
@@ -138,8 +152,6 @@ export default function Vendor() {
             
             // Fetch fresh data
             await fetchVendors();
-            
-            console.log('Vendors refreshed successfully');
         } catch (error) {
             console.error('Error refreshing vendors:', error);
         } finally {
@@ -186,57 +198,48 @@ export default function Vendor() {
                     />
                 </View>
 
-                {/* <CatererCard /> */}
-
                 {/* Loading Spinner below tabs */}
                 {isLoading ? (
                     <View style={styles.loaderContainer}>
                         <ActivityIndicator size="large" color={theme.colors.primary} />
                         <Text style={[styles.loadingText, { color: theme.colors.primary }]}>Loading vendors...</Text>
+                        <TouchableOpacity 
+                            style={[styles.retryButton, { backgroundColor: theme.colors.primary }]}
+                            onPress={() => {
+                                console.log('Manual retry triggered');
+                                setIsLoading(false);
+                                setTimeout(() => fetchVendors(), 100);
+                            }}
+                        >
+                            <Text style={styles.retryButtonText}>Retry Now</Text>
+                        </TouchableOpacity>
                     </View>
                 ) : (
                     <>
-                {/* Location Filter Indicator */}
-                {selectedLocation && (
+                {/* Vendor count indicator */}
+                {vendors.length > 0 && (
                     <View style={[styles.filterIndicator, { backgroundColor: '#f0f4ff', borderColor: theme.colors.primary + '33' }]}>
                         <Text style={[styles.filterIndicatorText, { color: theme.colors.primary }]}>
-                            Showing vendors in: {selectedLocation}
-                        </Text>
-                        <Text style={styles.vendorCount}>
-                            ({filteredVendors.length} vendor{filteredVendors.length !== 1 ? 's' : ''} found)
-                        </Text>
-                    </View>
-                )}
-
-                {/* Date Range Filter Indicator */}
-                {/* Removed date range filter indicator since we're not using date filter anymore */}
-
-                {/* Category Filter Indicator */}
-                {selectedCategory && (
-                    <View style={[styles.filterIndicator, { backgroundColor: '#fff0f5', borderColor: theme.colors.error + '33' }]}>
-                        <Text style={[styles.filterIndicatorText, { color: theme.colors.error }]}>
-                            Category: {selectedCategory}
-                        </Text>
-                        <Text style={styles.vendorCount}>
-                            ({filteredVendors.length} vendor{filteredVendors.length !== 1 ? 's' : ''} found)
+                            {vendors.length} vendor{vendors.length !== 1 ? 's' : ''} available
                         </Text>
                     </View>
                 )}
 
                 {/* No vendors message */}
-                {filteredVendors.length === 0 ? (
+                {vendors.length === 0 ? (
                     <View style={styles.noVendorsContainer}>
                         <Text style={styles.noVendorsText}>
-                            No vendors found{selectedLocation ? ` in ${selectedLocation}` : ''}
+                            No vendors found
                         </Text>
                         <Text style={styles.noVendorsSubtext}>
-                            Try selecting a different location or clear the filter
+                            Pull down to refresh or tap retry
                         </Text>
                     </View>
                 ) : (
-                    filteredVendors.map((vendor, idx) => (
+                    // Use vendors directly instead of filteredVendors
+                    vendors.map((vendor, idx) => (
                         <VendorCard
-                            key={idx}
+                            key={vendor.id || idx}
                             initials={vendor.initials}
                             name={vendor.name}
                             type={vendor.type}
@@ -245,12 +248,13 @@ export default function Vendor() {
                             images={vendor.images}
                             extraCount={vendor.extraCount}
                             location={vendor.location}
+                            offers={vendor.offers || []} // Add offers prop
                             isFocused={idx === focusedCardIndex}
                             onChatPress={() => navigation.navigate('ChatScreen', {
-                                chatId: `vendor_${idx}`,
+                                recipientId: vendor._original?.user_id || vendor.id,
                                 chatName: vendor.name,
                                 avatar: 'https://randomuser.me/api/portraits/men/1.jpg',
-                                isOnline: Math.random() > 0.5,
+                                isOnline: false,
                             })}
                         />
                     ))
@@ -336,7 +340,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
     },
     contentContainer: {
-        paddingBottom: 24,
+        paddingBottom: 100, // Increased padding to ensure last card is fully visible
     },
     headerWrapper: {
         marginBottom: 8,
@@ -399,6 +403,17 @@ const styles = StyleSheet.create({
         marginTop: 12,
         fontSize: 16,
         fontWeight: '500',
+    },
+    retryButton: {
+        marginTop: 20,
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 8,
+    },
+    retryButtonText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
     },
     modalOverlay: {
         flex: 1,

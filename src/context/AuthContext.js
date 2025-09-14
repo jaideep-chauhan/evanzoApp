@@ -108,6 +108,8 @@ export const AuthProvider = ({ children }) => {
                 await AsyncStorage.setItem('authToken', accessToken);
                 await AsyncStorage.setItem('refreshToken', refreshToken);
                 await AsyncStorage.setItem('userData', JSON.stringify(user));
+                // Store userId separately for easy access
+                await AsyncStorage.setItem('userId', String(user?.user_id || user?.id));
                 
                 // Verify what was stored
                 const storedUserData = await AsyncStorage.getItem('userData');
@@ -134,6 +136,7 @@ export const AuthProvider = ({ children }) => {
                     
                     await AsyncStorage.setItem('authToken', token);
                     await AsyncStorage.setItem('userData', JSON.stringify(user));
+                    await AsyncStorage.setItem('userId', String(user?.user_id || user?.id));
                     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
                     
                     setUser(user);
@@ -283,6 +286,7 @@ export const AuthProvider = ({ children }) => {
                 await AsyncStorage.setItem('authToken', accessToken);
                 await AsyncStorage.setItem('refreshToken', refreshToken);
                 await AsyncStorage.setItem('userData', JSON.stringify(user));
+                await AsyncStorage.setItem('userId', String(user?.user_id || user?.id));
                 
                 // Set token in API headers
                 api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
