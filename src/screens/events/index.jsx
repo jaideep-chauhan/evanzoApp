@@ -19,6 +19,7 @@ import CategorySelectionModal from '../vendors/CategorySelectionModal';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
 import SearchHeader from '../vendors/SearchHeader';
+import eventService from '../../services/eventService';
 
 export default function Events() {
     const navigation = useNavigation();
@@ -34,8 +35,42 @@ export default function Events() {
     const [isScrolled, setIsScrolled] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [events, setEvents] = useState([]);
 
-    const events = [
+    // Fetch events from API
+    const fetchEvents = async () => {
+        try {
+            setIsLoading(true);
+            console.log('Fetching all event ads...');
+            const response = await eventService.getAllEventAds();
+            console.log('Event ads response:', response);
+            
+            if (response.success && response.data && response.data.length > 0) {
+                // Format events using the same method as profile
+                const formattedEvents = response.data.map(event => {
+                    const formatted = eventService.formatEventForDisplay(event);
+                    return formatted;
+                });
+                console.log('Formatted events:', formattedEvents);
+                setEvents(formattedEvents);
+            } else {
+                console.log('No event ads found or empty response');
+                setEvents([]);
+            }
+        } catch (error) {
+            console.error('Error fetching events:', error);
+            setEvents([]);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Fetch events on component mount
+    useEffect(() => {
+        fetchEvents();
+    }, []);
+
+    const dummyEvents = [
         {
             id: 1,
             title: 'Corporate Event',
@@ -199,33 +234,26 @@ export default function Events() {
         // navigation.navigate('GiveQuote', { eventId: event.id });
     };
 
-    // Initial loading effect
-    useEffect(() => {
-        // Simulate initial data loading
-        setTimeout(() => {
-            setIsLoading(false);
-        }, 1500); // Simulate 1.5 second initial load
-    }, []);
+    // Removed duplicate loading effect - fetchEvents already handles loading state
 
-    const onRefresh = React.useCallback(() => {
+    const onRefresh = React.useCallback(async () => {
         setRefreshing(true);
         
-        // Simulate fetching new data
-        setTimeout(() => {
-            // Here you would typically:
-            // 1. Fetch new events from your API
-            // 2. Update the events state with new data
-            // 3. Reset any filters if needed
-            
-            console.log('Refreshing events...');
-            
-            // For now, just reset filters as an example
+        try {
+            // Reset filters
             setSelectedLocation(null);
             setSelectedCategory(null);
             setSelectedDateRange(null);
             
+            // Fetch fresh data
+            await fetchEvents();
+            
+            console.log('Events refreshed successfully');
+        } catch (error) {
+            console.error('Error refreshing events:', error);
+        } finally {
             setRefreshing(false);
-        }, 2000); // Simulate 2 second refresh
+        }
     }, []);
 
     return (

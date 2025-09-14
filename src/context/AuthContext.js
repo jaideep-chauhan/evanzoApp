@@ -35,14 +35,15 @@ export const AuthProvider = ({ children }) => {
                 // Set the token in API headers
                 api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
                 
-                // Since /auth/me doesn't exist, we'll trust the stored token
-                // The token will be validated when making actual API calls
-                // If it's expired, the 401 interceptor will handle it
-                
+                // Parse and verify user data
                 const user = JSON.parse(userData);
+                console.log('📱 Restored user from storage:', user);
+                console.log('📱 User ID from storage:', user?.user_id || user?.id);
+                console.log('📱 User Name from storage:', user?.full_name);
+                
                 setUser(user);
                 setIsAuthenticated(true);
-                console.log('✅ Session restored! User authenticated.');
+                console.log('✅ Session restored! User authenticated as:', user?.full_name, '(ID:', user?.user_id || user?.id, ')');
                 
                 // Optional: Test token with a lightweight endpoint
                 // This is commented out for performance, uncomment if needed
@@ -96,12 +97,21 @@ export const AuthProvider = ({ children }) => {
                     access: accessToken?.substring(0, 20) + '...', 
                     refresh: refreshToken?.substring(0, 20) + '...' 
                 });
-                console.log('👤 User data:', user);
+                console.log('👤 User data received from server:', user);
+                console.log('👤 User ID:', user?.user_id || user?.id);
+                console.log('👤 User Name:', user?.full_name);
                 
-                // Store token and user data
+                // Clear any old data first
+                await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'userData']);
+                
+                // Store NEW token and user data
                 await AsyncStorage.setItem('authToken', accessToken);
                 await AsyncStorage.setItem('refreshToken', refreshToken);
                 await AsyncStorage.setItem('userData', JSON.stringify(user));
+                
+                // Verify what was stored
+                const storedUserData = await AsyncStorage.getItem('userData');
+                console.log('📦 Stored user data:', JSON.parse(storedUserData));
                 
                 // Set token in API headers
                 api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
@@ -110,7 +120,7 @@ export const AuthProvider = ({ children }) => {
                 setUser(user);
                 setIsAuthenticated(true);
                 
-                console.log('✅ Login successful! User authenticated.');
+                console.log('✅ Login successful! User authenticated as:', user?.full_name, '(ID:', user?.user_id || user?.id, ')');
                 
                 return { success: true, user };
             } else if (response.data) {
@@ -430,10 +440,17 @@ export const AuthProvider = ({ children }) => {
     const logout = async () => {
         try {
             console.log('🚪 Logging out...');
-            // Clear stored data
-            await AsyncStorage.removeItem('authToken');
-            await AsyncStorage.removeItem('refreshToken');
-            await AsyncStorage.removeItem('userData');
+            
+            // Get all keys to see what's stored
+            const allKeys = await AsyncStorage.getAllKeys();
+            console.log('📦 All stored keys before logout:', allKeys);
+            
+            // Clear ALL auth-related data
+            await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'userData', 'tempRegistrationData']);
+            
+            // Verify removal
+            const remainingKeys = await AsyncStorage.getAllKeys();
+            console.log('📦 Remaining keys after logout:', remainingKeys);
             
             // Clear API header
             delete api.defaults.headers.common['Authorization'];
@@ -442,6 +459,7 @@ export const AuthProvider = ({ children }) => {
             setUser(null);
             setIsAuthenticated(false);
             
+            console.log('✅ Logout complete');
             return { success: true };
         } catch (error) {
             console.error('Logout error:', error);

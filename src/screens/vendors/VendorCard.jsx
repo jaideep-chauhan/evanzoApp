@@ -39,6 +39,10 @@ export default function VendorCard({
     
     // Convert image URLs to proper format for React Native Image component
     const formattedImages = safeImages.map(image => {
+        // Handle null or undefined
+        if (!image) {
+            return img;
+        }
         // If it's already an object with uri, use it as is
         if (typeof image === 'object' && image.uri) {
             return image;

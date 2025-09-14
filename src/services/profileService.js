@@ -1,6 +1,17 @@
 import api from './api';
 
 const profileService = {
+    // Test endpoint to verify current user
+    whoAmI: async () => {
+        try {
+            const response = await api.get('/test/whoami');
+            console.log('WHO AM I Response:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('WHO AM I Error:', error);
+            throw error;
+        }
+    },
     // Get current user profile
     getUserProfile: async () => {
         try {

@@ -25,6 +25,7 @@ import bg from '../../assets/images/profileBG.png';
 import { useTheme } from '../../ThemeContext';
 import vendorService from '../../services/vendorService';
 import eventService from '../../services/eventService';
+import profileService from '../../services/profileService';
 import { useAuth } from '../../context/AuthContext';
 
 const { height: screenHeight } = Dimensions.get('window');
@@ -33,6 +34,12 @@ export default function VendorAdDashboard({ navigation }) {
     const theme = useTheme();
     const { user } = useAuth();
     const [activeTab, setActiveTab] = useState('vendor');
+    
+    // Debug: Log current user info
+    console.log('=== PROFILE SCREEN DEBUG ===');
+    console.log('Current user from AuthContext:', user);
+    console.log('User ID:', user?.user_id || user?.id);
+    console.log('User Name:', user?.full_name);
     const [showPreSaved, setShowPreSaved] = useState(false);
     const [showChangeProfile, setShowChangeProfile] = useState(false);
     const [showCreateAd, setShowCreateAd] = useState(false);
@@ -45,7 +52,19 @@ export default function VendorAdDashboard({ navigation }) {
     // Fetch ads on component mount and when tab changes
     useEffect(() => {
         fetchAds();
+        // Test: Check who is logged in
+        testCurrentUser();
     }, [activeTab]);
+    
+    const testCurrentUser = async () => {
+        try {
+            const whoAmI = await profileService.whoAmI();
+            console.log('=== WHO AM I TEST ===');
+            console.log('Server says current user is:', whoAmI);
+        } catch (error) {
+            console.error('Failed to get current user from server:', error);
+        }
+    };
 
 
 
@@ -352,7 +371,7 @@ export default function VendorAdDashboard({ navigation }) {
             >
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
-                        <PreSavedMessage />
+                        <PreSavedMessage onClose={() => setShowPreSaved(false)} />
                         <TouchableOpacity
                             style={styles.closeBtn}
                             onPress={() => setShowPreSaved(false)}

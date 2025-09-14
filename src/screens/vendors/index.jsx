@@ -43,16 +43,20 @@ export default function Vendor() {
     const fetchVendors = async () => {
         try {
             setIsLoading(true);
-            const response = await vendorService.getAllVendorAds({
-                limit: 50,
-                sortBy: 'created_at:desc'
-            });
+            console.log('Fetching all vendor ads...');
+            const response = await vendorService.getAllVendorAds();
+            console.log('Vendor ads response:', response);
             
-            if (response.success) {
-                setVendors(response.data);
+            if (response.success && response.data && response.data.length > 0) {
+                // Format vendors using the same method as profile
+                const formattedVendors = response.data.map(vendor => {
+                    const formatted = vendorService.formatVendorForDisplay(vendor);
+                    return formatted;
+                });
+                console.log('Formatted vendors:', formattedVendors);
+                setVendors(formattedVendors);
             } else {
-                console.error('Failed to fetch vendors:', response.message);
-                // Keep empty array if fetch fails
+                console.log('No vendor ads found or empty response');
                 setVendors([]);
             }
         } catch (error) {
@@ -121,33 +125,26 @@ export default function Vendor() {
         extrapolate: 'clamp',
     });
 
-    // Initial loading effect
-    useEffect(() => {
-        // Simulate initial data loading
-        setTimeout(() => {
-            setIsLoading(false);
-        }, 1500); // Simulate 1.5 second initial load
-    }, []);
+    // Removed duplicate loading effect - fetchVendors already handles loading state
 
-    const onRefresh = React.useCallback(() => {
+    const onRefresh = React.useCallback(async () => {
         setRefreshing(true);
         
-        // Simulate fetching new data
-        setTimeout(() => {
-            // Here you would typically:
-            // 1. Fetch new vendors from your API
-            // 2. Update the vendors state with new data
-            // 3. Reset any filters if needed
-            
-            console.log('Refreshing vendors...');
-            
-            // For now, just reset filters as an example
+        try {
+            // Reset filters
             setSelectedLocation(null);
             setSelectedCategory(null);
             setActiveTab(null);
             
+            // Fetch fresh data
+            await fetchVendors();
+            
+            console.log('Vendors refreshed successfully');
+        } catch (error) {
+            console.error('Error refreshing vendors:', error);
+        } finally {
             setRefreshing(false);
-        }, 2000); // Simulate 2 second refresh
+        }
     }, []);
 
     return (

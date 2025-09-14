@@ -1,48 +1,9 @@
 import api from './api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import dummyImage from '../assets/images/dummy.png';
 
 class VendorService {
-    // Public endpoints (no auth required)
-    async searchVendors({
-        keyword = '',
-        location = '',
-        categories = [],
-        priceMin = null,
-        priceMax = null,
-        rating = null,
-        availability = null,
-        sortBy = 'featured',
-        page = 1,
-        limit = 20
-    } = {}) {
-        try {
-            const params = new URLSearchParams();
-            if (keyword) params.append('keyword', keyword);
-            if (location) params.append('location', location);
-            if (categories.length) params.append('categories', categories.join(','));
-            if (priceMin) params.append('priceMin', priceMin);
-            if (priceMax) params.append('priceMax', priceMax);
-            if (rating) params.append('rating', rating);
-            if (availability) params.append('availability', availability);
-            params.append('sortBy', sortBy);
-            params.append('page', page);
-            params.append('limit', limit);
-
-            const response = await api.get(`/vendors/search?${params.toString()}`);
-            return {
-                success: true,
-                data: response.data.data,
-                pagination: response.data.pagination
-            };
-        } catch (error) {
-            return {
-                success: false,
-                message: error.response?.data?.message || 'Failed to search vendors',
-                data: []
-            };
-        }
-    }
-
+    // Get categories
     async getCategories() {
         try {
             const response = await api.get('/vendor_ad/categories');
@@ -53,6 +14,7 @@ class VendorService {
         }
     }
 
+    // Get tags
     async getTags(type = 'vendor') {
         try {
             const response = await api.get(`/vendor_ad/tags?type=${type}`);
@@ -63,175 +25,52 @@ class VendorService {
         }
     }
 
-    async getLocations() {
-        try {
-            const response = await api.get('/vendors/locations');
-            return {
-                success: true,
-                data: response.data.data
-            };
-        } catch (error) {
-            return {
-                success: false,
-                message: error.response?.data?.message || 'Failed to fetch locations',
-                data: []
-            };
-        }
-    }
-
-    async getFeaturedVendors(limit = 10) {
-        try {
-            const response = await api.get(`/vendors/featured?limit=${limit}`);
-            return {
-                success: true,
-                data: response.data.data
-            };
-        } catch (error) {
-            return {
-                success: false,
-                message: error.response?.data?.message || 'Failed to fetch featured vendors',
-                data: []
-            };
-        }
-    }
-
-    async getTopRatedVendors(limit = 10) {
-        try {
-            const response = await api.get(`/vendors/top-rated?limit=${limit}`);
-            return {
-                success: true,
-                data: response.data.data
-            };
-        } catch (error) {
-            return {
-                success: false,
-                message: error.response?.data?.message || 'Failed to fetch top-rated vendors',
-                data: []
-            };
-        }
-    }
-
-    async getNearbyVendors(latitude, longitude, radius = 10) {
-        try {
-            const params = new URLSearchParams({
-                latitude,
-                longitude,
-                radius
-            });
-            
-            const response = await api.get(`/vendors/nearby?${params.toString()}`);
-            return {
-                success: true,
-                data: response.data.data
-            };
-        } catch (error) {
-            return {
-                success: false,
-                message: error.response?.data?.message || 'Failed to fetch nearby vendors',
-                data: []
-            };
-        }
-    }
-
-    async getVendorDetails(vendorId) {
-        try {
-            const response = await api.get(`/vendors/${vendorId}`);
-            return {
-                success: true,
-                data: response.data.data
-            };
-        } catch (error) {
-            return {
-                success: false,
-                message: error.response?.data?.message || 'Failed to fetch vendor details',
-                data: null
-            };
-        }
-    }
-
-    async getVendorPortfolio(vendorId) {
-        try {
-            const response = await api.get(`/vendors/${vendorId}/portfolio`);
-            return {
-                success: true,
-                data: response.data.data
-            };
-        } catch (error) {
-            return {
-                success: false,
-                message: error.response?.data?.message || 'Failed to fetch vendor portfolio',
-                data: []
-            };
-        }
-    }
-
-    async getVendorAvailability(vendorId) {
-        try {
-            const response = await api.get(`/vendors/${vendorId}/availability`);
-            return {
-                success: true,
-                data: response.data.data
-            };
-        } catch (error) {
-            return {
-                success: false,
-                message: error.response?.data?.message || 'Failed to fetch vendor availability',
-                data: []
-            };
-        }
-    }
-
-    async getVendorReviews(vendorId, page = 1, limit = 10) {
-        try {
-            const params = new URLSearchParams({ page, limit });
-            const response = await api.get(`/vendors/${vendorId}/reviews?${params.toString()}`);
-            return {
-                success: true,
-                data: response.data.data,
-                pagination: response.data.pagination
-            };
-        } catch (error) {
-            return {
-                success: false,
-                message: error.response?.data?.message || 'Failed to fetch vendor reviews',
-                data: []
-            };
-        }
-    }
-
-    async getSimilarVendors(vendorId, limit = 5) {
-        try {
-            const response = await api.get(`/vendors/${vendorId}/similar?limit=${limit}`);
-            return {
-                success: true,
-                data: response.data.data
-            };
-        } catch (error) {
-            return {
-                success: false,
-                message: error.response?.data?.message || 'Failed to fetch similar vendors',
-                data: []
-            };
-        }
-    }
-
-    // Protected endpoints (auth required)
+    // Get my vendor ads (for profile)
     async getMyVendorAds() {
         try {
-            const response = await api.get('/vendors/my-ads');
+            const response = await api.get('/vendor_ad/my-ads');
+            console.log('My vendor ads response:', response.data);
+            
+            const vendorAds = response.data.data || response.data || [];
+            
             return {
                 success: true,
-                data: response.data.data
+                data: vendorAds
             };
         } catch (error) {
+            console.error('Get my vendor ads error:', error);
             return {
                 success: false,
-                message: error.response?.data?.message || 'Failed to fetch your vendor ads',
+                message: error.response?.data?.message || 'Failed to fetch vendor ads',
                 data: []
             };
         }
     }
 
+    // Get all vendor ads (for vendors screen - excludes current user)
+    async getAllVendorAds() {
+        try {
+            const response = await api.get('/vendor_ad/all');
+            console.log('All vendor ads response:', response.data);
+            
+            // Extract the results array from the paginated response
+            const vendorAds = response.data.data?.results || [];
+            
+            return {
+                success: true,
+                data: vendorAds  // Return the array directly
+            };
+        } catch (error) {
+            console.error('Get all vendor ads error:', error);
+            return {
+                success: false,
+                message: error.response?.data?.message || 'Failed to fetch vendor ads',
+                data: []
+            };
+        }
+    }
+
+    // Create vendor ad
     async createVendorAd(vendorData) {
         try {
             const headers = {};
@@ -240,210 +79,21 @@ class VendorService {
             if (vendorData instanceof FormData) {
                 headers['Content-Type'] = 'multipart/form-data';
             }
+
+            console.log('Creating vendor ad with data:', vendorData);
+            const response = await api.post('/vendor_ad/create', vendorData, { headers });
             
-            const response = await api.post('/vendors/create-ad', vendorData, { headers });
-            return {
-                success: true,
-                data: response.data.data,
-                message: 'Vendor ad created successfully'
-            };
-        } catch (error) {
-            return {
-                success: false,
-                message: error.response?.data?.message || 'Failed to create vendor ad'
-            };
-        }
-    }
-
-    async updateVendorAd(vendorId, vendorData) {
-        try {
-            const response = await api.put(`/vendor_ad/${vendorId}`, vendorData);
-            return {
-                success: true,
-                data: response.data.data,
-                message: 'Vendor ad updated successfully'
-            };
-        } catch (error) {
-            return {
-                success: false,
-                message: error.response?.data?.message || 'Failed to update vendor ad'
-            };
-        }
-    }
-
-    async deleteVendorAd(vendorId) {
-        try {
-            await api.delete(`/vendor_ad/${vendorId}`);
-            return {
-                success: true,
-                message: 'Vendor ad deleted successfully'
-            };
-        } catch (error) {
-            return {
-                success: false,
-                message: error.response?.data?.message || 'Failed to delete vendor ad'
-            };
-        }
-    }
-
-    async createVendorReview(vendorId, reviewData) {
-        try {
-            const response = await api.post(`/vendors/${vendorId}/reviews`, reviewData);
-            return {
-                success: true,
-                data: response.data.data,
-                message: 'Review submitted successfully'
-            };
-        } catch (error) {
-            return {
-                success: false,
-                message: error.response?.data?.message || 'Failed to submit review'
-            };
-        }
-    }
-
-    async addPortfolioItem(vendorId, portfolioData) {
-        try {
-            const formData = new FormData();
-            
-            // Add portfolio data
-            Object.keys(portfolioData).forEach(key => {
-                if (key === 'media' && portfolioData[key]) {
-                    // Handle file uploads
-                    portfolioData[key].forEach((file, index) => {
-                        formData.append(`media`, file);
-                    });
-                } else {
-                    formData.append(key, portfolioData[key]);
-                }
-            });
-
-            const response = await api.post(`/vendors/${vendorId}/portfolio`, formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data'
-                }
-            });
+            console.log('Create vendor ad response:', response.data);
             
             return {
                 success: true,
-                data: response.data.data,
-                message: 'Portfolio item added successfully'
-            };
-        } catch (error) {
-            return {
-                success: false,
-                message: error.response?.data?.message || 'Failed to add portfolio item'
-            };
-        }
-    }
-
-    async updateVendorAvailability(vendorId, availabilityData) {
-        try {
-            const response = await api.put(`/vendors/${vendorId}/availability`, availabilityData);
-            return {
-                success: true,
-                data: response.data.data,
-                message: 'Availability updated successfully'
-            };
-        } catch (error) {
-            return {
-                success: false,
-                message: error.response?.data?.message || 'Failed to update availability'
-            };
-        }
-    }
-
-    async sendVendorInquiry(vendorId, inquiryData) {
-        try {
-            const response = await api.post(`/vendors/${vendorId}/inquiry`, inquiryData);
-            return {
-                success: true,
-                data: response.data.data,
-                message: 'Inquiry sent successfully'
-            };
-        } catch (error) {
-            return {
-                success: false,
-                message: error.response?.data?.message || 'Failed to send inquiry'
-            };
-        }
-    }
-
-    // Pre-saved messages
-    async getPreSavedMessages() {
-        try {
-            const response = await api.get('/vendors/messages/pre-saved');
-            return {
-                success: true,
-                data: response.data.data
-            };
-        } catch (error) {
-            return {
-                success: false,
-                message: error.response?.data?.message || 'Failed to fetch pre-saved messages',
-                data: []
-            };
-        }
-    }
-
-    async createPreSavedMessage(messageData) {
-        try {
-            const response = await api.post('/vendors/messages/pre-saved', messageData);
-            return {
-                success: true,
-                data: response.data.data,
-                message: 'Message saved successfully'
-            };
-        } catch (error) {
-            return {
-                success: false,
-                message: error.response?.data?.message || 'Failed to save message'
-            };
-        }
-    }
-
-    async updatePreSavedMessage(messageId, messageData) {
-        try {
-            const response = await api.put(`/vendors/messages/pre-saved/${messageId}`, messageData);
-            return {
-                success: true,
-                data: response.data.data,
-                message: 'Message updated successfully'
-            };
-        } catch (error) {
-            return {
-                success: false,
-                message: error.response?.data?.message || 'Failed to update message'
-            };
-        }
-    }
-
-    async usePreSavedMessage(messageId) {
-        try {
-            const response = await api.post(`/vendors/messages/pre-saved/${messageId}/use`);
-            return {
-                success: true,
-                data: response.data.data,
-                message: 'Message used successfully'
-            };
-        } catch (error) {
-            return {
-                success: false,
-                message: error.response?.data?.message || 'Failed to use message'
-            };
-        }
-    }
-
-    async createVendorAd(vendorData) {
-        try {
-            const response = await api.post('/vendor_ad', vendorData);
-            return {
-                success: true,
-                message: 'Vendor ad created successfully',
-                data: response.data.data
+                data: response.data.data || response.data,
+                message: response.data.message || 'Vendor ad created successfully'
             };
         } catch (error) {
             console.error('Create vendor ad error:', error);
+            console.error('Error response:', error.response?.data);
+            
             return {
                 success: false,
                 message: error.response?.data?.message || 'Failed to create vendor ad',
@@ -452,55 +102,42 @@ class VendorService {
         }
     }
 
-    async getMyVendorAds() {
+    // Update vendor ad
+    async updateVendorAd(vendorAdId, updateData) {
         try {
-            const response = await api.get('/vendor_ad/my-ads');
-            console.log('Raw vendor ads response from API:', response.data);
-            
-            // Handle different response structures
-            const vendorAds = response.data.data || response.data || [];
-            console.log('Extracted vendor ads:', vendorAds);
+            const response = await api.patch(`/vendor_ad/${vendorAdId}`, updateData);
             
             return {
                 success: true,
-                data: vendorAds
+                data: response.data.data || response.data,
+                message: 'Vendor ad updated successfully'
             };
         } catch (error) {
-            console.error('Get my vendor ads error:', error);
-            console.error('Error response:', error.response?.data);
+            console.error('Update vendor ad error:', error);
+            
             return {
                 success: false,
-                message: error.response?.data?.message || 'Failed to fetch vendor ads',
-                data: []
+                message: error.response?.data?.message || 'Failed to update vendor ad',
+                data: null
             };
         }
     }
 
-    async getAllVendorAds(options = {}) {
+    // Delete vendor ad
+    async deleteVendorAd(vendorAdId) {
         try {
-            const params = new URLSearchParams();
-            if (options.page) params.append('page', options.page);
-            if (options.limit) params.append('limit', options.limit);
-            if (options.sortBy) params.append('sortBy', options.sortBy);
-            
-            const queryString = params.toString();
-            const url = `/vendor_ad/all${queryString ? `?${queryString}` : ''}`;
-            
-            const response = await api.get(url);
-            
-            // Extract the results array from the nested structure
-            const vendorAds = response.data.data?.results || response.data.data || [];
+            const response = await api.delete(`/vendor_ad/${vendorAdId}`);
             
             return {
                 success: true,
-                data: vendorAds.map(vendor => this.formatVendorForDisplay(vendor))
+                message: 'Vendor ad deleted successfully'
             };
         } catch (error) {
-            console.error('Get all vendor ads error:', error);
+            console.error('Delete vendor ad error:', error);
+            
             return {
                 success: false,
-                message: error.response?.data?.message || 'Failed to fetch vendor ads',
-                data: []
+                message: error.response?.data?.message || 'Failed to delete vendor ad'
             };
         }
     }
@@ -528,149 +165,117 @@ class VendorService {
                         if (typeof photo === 'string' && photo.startsWith('http')) {
                             return photo;
                         }
-                        // If it's a relative path
-                        if (typeof photo === 'string' && photo.startsWith('/')) {
+                        // If it's a path string
+                        if (typeof photo === 'string') {
                             return `http://localhost:3000${photo}`;
                         }
-                        return null;
-                    }).filter(Boolean);
+                        return photo;
+                    });
                 } catch (e) {
-                    console.log('Failed to parse photos:', e);
+                    console.error('Error parsing photos:', e);
+                    photos = [];
                 }
-            } else if (Array.isArray(vendor.photos) && vendor.photos.length > 0) {
+            } else if (Array.isArray(vendor.photos)) {
                 photos = vendor.photos.map(photo => {
                     if (typeof photo === 'object' && photo.url) {
                         return photo.url;
                     }
-                    if (typeof photo === 'object' && photo.path) {
-                        return `http://localhost:3000${photo.path}`;
-                    }
                     if (typeof photo === 'string' && photo.startsWith('http')) {
                         return photo;
                     }
-                    if (typeof photo === 'string' && photo.startsWith('/')) {
+                    if (typeof photo === 'string') {
                         return `http://localhost:3000${photo}`;
                     }
                     return photo;
-                }).filter(Boolean);
+                });
             }
-        }
-        
-        // Fallback to attachments if no photos
-        if (photos.length === 0 && vendor.attachments) {
-            if (Array.isArray(vendor.attachments)) {
-                photos = vendor.attachments.filter(att => 
-                    typeof att === 'string' && (att.startsWith('http') || att.startsWith('/'))
-                ).map(att => att.startsWith('/') ? `http://localhost:3000${att}` : att);
-            }
-        }
-        
-        // Use dummy images as last fallback
-        if (photos.length === 0) {
-            // Import dummy image properly
-            const dummyImage = require('../assets/images/dummy.png');
-            photos = [dummyImage, dummyImage, dummyImage];
-        }
-        
-        // Parse services_offered if it's a string
-        let services = [];
-        if (vendor.services_offered) {
-            if (typeof vendor.services_offered === 'string') {
+        } else if (vendor.attachments) {
+            // Handle attachments field
+            if (typeof vendor.attachments === 'string' && vendor.attachments !== '[]') {
                 try {
-                    services = JSON.parse(vendor.services_offered);
+                    const parsed = JSON.parse(vendor.attachments);
+                    photos = parsed.map(att => {
+                        if (att.url) return att.url;
+                        if (att.path) return `http://localhost:3000${att.path}`;
+                        if (typeof att === 'string' && att.startsWith('http')) return att;
+                        if (typeof att === 'string') return `http://localhost:3000${att}`;
+                        return att;
+                    });
                 } catch (e) {
-                    services = [vendor.services_offered];
+                    console.error('Error parsing attachments:', e);
+                    photos = [];
                 }
-            } else if (Array.isArray(vendor.services_offered)) {
-                services = vendor.services_offered;
+            } else if (Array.isArray(vendor.attachments)) {
+                photos = vendor.attachments.map(att => {
+                    if (typeof att === 'object' && att.url) return att.url;
+                    if (typeof att === 'string' && att.startsWith('http')) return att;
+                    if (typeof att === 'string') return `http://localhost:3000${att}`;
+                    return att;
+                });
             }
         }
-        
-        // Parse offers if available
-        let offers = vendor.offers || [];
-        if (typeof offers === 'string') {
-            try {
-                offers = JSON.parse(offers);
-            } catch (e) {
-                console.log('Failed to parse offers:', e);
-                offers = [];
+
+        console.log('Parsed photos:', photos);
+
+        // Calculate initials from company name or title
+        const displayName = vendor.company_name || vendor.title || 'Vendor';
+        const initials = displayName
+            .split(' ')
+            .map(word => word[0])
+            .join('')
+            .substring(0, 2)
+            .toUpperCase();
+
+        // Parse offers if they exist
+        let offers = [];
+        if (vendor.offers) {
+            if (typeof vendor.offers === 'string') {
+                try {
+                    offers = JSON.parse(vendor.offers);
+                } catch (e) {
+                    console.error('Error parsing offers:', e);
+                }
+            } else if (Array.isArray(vendor.offers)) {
+                offers = vendor.offers;
             }
         }
+
+        // Get category name
+        let categoryName = vendor.category?.name || vendor.category_name || vendor.type || 'Service';
         
-        console.log('Raw vendor data:', vendor);
-        console.log('Formatted photos:', photos);
-        console.log('Formatted offers:', offers);
-        console.log('Formatted services:', services);
-        
+        // Map category_id to category name if needed
+        if (!categoryName && vendor.category_id) {
+            const categoryMap = {
+                1: 'Photographer',
+                2: 'Videographer',
+                3: 'Caterer',
+                4: 'Decorator',
+                5: 'DJ',
+                6: 'Event Planner',
+                7: 'Florist',
+                8: 'Makeup Artist',
+                9: 'Venue',
+                10: 'Transport'
+            };
+            categoryName = categoryMap[vendor.category_id] || 'Service';
+        }
+
         return {
-            id: vendor.id || vendor.vendor_ad_id,
-            initials: vendor.initials || this.getInitials(vendor.company_name || vendor.title),
-            name: vendor.company_name || vendor.title,
-            type: vendor.category_name || 
-                  (typeof vendor.category === 'object' ? vendor.category?.name : vendor.category) || 
-                  services[0] || 
-                  'Service Provider',
-            rating: vendor.rating || 0,
-            reviewCount: vendor.review_count || 0,
+            id: vendor.vendor_ad_id || vendor.id,
+            initials: initials,
+            name: displayName,
+            type: categoryName,
+            rating: vendor.rating || 4.5,
             description: vendor.description || '',
-            images: photos,
+            images: photos.length > 0 ? photos : [dummyImage, dummyImage, dummyImage], // Use dummy images as fallback
             extraCount: photos.length > 3 ? photos.length - 3 : 0,
-            location: vendor.location || vendor.service_areas?.[0] || 'Unknown',
-            price: vendor.price_amount || vendor.price_range,
-            currency: vendor.currency || 'USD',
-            verified: vendor.verified || false,
-            featured: vendor.featured || false,
-            boosted: vendor.is_boosted || false,
-            availability: vendor.availability || [],
-            services: services,
+            location: vendor.location || '',
             offers: offers,
-            contact: {
-                phone: vendor.contact_number,
-                email: vendor.contact_email,
-                whatsapp: vendor.whatsapp_number
-            }
+            // Keep original data for reference
+            _original: vendor
         };
-    }
-
-    getInitials(name) {
-        if (!name) return 'V';
-        const words = name.split(' ');
-        if (words.length === 1) {
-            return name.substring(0, 2).toUpperCase();
-        }
-        return words.slice(0, 2).map(w => w[0]).join('').toUpperCase();
-    }
-
-    extractImages(data) {
-        if (!data) return [];
-        
-        // If it's already an array of images
-        if (Array.isArray(data)) {
-            return data.filter(item => 
-                typeof item === 'string' && 
-                (item.startsWith('http') || item.startsWith('data:'))
-            );
-        }
-        
-        // If it's a JSON string
-        if (typeof data === 'string') {
-            try {
-                const parsed = JSON.parse(data);
-                if (Array.isArray(parsed)) {
-                    return this.extractImages(parsed);
-                }
-            } catch (e) {
-                // If it's a single URL
-                if (data.startsWith('http') || data.startsWith('data:')) {
-                    return [data];
-                }
-            }
-        }
-        
-        return [];
     }
 }
 
 const vendorService = new VendorService();
-export { vendorService };
 export default vendorService;

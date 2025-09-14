@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -8,70 +8,130 @@ import {
     SafeAreaView,
     Image,
     TextInput,
+    ActivityIndicator,
+    RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../../ThemeContext';
-
-// Mock chat data - replace with real data from your backend
-const mockChats = [
-    {
-        id: '1',
-        name: 'Sarah Johnson',
-        lastMessage: 'Hey! Are you available for the wedding event?',
-        timestamp: '10:30 AM',
-        unreadCount: 2,
-        avatar: 'https://randomuser.me/api/portraits/women/1.jpg',
-        isOnline: true,
-    },
-    {
-        id: '2',
-        name: 'Mike Photography',
-        lastMessage: 'I can provide photography services for your event',
-        timestamp: 'Yesterday',
-        unreadCount: 0,
-        avatar: 'https://randomuser.me/api/portraits/men/1.jpg',
-        isOnline: false,
-    },
-    {
-        id: '3',
-        name: 'Elite Catering',
-        lastMessage: 'What type of cuisine are you looking for?',
-        timestamp: 'Monday',
-        unreadCount: 1,
-        avatar: 'https://randomuser.me/api/portraits/women/2.jpg',
-        isOnline: true,
-    },
-    {
-        id: '4',
-        name: 'DJ Alex',
-        lastMessage: 'I have availability for your date',
-        timestamp: 'Sunday',
-        unreadCount: 0,
-        avatar: 'https://randomuser.me/api/portraits/men/2.jpg',
-        isOnline: false,
-    },
-    {
-        id: '5',
-        name: 'Floral Designs',
-        lastMessage: 'I sent you some samples, please check',
-        timestamp: 'Saturday',
-        unreadCount: 3,
-        avatar: 'https://randomuser.me/api/portraits/women/3.jpg',
-        isOnline: true,
-    },
-];
+import chatService from '../../services/chatService';
+import socketService from '../../services/socketService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function ChatList({ navigation }) {
     const [searchQuery, setSearchQuery] = useState('');
-    const [filteredChats, setFilteredChats] = useState(mockChats);
+    const [chats, setChats] = useState([]);
+    const [filteredChats, setFilteredChats] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [currentUserId, setCurrentUserId] = useState(null);
     const theme = useTheme();
+
+    useEffect(() => {
+        initializeChat();
+        loadChats();
+        setupSocketListeners();
+
+        return () => {
+            socketService.off('new-message');
+            socketService.off('chat-updated');
+            socketService.off('user-status-changed');
+        };
+    }, []);
+
+    const initializeChat = async () => {
+        try {
+            const userId = await AsyncStorage.getItem('userId');
+            setCurrentUserId(userId);
+
+            if (!socketService.isSocketConnected()) {
+                await socketService.connect();
+            }
+        } catch (error) {
+            console.error('Failed to initialize chat:', error);
+        }
+    };
+
+    const setupSocketListeners = () => {
+        socketService.on('new-message', (data) => {
+            loadChats();
+        });
+
+        socketService.on('chat-updated', (data) => {
+            loadChats();
+        });
+
+        socketService.on('user-status-changed', (data) => {
+            setChats(prevChats => prevChats.map(chat => {
+                if (chat.recipientId === data.userId) {
+                    return { ...chat, isOnline: data.status === 'online' };
+                }
+                return chat;
+            }));
+        });
+    };
+
+    const loadChats = async () => {
+        try {
+            setIsLoading(true);
+            const result = await chatService.getChats();
+            
+            if (result.success && result.data) {
+                const formattedChats = result.data.results ? result.data.results : result.data;
+                const chatList = Array.isArray(formattedChats) ? formattedChats : [];
+                
+                const processedChats = chatList.map(chat => ({
+                    id: chat.chat_id || chat.id,
+                    name: chat.name || chat.participants?.find(p => p.user_id !== currentUserId)?.name || 'Unknown User',
+                    lastMessage: chat.last_message || 'No messages yet',
+                    timestamp: formatTimestamp(chat.last_message_time || chat.updated_at),
+                    unreadCount: chat.unread_count || 0,
+                    avatar: chat.avatar || chat.participants?.find(p => p.user_id !== currentUserId)?.profile_picture || 'https://via.placeholder.com/50',
+                    isOnline: chat.participants?.find(p => p.user_id !== currentUserId)?.is_online || false,
+                    recipientId: chat.participants?.find(p => p.user_id !== currentUserId)?.user_id,
+                    type: chat.type || 'direct',
+                }));
+                
+                setChats(processedChats);
+                setFilteredChats(processedChats);
+            }
+        } catch (error) {
+            console.error('Failed to load chats:', error);
+        } finally {
+            setIsLoading(false);
+            setIsRefreshing(false);
+        }
+    };
+
+    const formatTimestamp = (timestamp) => {
+        if (!timestamp) return '';
+        
+        const date = new Date(typeof timestamp === 'number' ? timestamp : timestamp);
+        const now = new Date();
+        const diff = now - date;
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        
+        if (days === 0) {
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        } else if (days === 1) {
+            return 'Yesterday';
+        } else if (days < 7) {
+            return date.toLocaleDateString([], { weekday: 'long' });
+        } else {
+            return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        }
+    };
+
+    const onRefresh = () => {
+        setIsRefreshing(true);
+        loadChats();
+    };
 
     const handleSearch = (query) => {
         setSearchQuery(query);
         if (query.trim() === '') {
-            setFilteredChats(mockChats);
+            setFilteredChats(chats);
         } else {
-            const filtered = mockChats.filter(chat =>
+            const filtered = chats.filter(chat =>
                 chat.name.toLowerCase().includes(query.toLowerCase()) ||
                 chat.lastMessage.toLowerCase().includes(query.toLowerCase())
             );
@@ -86,7 +146,8 @@ export default function ChatList({ navigation }) {
                 chatId: item.id,
                 chatName: item.name,
                 avatar: item.avatar,
-                isOnline: item.isOnline
+                isOnline: item.isOnline,
+                recipientId: item.recipientId
             })}
         >
             <View style={styles.avatarContainer}>
@@ -152,14 +213,35 @@ export default function ChatList({ navigation }) {
             </View>
 
             {/* Chat List */}
-            <FlatList
-                data={filteredChats}
-                renderItem={renderChatItem}
-                keyExtractor={(item) => item.id}
-                style={styles.chatList}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.listContainer}
-            />
+            {isLoading ? (
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={theme.colors.primary} />
+                    <Text style={styles.loadingText}>Loading chats...</Text>
+                </View>
+            ) : (
+                <FlatList
+                    data={filteredChats}
+                    renderItem={renderChatItem}
+                    keyExtractor={(item) => item.id?.toString()}
+                    style={styles.chatList}
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={styles.listContainer}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={isRefreshing}
+                            onRefresh={onRefresh}
+                            colors={[theme.colors.primary]}
+                        />
+                    }
+                    ListEmptyComponent={
+                        <View style={styles.emptyContainer}>
+                            <Icon name="chatbubbles-outline" size={64} color="#8B95A5" />
+                            <Text style={styles.emptyText}>No chats yet</Text>
+                            <Text style={styles.emptySubText}>Start a conversation with vendors or event organizers</Text>
+                        </View>
+                    }
+                />
+            )}
 
             {/* Floating Action Button */}
             {/* <TouchableOpacity style={[styles.fab, { backgroundColor: theme.colors.primary }]}>
@@ -330,5 +412,34 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loadingText: {
+        marginTop: 10,
+        fontSize: 16,
+        color: '#8B95A5',
+    },
+    emptyContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingTop: 100,
+    },
+    emptyText: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#2C3D5B',
+        marginTop: 20,
+    },
+    emptySubText: {
+        fontSize: 14,
+        color: '#8B95A5',
+        marginTop: 8,
+        textAlign: 'center',
+        paddingHorizontal: 40,
     },
 });

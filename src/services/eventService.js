@@ -1,4 +1,5 @@
 import api from './api';
+import dummyImage from '../assets/images/dummy.png';
 
 class EventService {
     // Create event ad
@@ -73,6 +74,29 @@ class EventService {
             return {
                 success: false,
                 message: error.response?.data?.message || 'Failed to delete event ad'
+            };
+        }
+    }
+
+    // Get all event ads (for events screen - excludes current user)
+    async getAllEventAds() {
+        try {
+            const response = await api.get('/event_ad');
+            console.log('All event ads response:', response.data);
+            
+            // Extract the results array from the paginated response
+            const eventAds = response.data.data?.results || [];
+            
+            return {
+                success: true,
+                data: eventAds  // Return the array directly
+            };
+        } catch (error) {
+            console.error('Get all event ads error:', error);
+            return {
+                success: false,
+                message: error.response?.data?.message || 'Failed to fetch event ads',
+                data: []
             };
         }
     }
@@ -194,7 +218,33 @@ class EventService {
 
     // Helper method to format event data for display
     formatEventForDisplay(event) {
+        console.log('Formatting event:', event);
         const extractedImages = this.extractImages(event.attachments);
+        
+        // Format date if it exists
+        let formattedDate = 'Date TBD';
+        if (event.date) {
+            try {
+                const dateObj = new Date(event.date);
+                formattedDate = dateObj.toLocaleDateString('en-US', {
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric'
+                });
+            } catch (e) {
+                formattedDate = event.date;
+            }
+        }
+        
+        // Create dummy organizer data (since backend doesn't provide it yet)
+        const organizer = {
+            name: `User ${event.user_id || 'Unknown'}`,
+            avatar: 'https://randomuser.me/api/portraits/lego/1.jpg' // Default avatar
+        };
+        
+        // Determine event category
+        const category = event.event_type || event.service_needed || 'General Event';
+        
         return {
             id: event.id || event.event_ad_id,
             title: event.title || `${event.event_type || 'Event'} - ${event.service_needed || ''}`,
@@ -202,12 +252,15 @@ class EventService {
             event_type: event.event_type,
             event_tags: event.event_tags || [],
             location: event.location || 'Unknown',
-            date: event.date,
-            duration: event.duration,
-            budget: event.budget,
+            date: formattedDate,
+            duration: event.duration || 'TBD',
+            budget: event.budget || null,
+            guests: event.guests_count || null,
             description: event.description || '',
-            attachments: extractedImages, // For backward compatibility
-            images: extractedImages, // For new usage
+            attachments: extractedImages.length > 0 ? extractedImages : [], // Return empty array if no images
+            images: extractedImages.length > 0 ? extractedImages : [], // For new usage
+            organizer: organizer, // Add organizer data for EventCard
+            category: category, // Add category for filtering
             status: event.status || 'active',
             visibility: event.visibility || 'public',
             is_urgent: event.is_urgent || false,
