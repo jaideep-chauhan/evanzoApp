@@ -15,7 +15,7 @@ import percentage from '../../../assets/icons/percent.png'
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2; // 2 cards with spacing
 
-const OfferCard = ({ amount = 150, percent = 10 }) => {
+const OfferCard = ({ amount = 0, percent = 0 }) => {
     return (
         <View style={styles.card}>
             <View style={styles.row}>
@@ -41,37 +41,72 @@ const OfferCard = ({ amount = 150, percent = 10 }) => {
 };
 
 const OfferGrid = ({ offers = [] }) => {
-    console.log('OfferGrid - Received offers:', offers);
-    console.log('OfferGrid - Offers type:', typeof offers);
-    console.log('OfferGrid - Offers length:', offers?.length);
-    
-    // If no offers, show default cards
+    // If no offers, show default cards in 2x2 grid
     if (!offers || offers.length === 0) {
-        console.log('OfferGrid - No offers, showing default cards');
         return (
-            <View style={styles.container}>
-                <OfferCard amount={0} percent={0} />
-                <OfferCard amount={0} percent={0} />
+            <View style={styles.gridContainer}>
+                <View style={styles.row}>
+                    <OfferCard amount={0} percent={0} />
+                    <OfferCard amount={0} percent={0} />
+                </View>
+                <View style={styles.row}>
+                    <OfferCard amount={0} percent={0} />
+                    <OfferCard amount={0} percent={0} />
+                </View>
             </View>
         );
     }
 
-    // Display actual offers
-    console.log('OfferGrid - Displaying offers:', offers);
-    return (
-        <View style={styles.container}>
-            {offers.slice(0, 2).map((offer, index) => {
-                console.log(`OfferGrid - Offer ${index}:`, offer);
-                console.log(`OfferGrid - Amount: ${offer.amount}, Discount: ${offer.discount}`);
-                return (
-                    <OfferCard 
-                        key={index} 
-                        amount={offer.amount || 0} 
-                        percent={offer.discount || 0} 
-                    />
+    // Create rows for 2x2 grid layout
+    const renderOfferRows = () => {
+        const rows = [];
+        const itemsPerRow = 2;
+        
+        // Calculate how many offers to show (max 4 for 2x2 grid)
+        const offersToShow = offers.slice(0, 4);
+        
+        for (let i = 0; i < offersToShow.length; i += itemsPerRow) {
+            const rowOffers = offersToShow.slice(i, i + itemsPerRow);
+            
+            rows.push(
+                <View key={i} style={styles.row}>
+                    {rowOffers.map((offer, index) => (
+                        <OfferCard 
+                            key={i + index} 
+                            amount={offer.amount || 0} 
+                            percent={offer.discount || 0} 
+                        />
+                    ))}
+                    {/* Fill empty space if row is not complete */}
+                    {rowOffers.length === 1 && <View style={styles.emptyCard} />}
+                </View>
+            );
+        }
+        
+        // Fill remaining rows to maintain 2x2 grid structure
+        const remainingSlots = 4 - offersToShow.length;
+        if (remainingSlots > 0 && rows.length === 1) {
+            // If we have 1-3 offers, we need to fill the second row
+            const secondRowNeeded = Math.min(remainingSlots, 2);
+            if (secondRowNeeded > 0) {
+                const emptyCards = [];
+                for (let j = 0; j < secondRowNeeded; j++) {
+                    emptyCards.push(<View key={`empty-${j}`} style={styles.emptyCard} />);
+                }
+                rows.push(
+                    <View key="empty-row" style={styles.row}>
+                        {emptyCards}
+                    </View>
                 );
-            })}
-            {offers.length === 1 && <OfferCard amount={0} percent={0} />}
+            }
+        }
+        
+        return rows;
+    };
+
+    return (
+        <View style={styles.gridContainer}>
+            {renderOfferRows()}
         </View>
     );
 };
@@ -88,12 +123,38 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#eaeaea',
         borderRadius: 12,
-
+    },
+    gridContainer: {
+        padding: 16,
+        backgroundColor: '#fefefe',
+        borderWidth: 1,
+        borderColor: '#eaeaea',
+        borderRadius: 12,
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 1,
+        },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 1,
+    },
+    row: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+        gap: 8,
     },
     card: {
         width: CARD_WIDTH,
         paddingVertical: 12,
         paddingHorizontal: 12,
+    },
+    emptyCard: {
+        width: CARD_WIDTH,
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+        // Invisible placeholder to maintain grid layout
     },
     columnTitle: {
         flex: 1,
@@ -101,12 +162,6 @@ const styles = StyleSheet.create({
         color: '#1e2b4f',
         fontSize: 8,
         fontWeight: '500',
-    },
-    row: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 8,
-        gap: 4,
     },
     valueBox: {
         flex: 1,

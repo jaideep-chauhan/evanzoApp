@@ -1,10 +1,12 @@
 import React, { useRef, useState } from 'react'
 import VendorProfileCard from './VendorProfileCard';
 // Removed SafeAreaView
-import { ScrollView, StyleSheet, View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
+import { ScrollView, StyleSheet, View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
 import img from '../../../assets/images/dummy.png';
 import VendorDetailsSection from './VendorDetailsSection';
 import { useRoute } from '@react-navigation/native';
+import chatService from '../../../services/chatService';
+import { useAuth } from '../../../context/AuthContext';
 
 const dummyReviews = [
     {
@@ -33,16 +35,15 @@ const dummyReviews = [
 
 export default function VendorChat({ navigation }) {
     const route = useRoute();
+    const { user } = useAuth();
     const scrollViewRef = useRef(null);
     const offerSectionRef = useRef(null);
     const [quoteText, setQuoteText] = useState('');
+    const [isSubmittingQuote, setIsSubmittingQuote] = useState(false);
 
     const scrollToOffer = route.params?.scrollToOffer;
     const vendor = route.params?.vendor;
     
-    // Debug: Log vendor data
-    console.log('VendorAddDetail - Full vendor data:', vendor);
-    console.log('VendorAddDetail - Vendor offers:', vendor?.offers);
     
     // Format images to ensure they're in the correct format
     const formattedImages = vendor?.images?.map(image => {
@@ -62,9 +63,77 @@ export default function VendorChat({ navigation }) {
         return img;
     }) || [img, img, img, img, img];
 
-    const handleSendQuote = () => {
-        console.log('Sending quote:', quoteText);
-        setQuoteText('');
+    const handleSendQuote = async () => {
+        if (!quoteText.trim()) {
+            Alert.alert('Error', 'Please enter a quote message');
+            return;
+        }
+
+        if (!user) {
+            Alert.alert('Error', 'You must be logged in to send a quote');
+            return;
+        }
+
+        // Get vendor's user_id - try different possible fields
+        const vendorUserId = vendor?.user_id || 
+                           vendor?._original?.user_id || 
+                           vendor?.owner_id ||
+                           vendor?.vendor_user_id;
+
+        if (!vendorUserId) {
+            Alert.alert('Error', 'Unable to identify vendor. Please try again.');
+            return;
+        }
+
+        setIsSubmittingQuote(true);
+
+        try {
+            // Step 1: Create or get direct chat with vendor
+            const chatResult = await chatService.createDirectChat(vendorUserId);
+            
+            if (!chatResult.success) {
+                Alert.alert('Error', chatResult.message || 'Failed to create chat with vendor');
+                return;
+            }
+
+            const chatId = chatResult.data.chat_id;
+
+            // Step 2: Format quote message
+            const quoteMessage = `📋 Quote Request:\n\n${quoteText.trim()}\n\n💼 Service: ${vendor?.type || vendor?.category || 'General Service'}\n📍 Location: ${vendor?.location || 'Not specified'}`;
+
+            // Step 3: Send quote message
+            const messageResult = await chatService.sendMessage(chatId, quoteMessage, 'text');
+
+            if (messageResult.success) {
+                Alert.alert(
+                    'Quote Sent!',
+                    'Your quote has been sent to the vendor. They will respond to you via chat.',
+                    [
+                        {
+                            text: 'View Chat',
+                            onPress: () => {
+                                navigation.navigate('ChatScreen', {
+                                    chatId: chatId,
+                                    chatTitle: vendor?.name || vendor?.company_name || 'Vendor',
+                                });
+                            }
+                        },
+                        {
+                            text: 'OK',
+                            style: 'default'
+                        }
+                    ]
+                );
+                setQuoteText('');
+            } else {
+                Alert.alert('Error', messageResult.message || 'Failed to send quote');
+            }
+
+        } catch (error) {
+            Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+        } finally {
+            setIsSubmittingQuote(false);
+        }
     };
 
     // Set initial scroll position based on scrollToOffer flag
@@ -91,6 +160,7 @@ export default function VendorChat({ navigation }) {
                         onBackPress={() => navigation && navigation.goBack ? navigation.goBack() : null}
                         onBellPress={() => console.log('Notifications')}
                         navigation={navigation}
+                        vendor={vendor} // Pass the full vendor object
                     />
                     <View style={{ marginTop: 130 }} ref={offerSectionRef}>
                         <VendorDetailsSection
@@ -100,6 +170,7 @@ export default function VendorChat({ navigation }) {
                             reviews={dummyReviews}
                             hideMessageSection={true}
                             offers={vendor?.offers || []}
+                            vendorId={vendor?._original?.vendor_ad_id || vendor?.id}
                         />
                     </View>
                 </ScrollView>
@@ -109,13 +180,25 @@ export default function VendorChat({ navigation }) {
                     <View style={styles.quoteSection}>
                         <TextInput
                             style={styles.quoteInput}
-                            placeholder="Give a quote..."
+                            placeholder="Send a quote request to this vendor..."
                             placeholderTextColor="#ccc"
                             value={quoteText}
                             onChangeText={setQuoteText}
+                            multiline
+                            maxLength={500}
+                            textAlignVertical="top"
+                            editable={!isSubmittingQuote}
                         />
-                        <TouchableOpacity style={styles.sendBtn} onPress={handleSendQuote}>
-                            <Text style={styles.sendText}>Send</Text>
+                        <TouchableOpacity 
+                            style={[styles.sendBtn, isSubmittingQuote && styles.sendBtnDisabled]} 
+                            onPress={handleSendQuote}
+                            disabled={isSubmittingQuote}
+                        >
+                            {isSubmittingQuote ? (
+                                <ActivityIndicator size="small" color="#2C3D5B" />
+                            ) : (
+                                <Text style={styles.sendText}>Send</Text>
+                            )}
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -163,10 +246,12 @@ const styles = StyleSheet.create({
         borderColor: '#ccc',
         borderWidth: 1,
         borderRadius: 10,
-        paddingVertical: 8,
+        paddingVertical: 12,
         paddingHorizontal: 12,
         color: '#fff',
         marginRight: 10,
+        minHeight: 45,
+        maxHeight: 100,
     },
     sendBtn: {
         backgroundColor: '#fff',
@@ -175,6 +260,10 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    sendBtnDisabled: {
+        backgroundColor: '#ccc',
+        opacity: 0.7,
     },
     sendText: {
         color: '#2C3D5B',

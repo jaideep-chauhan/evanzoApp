@@ -7,7 +7,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import preSavedMessageService from '../../services/preSavedMessageService';
 import { CustomSuccessModal } from '../../components/CustomSuccessModal';
 
-const PreSavedMessage = ({ onClose }) => {
+const PreSavedMessage = ({ onClose, visible }) => {
     const theme = useTheme();
 
     const [date, setDate] = useState(new Date());
@@ -62,10 +62,39 @@ const PreSavedMessage = ({ onClose }) => {
         'Custom'
     ];
 
-    // Load existing message on component mount
+    // Load existing message when modal becomes visible
+    useEffect(() => {
+        if (visible) {
+            loadPreSavedMessage();
+        } else {
+            // Reset form state when modal is closed
+            resetFormState();
+        }
+    }, [visible]);
+    
+    // Also load on component mount for backward compatibility
     useEffect(() => {
         loadPreSavedMessage();
     }, []);
+
+    const resetFormState = () => {
+        setEventName('');
+        setLocation('');
+        setCategory('');
+        setTime(new Date());
+        setDuration('');
+        setDescription('');
+        setDate(new Date());
+        setExistingMessage(null);
+        setIsLoading(false);
+        setIsSaving(false);
+        // Also reset all modal/dropdown states
+        setShowCategoryDropdown(false);
+        setShowDurationDropdown(false);
+        setShowDatePicker(false);
+        setShowTimePicker(false);
+        setSuccessModalVisible(false);
+    };
 
     const loadPreSavedMessage = async () => {
         setIsLoading(true);
@@ -196,10 +225,14 @@ const PreSavedMessage = ({ onClose }) => {
     
     const handleSuccessModalConfirm = () => {
         setSuccessModalVisible(false);
-        if (modalMessage.type === 'success' && onClose) {
-            // Close the pre-save message form after success
-            onClose();
-        }
+        // Reset any dropdown states that might be open
+        setShowCategoryDropdown(false);
+        setShowDurationDropdown(false);
+        setShowDatePicker(false);
+        setShowTimePicker(false);
+        // Don't automatically close the form after success
+        // Let the user manually close it or continue editing
+        // This prevents modal state conflicts that can block the screen
     };
 
     if (isLoading) {
@@ -361,7 +394,7 @@ const PreSavedMessage = ({ onClose }) => {
                     mode="time"
                     is24Hour={false}
                     display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                    onChange={(event, selectedTime) => {
+                    onChange={(_, selectedTime) => {
                         setShowTimePicker(false);
                         if (selectedTime) {
                             setTime(selectedTime);

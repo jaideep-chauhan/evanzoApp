@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Animated, RefreshControl, ActivityIndicator } from 'react-native';
+import { Animated, RefreshControl, ActivityIndicator, Alert } from 'react-native';
 import {
     StyleSheet,
     SafeAreaView,
@@ -10,6 +10,7 @@ import {
     TouchableOpacity,
     Modal,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import SearchHeader from './SearchHeader';
 import Tabs from './Tabs';
 import VendorCard from './VendorCard';
@@ -17,7 +18,7 @@ import LocationSearchModal from './LocationSearchModal';
 import CategorySelectionModal from './CategorySelectionModal';
 import PreSavedMessage from '../profile/PreSavedMessage';
 import img from '../../assets/images/dummy.png'; // Fallback image
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
 import CatererCard from './CatererCard';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -38,59 +39,95 @@ export default function Vendor() {
     const [refreshing, setRefreshing] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [vendors, setVendors] = useState([]);
+    const [isFetchingVendors, setIsFetchingVendors] = useState(false);
+    const [networkError, setNetworkError] = useState(false);
+    const fetchTimeoutRef = useRef(null);
 
-    // Fetch vendors from API
-    const fetchVendors = async () => {
+    // Fetch vendors from API with proper error handling
+    const fetchVendors = async (isRetry = false) => {
+        // Prevent multiple simultaneous calls
+        if (isFetchingVendors) {
+            console.log('Already fetching vendors, skipping...');
+            return;
+        }
+
+        // Clear any existing timeout
+        if (fetchTimeoutRef.current) {
+            clearTimeout(fetchTimeoutRef.current);
+        }
+
         try {
-            setIsLoading(true);
+            setIsFetchingVendors(true);
+            setNetworkError(false);
+            
+            // Only show loading on initial load or manual retry
+            if (vendors.length === 0 || isRetry) {
+                setIsLoading(true);
+            }
             
             const response = await vendorService.getPublicVendorAds();
             
             if (response.success && response.data && Array.isArray(response.data)) {
                 if (response.data.length > 0) {
                     // Format vendors using the same method as profile
-                    const formattedVendors = response.data.map(vendor => 
-                        vendorService.formatVendorForDisplay(vendor)
-                    );
+                    const formattedVendors = response.data.map(vendor => {
+                        const formatted = vendorService.formatVendorForDisplay(vendor);
+                        console.log('Formatted vendor:', formatted.name, 'ID:', formatted.id, 'vendor_ad_id:', formatted.vendor_ad_id, 'Has _original:', !!formatted._original);
+                        return formatted;
+                    });
                     setVendors(formattedVendors);
                 } else {
                     setVendors([]);
                 }
             } else {
-                setVendors([]);
+                // Check if it was due to network error
+                if (response.message && response.message.includes('Request already in progress')) {
+                    console.log('Request already in progress, will not show error');
+                } else {
+                    setVendors([]);
+                    setNetworkError(true);
+                }
             }
         } catch (error) {
             console.error('Error fetching vendors:', error);
-            setVendors([]);
+            setNetworkError(true);
+            // Keep existing vendors if we have them
+            if (vendors.length === 0) {
+                setVendors([]);
+            }
         } finally {
             setIsLoading(false);
+            setIsFetchingVendors(false);
         }
     };
 
     // Fetch vendors on component mount
     useEffect(() => {
-        // Fetch vendors immediately
-        fetchVendors();
+        // Initial fetch with a small delay to prevent race conditions
+        const initialFetchTimeout = setTimeout(() => {
+            fetchVendors();
+        }, 100);
         
-        // Failsafe: Stop loading after 10 seconds if still loading
+        // Failsafe: Stop loading after 15 seconds if still loading
         const failsafeTimeout = setTimeout(() => {
             if (isLoading) {
                 setIsLoading(false);
+                setIsFetchingVendors(false);
+                setNetworkError(true);
             }
-        }, 10000);
+        }, 15000);
         
-        return () => clearTimeout(failsafeTimeout);
+        return () => {
+            clearTimeout(initialFetchTimeout);
+            clearTimeout(failsafeTimeout);
+            if (fetchTimeoutRef.current) {
+                clearTimeout(fetchTimeoutRef.current);
+            }
+        };
     }, []);
     
-    // Refetch vendors when screen comes into focus
-    useFocusEffect(
-        React.useCallback(() => {
-            // Only fetch if we don't have vendors yet
-            if (vendors.length === 0 && !isLoading) {
-                fetchVendors();
-            }
-        }, [vendors.length, isLoading])
-    );
+    // Note: Removed useFocusEffect that was causing continuous API calls 
+    // when no vendors found. Initial fetch on mount is sufficient.
 
 
     // Note: Filtering is disabled for now to ensure vendors always show
@@ -142,6 +179,11 @@ export default function Vendor() {
     });
 
     const onRefresh = React.useCallback(async () => {
+        // Don't refresh if already fetching
+        if (isFetchingVendors) {
+            return;
+        }
+        
         setRefreshing(true);
         
         try {
@@ -151,13 +193,13 @@ export default function Vendor() {
             setActiveTab(null);
             
             // Fetch fresh data
-            await fetchVendors();
+            await fetchVendors(true);
         } catch (error) {
             console.error('Error refreshing vendors:', error);
         } finally {
             setRefreshing(false);
         }
-    }, []);
+    }, [isFetchingVendors]);
 
     return (
         <View style={[styles.safe]}>
@@ -202,17 +244,23 @@ export default function Vendor() {
                 {isLoading ? (
                     <View style={styles.loaderContainer}>
                         <ActivityIndicator size="large" color={theme.colors.primary} />
-                        <Text style={[styles.loadingText, { color: theme.colors.primary }]}>Loading vendors...</Text>
-                        <TouchableOpacity 
-                            style={[styles.retryButton, { backgroundColor: theme.colors.primary }]}
-                            onPress={() => {
-                                console.log('Manual retry triggered');
-                                setIsLoading(false);
-                                setTimeout(() => fetchVendors(), 100);
-                            }}
-                        >
-                            <Text style={styles.retryButtonText}>Retry Now</Text>
-                        </TouchableOpacity>
+                        <Text style={[styles.loadingText, { color: theme.colors.primary }]}>
+                            {networkError ? 'Network issue detected. Retrying...' : 'Loading vendors...'}
+                        </Text>
+                        {networkError && (
+                            <TouchableOpacity 
+                                style={[styles.retryButton, { backgroundColor: theme.colors.primary }]}
+                                onPress={() => {
+                                    console.log('Manual retry triggered');
+                                    fetchVendors(true);
+                                }}
+                                disabled={isFetchingVendors}
+                            >
+                                <Text style={styles.retryButtonText}>
+                                    {isFetchingVendors ? 'Retrying...' : 'Retry Now'}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 ) : (
                     <>
@@ -229,17 +277,30 @@ export default function Vendor() {
                 {vendors.length === 0 ? (
                     <View style={styles.noVendorsContainer}>
                         <Text style={styles.noVendorsText}>
-                            No vendors found
+                            {networkError ? 'Unable to load vendors' : 'No vendors found'}
                         </Text>
                         <Text style={styles.noVendorsSubtext}>
-                            Pull down to refresh or tap retry
+                            {networkError ? 'Check your internet connection' : 'Pull down to refresh'}
                         </Text>
+                        {networkError && (
+                            <TouchableOpacity 
+                                style={[styles.retryButton, { backgroundColor: theme.colors.primary, marginTop: 16 }]}
+                                onPress={() => fetchVendors(true)}
+                                disabled={isFetchingVendors}
+                            >
+                                <Text style={styles.retryButtonText}>
+                                    {isFetchingVendors ? 'Retrying...' : 'Retry'}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 ) : (
                     // Use vendors directly instead of filteredVendors
                     vendors.map((vendor, idx) => (
                         <VendorCard
                             key={vendor.id || idx}
+                            vendorId={vendor._original?.vendor_ad_id || vendor.id}
+                            fullVendorData={vendor} // Pass the complete vendor object
                             initials={vendor.initials}
                             name={vendor.name}
                             type={vendor.type}
@@ -250,12 +311,36 @@ export default function Vendor() {
                             location={vendor.location}
                             offers={vendor.offers || []} // Add offers prop
                             isFocused={idx === focusedCardIndex}
-                            onChatPress={() => navigation.navigate('ChatScreen', {
-                                recipientId: vendor._original?.user_id || vendor.id,
-                                chatName: vendor.name,
-                                avatar: 'https://randomuser.me/api/portraits/men/1.jpg',
-                                isOnline: false,
-                            })}
+                            onChatPress={async () => {
+                                // Get current user ID
+                                const currentUserData = await AsyncStorage.getItem('userData');
+                                const currentUser = currentUserData ? JSON.parse(currentUserData) : null;
+                                const currentUserId = currentUser?.user_id || currentUser?.id;
+                                const vendorUserId = vendor._original?.user_id;
+                                
+                                console.log('Chat button pressed:', {
+                                    currentUserId,
+                                    vendorUserId,
+                                    vendorName: vendor.name
+                                });
+                                
+                                // Check if trying to chat with self
+                                if (String(vendorUserId) === String(currentUserId)) {
+                                    Alert.alert(
+                                        'Cannot Start Chat',
+                                        'You cannot start a chat with your own vendor listing.',
+                                        [{ text: 'OK' }]
+                                    );
+                                    return;
+                                }
+                                
+                                navigation.navigate('ChatScreen', {
+                                    recipientId: vendorUserId,
+                                    chatName: vendor.name,
+                                    avatar: 'https://randomuser.me/api/portraits/men/1.jpg',
+                                    isOnline: false,
+                                });
+                            }}
                         />
                     ))
                 )}

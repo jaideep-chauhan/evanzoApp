@@ -12,6 +12,8 @@ class AuthService {
                 await AsyncStorage.setItem('accessToken', tokens.accessToken);
                 await AsyncStorage.setItem('refreshToken', tokens.refreshToken);
                 await AsyncStorage.setItem('user', JSON.stringify(user));
+                await AsyncStorage.setItem('userId', String(user.user_id));
+                await AsyncStorage.setItem('authToken', tokens.accessToken);
                 
                 return {
                     success: true,

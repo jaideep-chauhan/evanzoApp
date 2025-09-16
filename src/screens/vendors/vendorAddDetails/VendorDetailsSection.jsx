@@ -47,6 +47,7 @@ export default function VendorDetailsSection({
     reviews = [],
     hideMessageSection = false,
     offers = [],
+    vendorId,
 }) {
     console.log('VendorDetailsSection - Received offers:', offers);
     const [descExpanded, setDescExpanded] = useState(false);
@@ -102,7 +103,7 @@ export default function VendorDetailsSection({
 
                 <OfferGrid offers={offers} />
 
-                <ProfileCardCarousel />
+                <ProfileCardCarousel vendorId={vendorId} />
 
                 {/* Message Input - Only show if not hidden */}
                 {!hideMessageSection && (

@@ -11,6 +11,14 @@ class PreSavedMessageService {
                 message: 'Pre-saved message retrieved successfully'
             };
         } catch (error) {
+            // If no message exists (404), return success with null data
+            if (error.response?.status === 404 || error.response?.data?.message?.includes('not found')) {
+                return {
+                    success: true,
+                    data: null,
+                    message: 'No pre-saved message found'
+                };
+            }
             return {
                 success: false,
                 message: error.response?.data?.message || 'Failed to retrieve pre-saved message',

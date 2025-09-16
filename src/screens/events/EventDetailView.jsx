@@ -18,6 +18,7 @@ import bg1 from '../../assets/images/smallHeader.jpg';
 import { useTheme } from '../../ThemeContext';
 import Icon2 from 'react-native-vector-icons/Feather'
 import Icon3 from 'react-native-vector-icons/Entypo'
+import { API_BASE_URL } from '../../services/api';
 const { width } = Dimensions.get('window');
 const AVATAR_SIZE = 60;
 
@@ -40,6 +41,8 @@ export default function EventDetailView() {
 
     // Get event data from navigation params
     const eventFromParams = route.params?.event || {};
+    
+    console.log('🎯 EventDetailView - eventFromParams:', JSON.stringify(eventFromParams, null, 2));
     
     // Parse additional fields from event data
     const parseDuration = (duration) => {
@@ -75,8 +78,31 @@ export default function EventDetailView() {
         return 'Budget TBD';
     };
 
+    // Get organizer data from event
+    const getOrganizerData = (event) => {
+        // Try to get organizer info from various possible fields
+        if (event.organizer) return event.organizer;
+        if (event.profile) return event.profile;
+        
+        // Create organizer from user data if available
+        const organizerName = event.organizer_name || 
+                             event.user_name || 
+                             event.created_by_name || 
+                             `User ${event.user_id || 'Unknown'}`;
+        
+        return {
+            name: organizerName,
+            avatar: event.organizer_avatar || img,
+            rating: event.organizer_rating || 4.8,
+            reviewCount: event.organizer_review_count || 12,
+            user_id: event.user_id
+        };
+    };
+
     const eventData = {
-        title: eventFromParams.title || 'Event',
+        // Core event info
+        id: eventFromParams.id || eventFromParams.event_ad_id,
+        title: eventFromParams.title || `${eventFromParams.event_type || 'Event'} - ${eventFromParams.service_needed || 'Service'}`,
         location: eventFromParams.location || 'Location TBD',
         date: parseDate(eventFromParams.date),
         duration: parseDuration(eventFromParams.duration),
@@ -84,30 +110,47 @@ export default function EventDetailView() {
         budget: parseBudget(eventFromParams.budget),
         guests: eventFromParams.guests || eventFromParams.guests_count || '50',
         description: eventFromParams.description || 'Event description not available.',
+        
+        // Event categories
         service_needed: eventFromParams.service_needed,
         event_type: eventFromParams.event_type,
-        images: eventFromParams.attachments && eventFromParams.attachments.length > 0 
-            ? eventFromParams.attachments.map(att => {
+        event_tags: eventFromParams.event_tags || [],
+        
+        // Requirements and additional info
+        requirements: eventFromParams.requirements || [],
+        is_urgent: eventFromParams.is_urgent || false,
+        visibility: eventFromParams.visibility || 'public',
+        
+        // Images - handle both attachments and images fields
+        images: (eventFromParams.attachments || eventFromParams.images || []).length > 0 
+            ? (eventFromParams.attachments || eventFromParams.images).map(att => {
                 // Handle different attachment formats
                 if (typeof att === 'string') {
-                    return att.startsWith('http') ? { uri: att } : att;
+                    return att.startsWith('http') ? { uri: att } : { uri: att };
                 } else if (att.url) {
                     return { uri: att.url };
                 } else if (att.path) {
-                    return { uri: `http://localhost:3000${att.path}` };
+                    return { uri: `${API_BASE_URL.replace('/api', '')}${att.path}` };
                 }
                 return img;
             })
             : [img, bg1, img], // Fallback images
-        organizer: eventFromParams.profile || {
-            name: 'Event Organizer',
-            avatar: img,
-            rating: 5.0,
-            reviewCount: 0,
-        },
-        status: eventFromParams.status || 'ACTIVE',
-        statusColor: eventFromParams.statusColor || '#2ECC71',
+            
+        // Organizer info
+        organizer: getOrganizerData(eventFromParams),
+        
+        // Status and metadata
+        status: eventFromParams.status || 'active',
+        statusColor: eventFromParams.status === 'completed' ? '#28a745' : 
+                    eventFromParams.status === 'cancelled' ? '#dc3545' : '#2ECC71',
+        views_count: eventFromParams.views_count || 0,
+        responses_count: eventFromParams.responses_count || 0,
+        boosted: eventFromParams.boosted || false,
+        created_at: eventFromParams.created_at,
+        updated_at: eventFromParams.updated_at
     };
+    
+    console.log('🎯 EventDetailView - processed eventData:', JSON.stringify(eventData, null, 2));
 
     const handleSendQuote = () => {
         console.log('Sending quote:', quoteText);

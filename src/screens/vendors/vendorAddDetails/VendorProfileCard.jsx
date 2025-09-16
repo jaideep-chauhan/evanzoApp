@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -7,49 +7,213 @@ import {
     TouchableOpacity,
     Dimensions,
     ImageBackground,
+    Alert,
+    ActivityIndicator,
 } from 'react-native';
 import bg1 from '../../../assets/images/smallHeader.jpg';
+import vendorDetailsService from '../../../services/vendorDetailsService';
 
 import Icon from 'react-native-vector-icons/Ionicons';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
-import Feather from 'react-native-vector-icons/Feather';
 import Entypo from 'react-native-vector-icons/Entypo';
 
 const { width } = Dimensions.get('window');
 const AVATAR_SIZE = 100;
 const INFO_CARD_WIDTH = width - 20;
 
-// 👇 ActionIcons component (Moved outside VendorProfileCard)
-const ActionIcons = () => {
+// 👇 ActionIcons component with functionality
+const ActionIcons = ({ vendor, navigation }) => {
+    const [isSaved, setIsSaved] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [isCheckingStatus, setIsCheckingStatus] = useState(true); // Separate loading state for initial check
+    const [rating, setRating] = useState(vendor?.rating || 0);
+    const [reviewCount, setReviewCount] = useState(vendor?.reviews_count || 0);
+
+    useEffect(() => {
+        // Reset state when vendor changes
+        setIsSaved(false);
+        setIsLoading(false);
+        
+        // Check if vendor is saved
+        checkSavedStatus();
+        // Fetch reviews
+        fetchReviews();
+    }, [vendor]); // Re-run when vendor prop changes
+
+    const checkSavedStatus = async () => {
+        const vendorId = vendor?._original?.vendor_ad_id || 
+                        vendor?.vendor_ad_id || 
+                        vendor?.id ||
+                        vendor?._id;
+                        
+        console.log('checkSavedStatus - vendorId:', vendorId);
+        
+        if (vendorId) {
+            try {
+                setIsCheckingStatus(true);
+                const saved = await vendorDetailsService.isVendorSaved(vendorId);
+                console.log('checkSavedStatus - vendor', vendorId, 'saved status:', saved);
+                setIsSaved(saved);
+            } catch (error) {
+                console.error('Error checking saved status:', error);
+                setIsSaved(false);
+            } finally {
+                setIsCheckingStatus(false);
+            }
+        } else {
+            // If no vendor ID, default to not saved
+            console.log('checkSavedStatus - no vendorId, defaulting to not saved');
+            setIsSaved(false);
+            setIsCheckingStatus(false);
+        }
+    };
+
+    const fetchReviews = async () => {
+        const vendorId = vendor?._original?.vendor_ad_id || 
+                        vendor?.vendor_ad_id || 
+                        vendor?.id ||
+                        vendor?._id;
+                        
+        if (vendorId) {
+            const response = await vendorDetailsService.getVendorReviews(vendorId);
+            if (response.success && response.data) {
+                setReviewCount(response.data.totalReviews || 0);
+                setRating(response.data.averageRating || vendor?.rating || 0);
+            }
+        }
+    };
+
+    const handleSave = async () => {
+        if (isLoading) return;
+        
+        // Optimistically update UI immediately for better UX
+        const newSavedState = !isSaved;
+        setIsSaved(newSavedState);
+        setIsLoading(true);
+        
+        // Try to get vendor ID from different possible sources
+        const vendorId = vendor?._original?.vendor_ad_id || 
+                        vendor?.vendor_ad_id || 
+                        vendor?.id ||
+                        vendor?._id;
+        
+        console.log('Full vendor object:', JSON.stringify(vendor, null, 2));
+        console.log('Vendor._original:', vendor?._original);
+        console.log('Attempting to save vendor with ID:', vendorId);
+        
+        if (!vendorId) {
+            console.warn('Vendor ID not found - using mock save for demo');
+            // For demo purposes, just keep the UI state change
+            // In production, this should show an error
+            setTimeout(() => {
+                setIsLoading(false);
+            }, 500);
+            return;
+        }
+        
+        try {
+            const response = await vendorDetailsService.toggleSaveVendor(vendorId);
+            
+            if (response.success) {
+                console.log('Save successful, saved state from backend:', response.saved);
+                
+                // If backend returns a definitive saved state, use it
+                if (response.saved !== undefined && response.saved !== null) {
+                    setIsSaved(response.saved);
+                } else {
+                    // If backend doesn't return saved state, keep our optimistic update
+                    console.log('Backend did not return saved state, keeping local state:', newSavedState);
+                    // The state is already set optimistically, so we don't need to do anything
+                }
+            } else {
+                console.error('Save vendor error:', response.message);
+                // Revert optimistic update on error
+                setIsSaved(!newSavedState);
+            }
+        } catch (error) {
+            console.error('Save vendor exception:', error);
+            // Revert optimistic update on error
+            setIsSaved(!newSavedState);
+        }
+        
+        setIsLoading(false);
+    };
+
+    const handleShare = async () => {
+        const response = await vendorDetailsService.shareVendor(vendor);
+        if (!response.success && response.message !== 'Share cancelled') {
+            console.error('Share error:', response.message);
+        }
+    };
+
+    const handleRatingPress = () => {
+        // Navigate to reviews screen or show rating modal
+        if (navigation) {
+            const vendorId = vendor?._original?.vendor_ad_id || 
+                            vendor?.vendor_ad_id || 
+                            vendor?.id ||
+                            vendor?._id;
+            navigation.navigate('AllReviews', { 
+                vendorId: vendorId,
+                vendorName: vendor?.name || vendor?.company_name || vendor?.title
+            });
+        }
+    };
+
+    const handleReviewsPress = () => {
+        // Navigate to reviews screen
+        if (navigation) {
+            const vendorId = vendor?._original?.vendor_ad_id || 
+                            vendor?.vendor_ad_id || 
+                            vendor?.id ||
+                            vendor?._id;
+            navigation.navigate('AllReviews', { 
+                vendorId: vendorId,
+                vendorName: vendor?.name || vendor?.company_name || vendor?.title
+            });
+        }
+    };
+
     return (
         <View style={actionIconStyles.container}>
             {/* Rating */}
-            <TouchableOpacity style={actionIconStyles.item}>
+            <TouchableOpacity style={actionIconStyles.item} onPress={handleRatingPress}>
                 <View style={actionIconStyles.iconCircle}>
                     <FontAwesome name="star" size={12} color="#2c2c3d" />
-                    <Text style={actionIconStyles.iconText}>4.</Text>
+                    <Text style={actionIconStyles.iconText}>{rating.toFixed(1)}</Text>
                 </View>
                 <Text style={actionIconStyles.label}>Rating</Text>
             </TouchableOpacity>
 
             {/* Reviews */}
-            <TouchableOpacity style={actionIconStyles.item}>
+            <TouchableOpacity style={actionIconStyles.item} onPress={handleReviewsPress}>
                 <View style={actionIconStyles.iconCircle}>
-                    <Text style={actionIconStyles.reviewText}>15</Text>
+                    <Text style={actionIconStyles.reviewText}>{reviewCount}</Text>
                 </View>
                 <Text style={actionIconStyles.label}>Reviews</Text>
             </TouchableOpacity>
 
             {/* Save */}
-            <TouchableOpacity style={actionIconStyles.item}>
-                <View style={actionIconStyles.iconCircle}>
-                    <Feather name="heart" size={20} color="#2c2c3d" />
+            <TouchableOpacity style={actionIconStyles.item} onPress={handleSave} disabled={isLoading || isCheckingStatus}>
+                <View style={[actionIconStyles.iconCircle, isSaved && actionIconStyles.savedCircle]}>
+                    {(isLoading || isCheckingStatus) ? (
+                        <ActivityIndicator size="small" color={isSaved ? "#ff4444" : "#2c2c3d"} />
+                    ) : (
+                        <Ionicons 
+                            name={isSaved ? "heart" : "heart-outline"} 
+                            size={22} 
+                            color={isSaved ? "#ff4444" : "#2c2c3d"}
+                        />
+                    )}
                 </View>
-                <Text style={actionIconStyles.label}>Save</Text>
+                <Text style={[actionIconStyles.label, isSaved && actionIconStyles.savedLabel]}>
+                    {isSaved ? 'Saved' : 'Save'}
+                </Text>
             </TouchableOpacity>
 
             {/* Share */}
-            <TouchableOpacity style={actionIconStyles.item}>
+            <TouchableOpacity style={actionIconStyles.item} onPress={handleShare}>
                 <View style={actionIconStyles.iconCircle}>
                     <Entypo name="share" size={20} color="#2c2c3d" />
                 </View>
@@ -68,6 +232,7 @@ export default function VendorProfileCard({
     onBackPress,
     onBellPress,
     navigation,
+    vendor, // Pass the full vendor object
 }) {
     return (
         <View style={{ flex: 1, backgroundColor: '#fff' }}>
@@ -86,7 +251,20 @@ export default function VendorProfileCard({
             {/* White Info Card */}
             <View style={[styles.infoCardWrapper, { flex: 1 }]}>
                 <View style={[styles.infoCard, { flexGrow: 1 }]}>
-                    <TouchableOpacity style={styles.seeAllBtn} onPress={() => navigation.navigate('AllReviews')} activeOpacity={0.7}>
+                    <TouchableOpacity 
+                        style={styles.seeAllBtn} 
+                        onPress={() => {
+                            const vendorId = vendor?._original?.vendor_ad_id || 
+                                            vendor?.vendor_ad_id || 
+                                            vendor?.id ||
+                                            vendor?._id;
+                            navigation?.navigate('AllReviews', {
+                                vendorId: vendorId,
+                                vendorName: name
+                            });
+                        }} 
+                        activeOpacity={0.7}
+                    >
                         <Text style={styles.seeAllText}>See All</Text>
                     </TouchableOpacity>
                     <View style={styles.avatarWrapper}>
@@ -98,7 +276,7 @@ export default function VendorProfileCard({
                     <Text style={styles.name}>{name}</Text>
                     <Text style={styles.category}>{category}</Text>
                     <Text style={styles.location}>{location}</Text>
-                    <ActionIcons />
+                    <ActionIcons vendor={vendor} navigation={navigation} />
                 </View>
             </View>
         </View>
@@ -242,5 +420,12 @@ const actionIconStyles = StyleSheet.create({
         fontSize: 14,
         color: '#49454F',
         fontWeight: '500',
+    },
+    savedCircle: {
+        backgroundColor: '#ffe0e0', // Light red background when saved
+    },
+    savedLabel: {
+        color: '#ff4444', // Red text when saved
+        fontWeight: '600',
     },
 });

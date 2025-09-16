@@ -39,10 +39,14 @@ export default function SearchHeader() {
                 useNativeDriver: true,
             }).start(() => {
                 if (!running) return;
-                setPlaceholderIndex(nextIndex);
-                setNextIndex((nextIndex + 1) % placeholders.length);
-                anim.setValue(0);
-                intervalRef.current = setTimeout(loop, 1800);
+                // Use requestAnimationFrame to defer state updates
+                requestAnimationFrame(() => {
+                    if (!running) return;
+                    setPlaceholderIndex(nextIndex);
+                    setNextIndex((nextIndex + 1) % placeholders.length);
+                    anim.setValue(0);
+                    intervalRef.current = setTimeout(loop, 1800);
+                });
             });
         };
         intervalRef.current = setTimeout(loop, 1800);

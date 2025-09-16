@@ -1,7 +1,64 @@
-import api from './api';
+import api, { API_BASE_URL } from './api';
 import dummyImage from '../assets/images/dummy.png';
 
 class VendorService {
+    constructor() {
+        this.retryCount = 0;
+        this.maxRetries = 3;
+        this.baseDelay = 1000; // 1 second
+        this.lastRequestTime = 0;
+        this.minRequestInterval = 2000; // 2 seconds minimum between requests
+        this.isRequestInProgress = false;
+    }
+
+    // Helper method for exponential backoff
+    async retryWithBackoff(apiCall, retryCount = 0) {
+        try {
+            const result = await apiCall();
+            this.retryCount = 0; // Reset on success
+            return result;
+        } catch (error) {
+            if (retryCount >= this.maxRetries) {
+                throw error;
+            }
+            
+            // Calculate exponential backoff delay
+            const delay = this.baseDelay * Math.pow(2, retryCount);
+            console.log(`Retry attempt ${retryCount + 1}/${this.maxRetries} after ${delay}ms`);
+            
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return this.retryWithBackoff(apiCall, retryCount + 1);
+        }
+    }
+
+    // Debounce mechanism to prevent rapid API calls
+    async debounceRequest(apiCall) {
+        const now = Date.now();
+        const timeSinceLastRequest = now - this.lastRequestTime;
+        
+        // If a request is already in progress, don't make another one
+        if (this.isRequestInProgress) {
+            console.log('Request already in progress, skipping...');
+            return { success: false, message: 'Request already in progress', data: [] };
+        }
+        
+        // Ensure minimum interval between requests
+        if (timeSinceLastRequest < this.minRequestInterval) {
+            const waitTime = this.minRequestInterval - timeSinceLastRequest;
+            console.log(`Waiting ${waitTime}ms before next request...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+        
+        this.lastRequestTime = Date.now();
+        this.isRequestInProgress = true;
+        
+        try {
+            const result = await apiCall();
+            return result;
+        } finally {
+            this.isRequestInProgress = false;
+        }
+    }
     // Get categories
     async getCategories() {
         try {
@@ -26,60 +83,91 @@ class VendorService {
 
     // Get my vendor ads (for profile screen - current user's ads only)
     async getMyVendorAds() {
-        try {
-            const response = await api.get('/vendor_ad/my-ads');
-            
-            // Backend returns simple array for my-ads
-            const vendorAds = response.data.data || [];
-            
-            return {
-                success: true,
-                data: vendorAds
-            };
-        } catch (error) {
-            console.error('Get my vendor ads error:', error);
-            return {
-                success: false,
-                message: error.response?.data?.message || 'Failed to fetch your vendor ads',
-                data: []
-            };
-        }
+        return this.debounceRequest(async () => {
+            return this.retryWithBackoff(async () => {
+                try {
+                    const response = await api.get('/vendor_ad/my-ads');
+                    
+                    // Backend returns simple array for my-ads
+                    const vendorAds = response.data.data || [];
+                    
+                    return {
+                        success: true,
+                        data: vendorAds
+                    };
+                } catch (error) {
+                    // Check if it's a network error
+                    if (error.code === 'ECONNABORTED' || error.message === 'Network Error' || !error.response) {
+                        console.error('Network error detected:', error.message);
+                        throw error; // Will trigger retry
+                    }
+                    
+                    console.error('Get my vendor ads error:', error);
+                    
+                    // Don't retry for client errors (4xx)
+                    if (error.response?.status >= 400 && error.response?.status < 500) {
+                        return {
+                            success: false,
+                            message: error.response?.data?.message || 'Failed to fetch your vendor ads',
+                            data: []
+                        };
+                    }
+                    
+                    throw error; // Will trigger retry for 5xx errors
+                }
+            });
+        });
     }
 
     // Get public vendor ads (for vendors tab - excludes current user)
     async getPublicVendorAds() {
-        try {
-            const response = await api.get('/vendor_ad/all');
-            
-            // Handle different response structures
-            let vendorAds = [];
-            
-            // Check if response has the paginated structure
-            if (response.data?.data?.results) {
-                vendorAds = response.data.data.results;
-            }
-            // Check if data is directly an array (non-paginated)
-            else if (Array.isArray(response.data?.data)) {
-                vendorAds = response.data.data;
-            }
-            // Check if results are at the top level
-            else if (Array.isArray(response.data)) {
-                vendorAds = response.data;
-            }
-            
-            return {
-                success: true,
-                data: vendorAds
-            };
-        } catch (error) {
-            console.error('Get public vendor ads error:', error);
-            
-            return {
-                success: false,
-                message: error.response?.data?.message || 'Failed to fetch vendor ads',
-                data: []
-            };
-        }
+        return this.debounceRequest(async () => {
+            return this.retryWithBackoff(async () => {
+                try {
+                    const response = await api.get('/vendor_ad/all');
+                    
+                    // Handle different response structures
+                    let vendorAds = [];
+                    
+                    // Check if response has the paginated structure
+                    if (response.data?.data?.results) {
+                        vendorAds = response.data.data.results;
+                    }
+                    // Check if data is directly an array (non-paginated)
+                    else if (Array.isArray(response.data?.data)) {
+                        vendorAds = response.data.data;
+                    }
+                    // Check if results are at the top level
+                    else if (Array.isArray(response.data)) {
+                        vendorAds = response.data;
+                    }
+                    
+                    return {
+                        success: true,
+                        data: vendorAds
+                    };
+                } catch (error) {
+                    // Check if it's a network error
+                    if (error.code === 'ECONNABORTED' || error.message === 'Network Error' || !error.response) {
+                        console.error('Network error detected:', error.message);
+                        throw error; // Will trigger retry
+                    }
+                    
+                    console.error('Get public vendor ads error:', error);
+                    
+                    // Don't retry for client errors (4xx)
+                    if (error.response?.status >= 400 && error.response?.status < 500) {
+                        return {
+                            success: false,
+                            message: error.response?.data?.message || 'Failed to fetch vendor ads',
+                            data: []
+                        };
+                    }
+                    
+                    throw error; // Will trigger retry for 5xx errors
+                }
+            });
+        });
     }
     
     // Deprecated: Keep for backward compatibility, redirects to getPublicVendorAds
@@ -160,6 +248,17 @@ class VendorService {
     formatVendorForDisplay(vendor) {
         // Parse photos if it's a JSON string or use attachments
         let photos = [];
+        const baseUrl = API_BASE_URL.replace('/api', ''); // Remove /api to get base server URL
+        
+        console.log('📸 Formatting vendor for display:', {
+            vendorId: vendor.vendor_ad_id || vendor.id,
+            hasPhotos: !!vendor.photos,
+            photosType: typeof vendor.photos,
+            photosLength: vendor.photos ? vendor.photos.length : 0,
+            hasAttachments: !!vendor.attachments,
+            baseUrl
+        });
+        
         if (vendor.photos) {
             if (typeof vendor.photos === 'string' && vendor.photos !== '[]' && vendor.photos !== '') {
                 try {
@@ -167,11 +266,12 @@ class VendorService {
                     photos = parsed.map(photo => {
                         // If photo has url property, use it directly
                         if (photo.url) {
-                            return photo.url;
+                            // If it's already a full URL, use it; otherwise append base URL
+                            return photo.url.startsWith('http') ? photo.url : `${baseUrl}${photo.url}`;
                         }
                         // If photo has path property, use it with base URL
                         if (photo.path) {
-                            return `http://localhost:3000${photo.path}`;
+                            return `${baseUrl}${photo.path}`;
                         }
                         // If it's already a URL string
                         if (typeof photo === 'string' && photo.startsWith('http')) {
@@ -179,7 +279,7 @@ class VendorService {
                         }
                         // If it's a path string
                         if (typeof photo === 'string') {
-                            return `http://localhost:3000${photo}`;
+                            return `${baseUrl}${photo}`;
                         }
                         return photo;
                     });
@@ -190,13 +290,13 @@ class VendorService {
             } else if (Array.isArray(vendor.photos) && vendor.photos.length > 0) {
                 photos = vendor.photos.map(photo => {
                     if (typeof photo === 'object' && photo.url) {
-                        return photo.url;
+                        return photo.url.startsWith('http') ? photo.url : `${baseUrl}${photo.url}`;
                     }
                     if (typeof photo === 'string' && photo.startsWith('http')) {
                         return photo;
                     }
                     if (typeof photo === 'string') {
-                        return `http://localhost:3000${photo}`;
+                        return `${baseUrl}${photo}`;
                     }
                     return photo;
                 });
@@ -210,10 +310,10 @@ class VendorService {
                 try {
                     const parsed = JSON.parse(vendor.attachments);
                     photos = parsed.map(att => {
-                        if (att.url) return att.url;
-                        if (att.path) return `http://localhost:3000${att.path}`;
+                        if (att.url) return att.url.startsWith('http') ? att.url : `${baseUrl}${att.url}`;
+                        if (att.path) return `${baseUrl}${att.path}`;
                         if (typeof att === 'string' && att.startsWith('http')) return att;
-                        if (typeof att === 'string') return `http://localhost:3000${att}`;
+                        if (typeof att === 'string') return `${baseUrl}${att}`;
                         return att;
                     });
                 } catch (e) {
@@ -222,13 +322,15 @@ class VendorService {
                 }
             } else if (Array.isArray(vendor.attachments)) {
                 photos = vendor.attachments.map(att => {
-                    if (typeof att === 'object' && att.url) return att.url;
+                    if (typeof att === 'object' && att.url) return att.url.startsWith('http') ? att.url : `${baseUrl}${att.url}`;
                     if (typeof att === 'string' && att.startsWith('http')) return att;
-                    if (typeof att === 'string') return `http://localhost:3000${att}`;
+                    if (typeof att === 'string') return `${baseUrl}${att}`;
                     return att;
                 });
             }
         }
+        
+        console.log('📸 Final formatted photos:', photos);
 
         // Calculate initials from company name or title
         const displayName = vendor.company_name || vendor.title || 'Vendor';
@@ -274,9 +376,11 @@ class VendorService {
         }
 
         return {
-            id: vendor.vendor_ad_id || vendor.id,
+            id: vendor.vendor_ad_id || vendor.id || vendor._id,
+            vendor_ad_id: vendor.vendor_ad_id || vendor.id || vendor._id, // Add vendor_ad_id explicitly
             initials: initials,
             name: displayName,
+            company_name: vendor.company_name || vendor.title, // Add company_name
             type: categoryName,
             rating: vendor.rating || 4.5,
             description: vendor.description || '',

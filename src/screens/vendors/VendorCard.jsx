@@ -28,13 +28,23 @@ export default function VendorCard({
     offers = [],
     onChatPress,
     isChat = true,
-    isFocused = false
+    isFocused = false,
+    vendorId,
+    fullVendorData // Full vendor object with all data
 }) {
     const navigation = useNavigation();
     const theme = useTheme();
 
     // Carousel logic for infinite auto-scroll
     // Use fallback image if no images available
+    console.log('🎯 VendorCard - received images:', { 
+        images, 
+        imagesLength: images ? images.length : 0, 
+        imagesType: typeof images,
+        vendorId: vendorId || 'unknown',
+        name 
+    });
+    
     const safeImages = images && images.length > 0 ? images : [img, img, img];
     
     // Convert image URLs to proper format for React Native Image component
@@ -112,34 +122,48 @@ export default function VendorCard({
     };
 
     const handleCardPress = () => {
+        // Pass the full vendor data if available, otherwise construct from props
+        const vendorData = fullVendorData || { 
+            id: vendorId,
+            vendor_ad_id: vendorId,
+            initials, 
+            name, 
+            type, 
+            rating, 
+            description, 
+            images, 
+            extraCount, 
+            location,
+            offers 
+        };
+        
+        console.log('VendorCard handleCardPress - vendorId:', vendorId);
+        console.log('VendorCard handleCardPress - fullVendorData:', fullVendorData);
+        console.log('VendorCard handleCardPress - vendorData being passed:', vendorData);
+        
         navigation.navigate('VendorAddDetail', { 
-            vendor: { 
-                initials, 
-                name, 
-                type, 
-                rating, 
-                description, 
-                images, 
-                extraCount, 
-                location,
-                offers 
-            } 
+            vendor: vendorData
         });
     };
 
     const handleSeeMorePress = () => {
+        // Pass the full vendor data if available, otherwise construct from props
+        const vendorData = fullVendorData || { 
+            id: vendorId,
+            vendor_ad_id: vendorId,
+            initials, 
+            name, 
+            type, 
+            rating, 
+            description, 
+            images, 
+            extraCount, 
+            location,
+            offers 
+        };
+        
         navigation.navigate('VendorAddDetail', {
-            vendor: { 
-                initials, 
-                name, 
-                type, 
-                rating, 
-                description, 
-                images, 
-                extraCount, 
-                location,
-                offers 
-            },
+            vendor: vendorData,
             scrollToOffer: true
         });
     };

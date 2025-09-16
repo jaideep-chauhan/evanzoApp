@@ -15,6 +15,16 @@ export default function EventCard({ event, onGiveQuote }) {
     const navigation = useNavigation();
     const theme = useTheme();
     const safeAttachments = Array.isArray(event.attachments) ? event.attachments : [];
+    
+    console.log('🎴 EventCard rendering:', {
+        eventId: event.id,
+        eventTitle: event.title,
+        attachmentsType: typeof event.attachments,
+        attachmentsLength: event.attachments?.length,
+        safeAttachmentsLength: safeAttachments.length,
+        attachments: event.attachments,
+        safeAttachments
+    });
 
     const handleCardPress = () => {
         navigation.navigate('EventDetailView', { event });

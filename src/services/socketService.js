@@ -11,46 +11,261 @@ class SocketService {
     this.listeners = new Map();
     this.currentChatId = null;
     this.typingTimeout = null;
+    this.isReconnecting = false;
+    this.connectionTimeout = null;
+    this.reconnectTimeout = null;
+    this.lastConnectionAttempt = 0;
+    this.minReconnectDelay = 2000; // Minimum 2 seconds between attempts
+    this.maxReconnectDelay = 30000; // Maximum 30 seconds between attempts
+    this.connectionState = 'disconnected'; // disconnected, connecting, connected, error
+  }
+
+  async refreshTokenIfNeeded() {
+    try {
+      const refreshToken = await AsyncStorage.getItem('refreshToken');
+      if (!refreshToken) {
+        console.error('❌ No refresh token found');
+        return null;
+      }
+
+      console.log('🔄 Refreshing auth token...');
+      
+      // Use fetch directly to avoid circular dependency with api service
+      const response = await fetch(`${API_BASE_URL}/auth/refresh-tokens`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Client-Type': 'mobile',
+        },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      const data = await response.json();
+      
+      if (response.ok && data.success && data.tokens) {
+        const { accessToken, refreshToken: newRefreshToken } = data.tokens;
+        
+        // Store new tokens
+        await AsyncStorage.setItem('authToken', accessToken);
+        await AsyncStorage.setItem('refreshToken', newRefreshToken);
+        
+        console.log('✅ Token refreshed successfully');
+        return accessToken;
+      } else {
+        console.error('❌ Failed to refresh token:', data.message);
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ Error refreshing token:', error);
+      return null;
+    }
   }
 
   async connect() {
+    // Prevent multiple simultaneous connection attempts
+    if (this.connectionState === 'connecting') {
+      console.log('⚠️ Already attempting to connect, skipping...');
+      return Promise.resolve(false);
+    }
+
+    // Check if we're already connected
+    if (this.connectionState === 'connected' && this.socket?.connected) {
+      console.log('✅ Already connected');
+      return Promise.resolve(true);
+    }
+
+    // Implement connection throttling
+    const now = Date.now();
+    const timeSinceLastAttempt = now - this.lastConnectionAttempt;
+    if (timeSinceLastAttempt < this.minReconnectDelay) {
+      const waitTime = this.minReconnectDelay - timeSinceLastAttempt;
+      console.log(`⏳ Waiting ${waitTime}ms before attempting connection...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+
+    this.lastConnectionAttempt = Date.now();
+    this.connectionState = 'connecting';
+
     try {
       // Get auth token
-      const token = await AsyncStorage.getItem('authToken');
+      let token = await AsyncStorage.getItem('authToken');
       if (!token) {
+        console.error('❌ No auth token found in AsyncStorage');
+        this.connectionState = 'error';
         throw new Error('No auth token found');
       }
+      
+      console.log('🔑 Auth token found, length:', token.length);
+      console.log('🔑 Token preview:', token.substring(0, 50) + '...');
 
-      // Initialize socket connection
-      this.socket = io(API_BASE_URL.replace('/api', ''), {
+      // Get the base URL for socket connection
+      const socketUrl = API_BASE_URL.replace('/api', '');
+      console.log('🌐 Connecting to socket server:', socketUrl);
+
+      // Calculate reconnection delay with exponential backoff
+      const reconnectDelay = Math.min(
+        this.minReconnectDelay * Math.pow(2, this.reconnectAttempts),
+        this.maxReconnectDelay
+      );
+
+      // Initialize socket connection with better reconnection settings
+      this.socket = io(socketUrl, {
         auth: {
           token: token
         },
         transports: ['websocket'],
         reconnection: true,
         reconnectionAttempts: this.maxReconnectAttempts,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
+        reconnectionDelay: reconnectDelay,
+        reconnectionDelayMax: this.maxReconnectDelay,
+        randomizationFactor: 0.5, // Add jitter to prevent thundering herd
+        timeout: 20000, // 20 second connection timeout
       });
 
       this.setupEventHandlers();
       
       return new Promise((resolve, reject) => {
-        this.socket.on('connect', () => {
+        // Clear any existing connection timeout
+        if (this.connectionTimeout) {
+          clearTimeout(this.connectionTimeout);
+        }
+
+        this.connectionTimeout = setTimeout(() => {
+          console.error('⏱️ Socket connection timeout after 20 seconds');
+          this.connectionState = 'error';
+          this.socket?.disconnect();
+          reject(new Error('Connection timeout'));
+        }, 20000);
+
+        this.socket.once('connect', () => {
+          if (this.connectionTimeout) {
+            clearTimeout(this.connectionTimeout);
+            this.connectionTimeout = null;
+          }
           this.isConnected = true;
+          this.connectionState = 'connected';
           this.reconnectAttempts = 0;
-          console.log('Socket connected successfully');
+          console.log('✅ Socket connected successfully');
+          console.log('🆔 Socket ID:', this.socket.id);
           resolve(true);
         });
 
-        this.socket.on('connect_error', (error) => {
-          console.error('Socket connection error:', error.message);
-          this.isConnected = false;
-          reject(error);
+        this.socket.once('connect_error', async (error) => {
+          if (this.connectionTimeout) {
+            clearTimeout(this.connectionTimeout);
+            this.connectionTimeout = null;
+          }
+          
+          // Limit error logging to prevent spam
+          if (this.reconnectAttempts === 0 || this.reconnectAttempts % 3 === 0) {
+            console.error('❌ Socket connection error:', error.message);
+            console.error('❌ Error type:', error.type);
+            console.error('❌ Reconnect attempt:', this.reconnectAttempts + 1, '/', this.maxReconnectAttempts);
+          }
+          
+          // Increment reconnect attempts
+          this.reconnectAttempts++;
+
+          // If we've exceeded max attempts, stop trying
+          if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            console.error('❌ Max reconnection attempts reached. Stopping.');
+            this.connectionState = 'error';
+            this.isConnected = false;
+            this.socket?.disconnect();
+            reject(new Error('Max reconnection attempts reached'));
+            return;
+          }
+
+          // If authentication failed due to expired token, try refreshing once
+          if ((error.message === 'Authentication failed' || error.message.includes('jwt expired')) && this.reconnectAttempts === 1) {
+            console.log('🔄 Token expired, attempting to refresh...');
+            const newToken = await this.refreshTokenIfNeeded();
+            
+            if (newToken) {
+              console.log('🔁 Retrying connection with new token...');
+              // Disconnect current socket
+              if (this.socket) {
+                this.socket.disconnect();
+              }
+              
+              // Calculate delay with exponential backoff
+              const retryDelay = Math.min(
+                this.minReconnectDelay * Math.pow(2, this.reconnectAttempts),
+                this.maxReconnectDelay
+              );
+              
+              // Try connecting again with new token after delay
+              setTimeout(() => {
+                this.socket = io(socketUrl, {
+                  auth: {
+                    token: newToken
+                  },
+                  transports: ['websocket'],
+                  reconnection: true,
+                  reconnectionAttempts: this.maxReconnectAttempts - this.reconnectAttempts,
+                  reconnectionDelay: retryDelay,
+                  reconnectionDelayMax: this.maxReconnectDelay,
+                  timeout: 20000,
+                });
+                
+                // Set up handlers for retry
+                this.socket.once('connect', () => {
+                  this.isConnected = true;
+                  this.connectionState = 'connected';
+                  this.reconnectAttempts = 0;
+                  console.log('✅ Socket connected successfully after token refresh');
+                  console.log('🆔 Socket ID:', this.socket.id);
+                  resolve(true);
+                });
+                
+                this.socket.once('connect_error', (retryError) => {
+                  console.error('❌ Failed to connect even after token refresh:', retryError.message);
+                  this.connectionState = 'error';
+                  this.isConnected = false;
+                  reject(retryError);
+                });
+                
+                // Re-setup event handlers for the new socket
+                this.setupEventHandlers();
+              }, retryDelay);
+            } else {
+              console.error('❌ Failed to refresh token, user needs to login again');
+              this.connectionState = 'error';
+              this.isConnected = false;
+              reject(new Error('Authentication failed - please login again'));
+            }
+          } else {
+            // For other errors, implement exponential backoff
+            const retryDelay = Math.min(
+              this.minReconnectDelay * Math.pow(2, this.reconnectAttempts - 1),
+              this.maxReconnectDelay
+            );
+            
+            console.log(`⏳ Will retry connection in ${retryDelay}ms...`);
+            this.connectionState = 'error';
+            this.isConnected = false;
+            
+            // Schedule a reconnection attempt
+            if (this.reconnectTimeout) {
+              clearTimeout(this.reconnectTimeout);
+            }
+            
+            this.reconnectTimeout = setTimeout(() => {
+              if (this.connectionState !== 'connected') {
+                console.log('🔄 Attempting to reconnect...');
+                this.connect().catch(err => {
+                  console.error('Failed to reconnect:', err);
+                });
+              }
+            }, retryDelay);
+            
+            reject(error);
+          }
         });
       });
     } catch (error) {
-      console.error('Failed to connect socket:', error);
+      console.error('❌ Failed to connect socket:', error);
+      this.connectionState = 'error';
       throw error;
     }
   }
@@ -67,7 +282,15 @@ class SocketService {
     this.socket.on('disconnect', (reason) => {
       console.log('Socket disconnected:', reason);
       this.isConnected = false;
+      this.connectionState = 'disconnected';
       this.emit('disconnected', reason);
+      
+      // Don't auto-reconnect for certain disconnect reasons
+      const noReconnectReasons = ['io server disconnect', 'io client disconnect'];
+      if (noReconnectReasons.includes(reason)) {
+        console.log('ℹ️ Disconnect was intentional, not attempting reconnection');
+        return;
+      }
     });
 
     this.socket.on('reconnect', (attemptNumber) => {
@@ -125,9 +348,12 @@ class SocketService {
       this.emit('user-status-changed', data);
     });
 
-    // Error handling
+    // Error handling with rate limiting
     this.socket.on('error', (error) => {
-      console.error('Socket error:', error);
+      // Only log errors occasionally to prevent spam
+      if (this.reconnectAttempts === 0 || this.reconnectAttempts % 5 === 0) {
+        console.error('Socket error:', error);
+      }
       this.emit('error', error);
     });
   }
@@ -261,22 +487,46 @@ class SocketService {
       // Clear all listeners
       this.listeners.clear();
       
-      // Clear typing timeout
+      // Clear timeouts
       if (this.typingTimeout) {
         clearTimeout(this.typingTimeout);
+        this.typingTimeout = null;
       }
+      if (this.connectionTimeout) {
+        clearTimeout(this.connectionTimeout);
+        this.connectionTimeout = null;
+      }
+      if (this.reconnectTimeout) {
+        clearTimeout(this.reconnectTimeout);
+        this.reconnectTimeout = null;
+      }
+
+      // Update state
+      this.connectionState = 'disconnected';
+      this.isConnected = false;
+      this.currentChatId = null;
+      this.reconnectAttempts = 0;
 
       // Disconnect socket
       this.socket.disconnect();
       this.socket = null;
-      this.isConnected = false;
-      this.currentChatId = null;
     }
   }
 
   // Check connection status
   isSocketConnected() {
     return this.isConnected && this.socket && this.socket.connected;
+  }
+
+  // Get connection state
+  getConnectionState() {
+    return this.connectionState;
+  }
+
+  // Reset connection attempts
+  resetReconnectAttempts() {
+    this.reconnectAttempts = 0;
+    this.lastConnectionAttempt = 0;
   }
 
   // Get socket instance (for advanced usage)

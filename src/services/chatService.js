@@ -1,4 +1,5 @@
 import api from './api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 class ChatService {
   // Create a new chat
@@ -20,6 +21,20 @@ class ChatService {
   // Create direct chat with a user
   async createDirectChat(recipientId) {
     try {
+      // Get current user ID to prevent self-chat on frontend
+      const userData = await AsyncStorage.getItem('userData');
+      if (userData) {
+        const user = JSON.parse(userData);
+        const currentUserId = String(user?.user_id || user?.id);
+        
+        if (String(recipientId) === currentUserId) {
+          return {
+            success: false,
+            message: 'Cannot create a direct chat with yourself'
+          };
+        }
+      }
+      
       const response = await api.post('/chat/direct', {
         recipient_id: recipientId
       });
@@ -116,15 +131,35 @@ class ChatService {
         messageData.attachments = attachments;
       }
 
-      const response = await api.post(`/chat/${chatId}/message`, messageData);
-      return {
-        success: true,
-        data: response.data.data
-      };
+      const response = await api.post(`/chat/${chatId}/messages`, messageData);
+      console.log('📤 ChatService - API Response:', {
+        status: response.status,
+        data: response.data,
+        hasData: !!response.data.data
+      });
+      
+      if (response.data.success && response.data.data) {
+        return {
+          success: true,
+          data: response.data.data
+        };
+      } else {
+        return {
+          success: false,
+          message: response.data.message || 'Server returned unsuccessful response'
+        };
+      }
     } catch (error) {
+      console.error('📤 ChatService - API Error:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        errorData: error.response?.data,
+        errorMessage: error.message
+      });
+      
       return {
         success: false,
-        message: error.response?.data?.message || 'Failed to send message'
+        message: error.response?.data?.message || error.message || 'Failed to send message'
       };
     }
   }
@@ -132,20 +167,27 @@ class ChatService {
   // Send media message
   async sendMediaMessage(chatId, formData) {
     try {
-      const response = await api.post(`/chat/${chatId}/media`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
+      console.log('📤 ChatService.sendMediaMessage - Sending to:', `/chat/${chatId}/messages/media`);
+      
+      // Don't set Content-Type header - api.js interceptor handles it
+      const response = await api.post(`/chat/${chatId}/messages/media`, formData);
+      
+      console.log('✅ ChatService.sendMediaMessage - Success:', response.data);
       
       return {
         success: true,
         data: response.data.data
       };
     } catch (error) {
+      console.error('❌ ChatService.sendMediaMessage - Error:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
+      });
+      
       return {
         success: false,
-        message: error.response?.data?.message || 'Failed to send media'
+        message: error.response?.data?.message || error.message || 'Failed to send media'
       };
     }
   }
@@ -153,7 +195,7 @@ class ChatService {
   // Mark message as read
   async markMessageAsRead(messageId) {
     try {
-      const response = await api.put(`/chat/message/${messageId}/read`);
+      const response = await api.post(`/chat/messages/${messageId}/read`);
       return {
         success: true
       };
@@ -168,7 +210,7 @@ class ChatService {
   // Mark entire chat as read
   async markChatAsRead(chatId) {
     try {
-      const response = await api.put(`/chat/${chatId}/read`);
+      const response = await api.post(`/chat/${chatId}/read`);
       return {
         success: true
       };
@@ -183,7 +225,7 @@ class ChatService {
   // Update message
   async updateMessage(messageId, content) {
     try {
-      const response = await api.put(`/chat/message/${messageId}`, { content });
+      const response = await api.patch(`/chat/messages/${messageId}`, { content });
       return {
         success: true,
         data: response.data.data
@@ -199,7 +241,7 @@ class ChatService {
   // Delete message
   async deleteMessage(messageId) {
     try {
-      const response = await api.delete(`/chat/message/${messageId}`);
+      const response = await api.delete(`/chat/messages/${messageId}`);
       return {
         success: true
       };
@@ -214,7 +256,7 @@ class ChatService {
   // Update chat settings
   async updateChatSettings(chatId, settings) {
     try {
-      const response = await api.put(`/chat/${chatId}/settings`, settings);
+      const response = await api.patch(`/chat/${chatId}/settings`, settings);
       return {
         success: true
       };
@@ -250,7 +292,7 @@ class ChatService {
       if (options.page) params.append('page', options.page);
       if (options.limit) params.append('limit', options.limit);
 
-      const response = await api.get(`/chat/${chatId}/search?${params.toString()}`);
+      const response = await api.get(`/chat/${chatId}/messages/search?${params.toString()}`);
       return {
         success: true,
         data: response.data.data
@@ -284,7 +326,7 @@ class ChatService {
   // Add participant to chat
   async addParticipant(chatId, userId, role = 'member') {
     try {
-      const response = await api.post(`/chat/${chatId}/participant`, {
+      const response = await api.post(`/chat/${chatId}/participants`, {
         user_id: userId,
         role
       });
@@ -303,7 +345,7 @@ class ChatService {
   // Remove participant from chat
   async removeParticipant(chatId, userId) {
     try {
-      const response = await api.delete(`/chat/${chatId}/participant/${userId}`);
+      const response = await api.delete(`/chat/${chatId}/participants/${userId}`);
       return {
         success: true
       };
@@ -402,7 +444,8 @@ class ChatService {
       messageType: message.message_type || 'text',
       status: message.status || 'sent',
       attachments: message.attachments,
-      sender: message.sender
+      sender: message.sender,
+      senderId: message.sender_id
     };
   }
 

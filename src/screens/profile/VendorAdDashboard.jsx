@@ -142,6 +142,7 @@ export default function VendorAdDashboard({ navigation }) {
                         </TouchableOpacity>
                     </View>
 
+
                     {/* Create New Ad Box */}
                     <TouchableOpacity 
                         style={styles.createAdBox}
@@ -265,10 +266,19 @@ export default function VendorAdDashboard({ navigation }) {
             >
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
-                        <PreSavedMessage onClose={() => setShowPreSaved(false)} />
+                        <PreSavedMessage 
+                            onClose={() => {
+                                console.log('PreSavedMessage onClose called');
+                                setShowPreSaved(false);
+                            }} 
+                            visible={showPreSaved} 
+                        />
                         <TouchableOpacity
                             style={styles.closeBtn}
-                            onPress={() => setShowPreSaved(false)}
+                            onPress={() => {
+                                console.log('Close button pressed');
+                                setShowPreSaved(false);
+                            }}
                         >
                             <Icon name="close" size={24} color={theme.colors.primary} />
                         </TouchableOpacity>

@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import api from '../services/api';
+import api, { resetRefreshState } from '../services/api';
+import { setAuthLogout } from '../services/navigationService';
 
 const AuthContext = createContext({});
 
@@ -20,16 +21,14 @@ export const AuthProvider = ({ children }) => {
     // Check for existing token on app startup
     useEffect(() => {
         checkAuthState();
+        // Register logout function with navigation service
+        setAuthLogout(logout);
     }, []);
 
     const checkAuthState = async () => {
         try {
-            console.log('🔍 Checking authentication state...');
             const token = await AsyncStorage.getItem('authToken');
             const userData = await AsyncStorage.getItem('userData');
-            
-            console.log('🔑 Stored token found:', token ? 'Yes' : 'No');
-            console.log('👤 Stored user data found:', userData ? 'Yes' : 'No');
             
             if (token && userData) {
                 // Set the token in API headers
@@ -37,34 +36,21 @@ export const AuthProvider = ({ children }) => {
                 
                 // Parse and verify user data
                 const user = JSON.parse(userData);
-                console.log('📱 Restored user from storage:', user);
-                console.log('📱 User ID from storage:', user?.user_id || user?.id);
-                console.log('📱 User Name from storage:', user?.full_name);
                 
                 setUser(user);
                 setIsAuthenticated(true);
-                console.log('✅ Session restored! User authenticated as:', user?.full_name, '(ID:', user?.user_id || user?.id, ')');
                 
-                // Optional: Test token with a lightweight endpoint
-                // This is commented out for performance, uncomment if needed
-                /*
+                // Test token validity with a lightweight endpoint
                 try {
-                    console.log('🔄 Testing token validity...');
-                    await api.get('/vendors/my-ads');
-                    console.log('✅ Token is valid');
+                    await api.get('/auth/check-auth');
                 } catch (testError) {
-                    if (testError.response?.status === 401) {
-                        console.log('❌ Token expired, clearing session');
+                    if (testError.response?.status === 401 || testError.shouldLogout) {
                         await logout();
                         return;
                     }
                 }
-                */
-            } else {
-                console.log('📵 No stored authentication found');
             }
         } catch (error) {
-            console.error('❌ Error checking auth state:', error);
             // Don't logout on error, just leave unauthenticated
             setIsAuthenticated(false);
         } finally {
@@ -80,12 +66,9 @@ export const AuthProvider = ({ children }) => {
                 password,
             };
             
-            console.log('🔐 Login attempt with payload:', loginPayload);
             
             const response = await api.post('/auth/login', loginPayload);
             
-            console.log('📥 Login response:', response.data);
-            console.log('📥 Response structure:', JSON.stringify(response.data, null, 2));
 
             // Check if response has the expected structure
             if (response.data && response.data.tokens) {
@@ -93,13 +76,6 @@ export const AuthProvider = ({ children }) => {
                 const { accessToken, refreshToken } = response.data.tokens;
                 const user = response.data.user;
                 
-                console.log('🔑 Tokens received:', { 
-                    access: accessToken?.substring(0, 20) + '...', 
-                    refresh: refreshToken?.substring(0, 20) + '...' 
-                });
-                console.log('👤 User data received from server:', user);
-                console.log('👤 User ID:', user?.user_id || user?.id);
-                console.log('👤 User Name:', user?.full_name);
                 
                 // Clear any old data first
                 await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'userData']);
@@ -111,9 +87,6 @@ export const AuthProvider = ({ children }) => {
                 // Store userId separately for easy access
                 await AsyncStorage.setItem('userId', String(user?.user_id || user?.id));
                 
-                // Verify what was stored
-                const storedUserData = await AsyncStorage.getItem('userData');
-                console.log('📦 Stored user data:', JSON.parse(storedUserData));
                 
                 // Set token in API headers
                 api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
@@ -122,12 +95,10 @@ export const AuthProvider = ({ children }) => {
                 setUser(user);
                 setIsAuthenticated(true);
                 
-                console.log('✅ Login successful! User authenticated as:', user?.full_name, '(ID:', user?.user_id || user?.id, ')');
                 
                 return { success: true, user };
             } else if (response.data) {
                 // Try alternative response structure
-                console.log('⚠️ Unexpected response structure, trying alternatives...');
                 
                 // Maybe the response is directly in response.data
                 if (response.data.user && (response.data.accessToken || response.data.token)) {
@@ -156,9 +127,6 @@ export const AuthProvider = ({ children }) => {
                 };
             }
         } catch (error) {
-            console.error('❌ Login error:', error);
-            console.error('❌ Error response:', error.response?.data);
-            console.error('❌ Error status:', error.response?.status);
             return { 
                 success: false, 
                 error: error.response?.data?.message || 'Network error. Please try again.' 
@@ -245,8 +213,6 @@ export const AuthProvider = ({ children }) => {
                 };
             }
         } catch (error) {
-            console.error('❌ Send OTP error:', error);
-            console.error('❌ Error response:', error.response?.data);
             return { 
                 success: false, 
                 error: error.response?.data?.message || 'Failed to send OTP. Please try again.' 
@@ -377,7 +343,6 @@ export const AuthProvider = ({ children }) => {
                 };
             }
         } catch (error) {
-            console.error('Forgot password error:', error);
             return { 
                 success: false, 
                 error: error.response?.data?.message || 'Network error. Please try again.' 
@@ -404,7 +369,6 @@ export const AuthProvider = ({ children }) => {
                 };
             }
         } catch (error) {
-            console.error('Reset password error:', error);
             return { 
                 success: false, 
                 error: error.response?.data?.message || 'Network error. Please try again.' 
@@ -433,7 +397,6 @@ export const AuthProvider = ({ children }) => {
                 };
             }
         } catch (error) {
-            console.error('Update profile error:', error);
             return { 
                 success: false, 
                 error: error.response?.data?.message || 'Network error. Please try again.' 
@@ -441,20 +404,23 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    const logout = async () => {
+    const logout = async (navigateToLogin = false) => {
         try {
-            console.log('🚪 Logging out...');
             
-            // Get all keys to see what's stored
-            const allKeys = await AsyncStorage.getAllKeys();
-            console.log('📦 All stored keys before logout:', allKeys);
+            // Reset refresh state to prevent any ongoing refresh attempts
+            resetRefreshState();
+            
+            // Try to notify backend of logout (skip if we're already getting 401s)
+            if (!navigateToLogin) {
+                try {
+                    await api.post('/auth/logout');
+                } catch (logoutError) {
+                    // Continue with local logout even if server call fails
+                }
+            }
             
             // Clear ALL auth-related data
-            await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'userData', 'tempRegistrationData']);
-            
-            // Verify removal
-            const remainingKeys = await AsyncStorage.getAllKeys();
-            console.log('📦 Remaining keys after logout:', remainingKeys);
+            await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'userData', 'tempRegistrationData', 'userId', 'accessToken', 'user']);
             
             // Clear API header
             delete api.defaults.headers.common['Authorization'];
@@ -463,13 +429,46 @@ export const AuthProvider = ({ children }) => {
             setUser(null);
             setIsAuthenticated(false);
             
-            console.log('✅ Logout complete');
+            
+            // Navigate to login if requested (for automatic logouts)
+            if (navigateToLogin) {
+                const { navigationRef } = require('../services/navigationService');
+                setTimeout(() => {
+                    if (navigationRef.isReady()) {
+                        navigationRef.reset({
+                            index: 0,
+                            routes: [{ name: 'Login' }],
+                        });
+                    }
+                }, 200);
+            }
+            
             return { success: true };
         } catch (error) {
-            console.error('Logout error:', error);
-            return { success: false, error: 'Failed to logout' };
+            
+            // Even if logout fails, clear local state and navigate
+            resetRefreshState();
+            await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'userData', 'tempRegistrationData', 'userId', 'accessToken', 'user']);
+            delete api.defaults.headers.common['Authorization'];
+            setUser(null);
+            setIsAuthenticated(false);
+            
+            if (navigateToLogin) {
+                const { navigationRef } = require('../services/navigationService');
+                setTimeout(() => {
+                    if (navigationRef.isReady()) {
+                        navigationRef.reset({
+                            index: 0,
+                            routes: [{ name: 'Login' }],
+                        });
+                    }
+                }, 200);
+            }
+            
+            return { success: false, error: 'Failed to logout completely, but cleared local session' };
         }
     };
+
 
     const value = {
         user,

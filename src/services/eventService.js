@@ -1,4 +1,4 @@
-import api from './api';
+import api, { API_BASE_URL } from './api';
 import dummyImage from '../assets/images/dummy.png';
 
 class EventService {
@@ -88,10 +88,15 @@ class EventService {
         try {
             const response = await api.get('/event_ad');
             console.log('🌐 Public event ads response received');
+            console.log('📦 Raw response object:', JSON.stringify(response, null, 2));
+            console.log('📦 Raw response.data:', JSON.stringify(response.data, null, 2));
+            console.log('📦 response.data.data:', JSON.stringify(response.data?.data, null, 2));
+            console.log('📦 response.data.data.results:', JSON.stringify(response.data?.data?.results, null, 2));
             
             // Check if response.data exists and has the expected structure
             if (!response.data || !response.data.data) {
                 console.error('❌ Unexpected Event API response structure');
+                console.error('Response data:', response.data);
                 return {
                     success: false,
                     message: 'Invalid API response structure',
@@ -102,6 +107,7 @@ class EventService {
             // Extract the results array from the paginated response
             const eventAds = response.data.data?.results || [];
             console.log(`✅ Found ${eventAds.length} public event ads`);
+            console.log('📦 Event ads array:', eventAds);
             
             return {
                 success: true,
@@ -200,14 +206,20 @@ class EventService {
     extractImages(attachments) {
         if (!attachments) return [];
         
+        const baseUrl = API_BASE_URL.replace('/api', ''); // Remove /api to get base server URL
+        console.log('🖼️ Extracting images with baseUrl:', baseUrl);
+        console.log('🖼️ Raw attachments:', attachments);
+        
         try {
             // If attachments is a JSON string, parse it
             const parsed = typeof attachments === 'string' 
                 ? JSON.parse(attachments) 
                 : attachments;
+                
+            console.log('🖼️ Parsed attachments:', parsed);
             
             if (Array.isArray(parsed)) {
-                return parsed
+                const imageUrls = parsed
                     .filter(item => {
                         // Check if it's an image file object or URL
                         if (typeof item === 'string') {
@@ -221,15 +233,20 @@ class EventService {
                         return false;
                     })
                     .map(item => {
-                        // Return just the URL string for image rendering
+                        // Return properly formatted URL string for image rendering
                         if (typeof item === 'string') {
-                            return item;
+                            // If it's already a full URL, use it; otherwise append base URL
+                            return item.startsWith('http') ? item : `${baseUrl}${item}`;
                         } else if (typeof item === 'object' && item.url) {
-                            return item.url;
+                            // Handle file objects with url property
+                            return item.url.startsWith('http') ? item.url : `${baseUrl}${item.url}`;
                         }
                         return null;
                     })
                     .filter(Boolean); // Remove null values
+                    
+                console.log('🖼️ Final image URLs:', imageUrls);
+                return imageUrls;
             }
         } catch (e) {
             console.error('Error parsing event attachments:', e);
@@ -240,8 +257,12 @@ class EventService {
 
     // Helper method to format event data for display
     formatEventForDisplay(event) {
-        console.log('Formatting event:', event);
+        console.log('🎯 Formatting event for display:', JSON.stringify(event, null, 2));
+        console.log('🎯 Event attachments:', event.attachments);
+        console.log('🎯 Event attachments type:', typeof event.attachments);
+        
         const extractedImages = this.extractImages(event.attachments);
+        console.log('🎯 Extracted images:', extractedImages);
         
         // Format date if it exists
         let formattedDate = 'Date TBD';

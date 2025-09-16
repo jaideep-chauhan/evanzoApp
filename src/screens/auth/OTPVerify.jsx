@@ -81,6 +81,11 @@ export default function OTPVerify() {
                 const newDigits = pastedOtp.split('').concat(Array(6).fill('')).slice(0, 6);
                 setOtpDigits(newDigits);
                 
+                // Clear error when user pastes
+                if (error) {
+                    setError('');
+                }
+                
                 // Focus last filled input or last input if all filled
                 const lastFilledIndex = Math.min(pastedOtp.length - 1, 5);
                 if (inputsRef[lastFilledIndex].current) {
@@ -90,7 +95,7 @@ export default function OTPVerify() {
                 
                 // Auto-submit if 6 digits were pasted
                 if (pastedOtp.length === 6) {
-                    setTimeout(() => handleVerify(), 100);
+                    setTimeout(() => handleVerify(pastedOtp), 100);
                 }
             }
         } else if (/^\d?$/.test(text)) {
@@ -98,6 +103,11 @@ export default function OTPVerify() {
             const newDigits = [...otpDigits];
             newDigits[idx] = text;
             setOtpDigits(newDigits);
+            
+            // Clear error when user starts typing
+            if (error) {
+                setError('');
+            }
             if (text && idx < 5) {
                 inputsRef[idx + 1].current.focus();
                 setActiveIndex(idx + 1);
@@ -111,15 +121,19 @@ export default function OTPVerify() {
                 const fullOtp = [...newDigits];
                 fullOtp[5] = text;
                 if (fullOtp.every(digit => digit !== '')) {
-                    setTimeout(() => handleVerify(), 100);
+                    const completeOtp = fullOtp.join('');
+                    setTimeout(() => handleVerify(completeOtp), 100);
                 }
             }
         }
     };
 
-    const handleVerify = async () => {
-        const otp = otpDigits.join('');
-        if (otp.length !== 6) {
+    const handleVerify = async (providedOtp = null) => {
+        const otp = providedOtp || otpDigits.join('');
+        
+        // Clean the OTP and check if it's valid
+        const cleanOtp = otp.replace(/\D/g, '');
+        if (cleanOtp.length !== 6) {
             setError('Please enter a valid 6-digit OTP');
             return;
         }
@@ -128,7 +142,7 @@ export default function OTPVerify() {
         setError('');
         
         try {
-            const result = await verifyOTPAndRegister(otp);
+            const result = await verifyOTPAndRegister(cleanOtp);
             
             if (result.success) {
                 // Show success toast then navigate
@@ -228,7 +242,7 @@ export default function OTPVerify() {
                                     opacity: isLoading ? 0.7 : 1
                                 }
                             ]} 
-                            onPress={handleVerify}
+                            onPress={() => handleVerify()}
                             disabled={isLoading}
                         >
                             {isLoading ? (

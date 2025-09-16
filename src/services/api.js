@@ -10,25 +10,50 @@ const BASE_URL = Platform.select({
 
 export const API_BASE_URL = BASE_URL; // Export for socket service
 
+// Track if we're currently refreshing token to prevent multiple refresh attempts
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+    failedQueue.forEach(({ resolve, reject }) => {
+        if (error) {
+            reject(error);
+        } else {
+            resolve(token);
+        }
+    });
+    
+    failedQueue = [];
+};
+
+// Function to reset refresh state (useful for manual logout)
+export const resetRefreshState = () => {
+    isRefreshing = false;
+    failedQueue = [];
+};
+
 const api = axios.create({
     baseURL: BASE_URL,
-    timeout: 30000,
+    timeout: 15000, // Reduced timeout to fail faster on network issues
     headers: {
         'X-Client-Type': 'mobile',
     },
+    // Add retry configuration
+    validateStatus: function (status) {
+        // Consider 2xx and 3xx as success, but 4xx and 5xx as errors
+        // This ensures 401 errors are caught by the error interceptor
+        return status >= 200 && status < 400;
+    }
 });
 
 api.interceptors.request.use(
     async (config) => {
-        console.log('🌐 API Request:', config.method?.toUpperCase(), config.url);
-        console.log('🌐 Request data:', config.data);
         
         // Check if the data is FormData
         if (config.data instanceof FormData) {
             // For FormData, let axios set the Content-Type with boundary
             // Remove any preset Content-Type to allow multipart/form-data with boundary
             delete config.headers['Content-Type'];
-            console.log('📤 Sending FormData - multipart/form-data');
         } else {
             // For regular JSON data, set Content-Type to application/json
             config.headers['Content-Type'] = 'application/json';
@@ -37,42 +62,63 @@ api.interceptors.request.use(
         const token = await AsyncStorage.getItem('authToken');
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
-            console.log('🔑 Token added to request');
         }
         return config;
     },
     (error) => {
-        console.error('🌐 Request error:', error);
         return Promise.reject(error);
     }
 );
 
 api.interceptors.response.use(
     (response) => {
-        console.log('✅ API Response:', response.config.url, response.status);
         return response;
     },
     async (error) => {
-        console.error('❌ API Error:', error.config?.url, error.response?.status);
-        console.error('❌ Error details:', error.response?.data);
         const originalRequest = error.config;
         
-        // Check if token expired
-        const errorMessage = error.response?.data?.message || '';
-        const isTokenExpired = errorMessage.includes('expired') || 
-                              errorMessage.includes('authenticate') ||
-                              error.response?.data?.info?.message === 'jwt expired';
-        
+        // Check if this is a 401 error and we haven't already tried to refresh for this request
         if (error.response?.status === 401 && !originalRequest._retry) {
-            originalRequest._retry = true;
             
-            // If token expired, try to refresh
-            if (isTokenExpired) {
+            // Check if this is an authentication error
+            const errorMessage = error.response?.data?.message || '';
+            
+            const isAuthError = errorMessage.includes('expired') || 
+                               errorMessage.includes('authenticate') ||
+                               errorMessage.includes('jwt expired') ||
+                               errorMessage.includes('Please authenticate') ||
+                               errorMessage === 'Please authenticate' ||
+                               error.response?.status === 401;
+            
+            
+            if (isAuthError) {
+                // If we're already refreshing, queue this request
+                if (isRefreshing) {
+                    return new Promise((resolve, reject) => {
+                        failedQueue.push({ resolve, reject });
+                    }).then(token => {
+                        originalRequest.headers.Authorization = `Bearer ${token}`;
+                        return api(originalRequest);
+                    }).catch(err => {
+                        return Promise.reject(err);
+                    });
+                }
+
+                originalRequest._retry = true;
+                isRefreshing = true;
+
                 try {
                     const refreshToken = await AsyncStorage.getItem('refreshToken');
+                    
                     if (!refreshToken) {
-                        console.log('🔒 No refresh token, logging out...');
-                        await logout();
+                        processQueue(error, null);
+                        isRefreshing = false;
+                        
+                        // Force logout
+                        setTimeout(async () => {
+                            await logout();
+                        }, 100);
+                        
                         return Promise.reject({
                             ...error,
                             shouldLogout: true,
@@ -80,23 +126,43 @@ api.interceptors.response.use(
                         });
                     }
                     
-                    console.log('🔄 Attempting to refresh token...');
                     const response = await axios.post(`${BASE_URL}/auth/refresh-tokens`, {
                         refreshToken: refreshToken
+                    }, {
+                        headers: {
+                            'X-Client-Type': 'mobile',
+                            'Content-Type': 'application/json'
+                        }
                     });
                     
                     const { accessToken, refreshToken: newRefreshToken } = response.data.tokens;
                     
-                    console.log('✅ Token refreshed successfully');
                     await AsyncStorage.setItem('authToken', accessToken);
-                    await AsyncStorage.setItem('refreshToken', newRefreshToken);
+                    if (newRefreshToken) {
+                        await AsyncStorage.setItem('refreshToken', newRefreshToken);
+                    }
                     
+                    // Update the authorization header for all pending requests
+                    api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
                     originalRequest.headers.Authorization = `Bearer ${accessToken}`;
                     
+                    // Process the queue with the new token
+                    processQueue(null, accessToken);
+                    isRefreshing = false;
+                    
                     return api(originalRequest);
+                    
                 } catch (refreshError) {
-                    console.log('❌ Token refresh failed, logging out...');
-                    await logout();
+                    
+                    // Process queue with error and reset state
+                    processQueue(refreshError, null);
+                    isRefreshing = false;
+                    
+                    // Force logout
+                    setTimeout(async () => {
+                        await logout();
+                    }, 100);
+                    
                     return Promise.reject({
                         ...refreshError,
                         shouldLogout: true,

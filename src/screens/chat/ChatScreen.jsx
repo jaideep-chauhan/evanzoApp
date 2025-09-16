@@ -14,6 +14,7 @@ import {
     ImageBackground,
     ActivityIndicator,
     Modal,
+    PermissionsAndroid,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import MessageStatus from './MessageStatus';
@@ -22,10 +23,17 @@ import socketService from '../../services/socketService';
 import chatService from '../../services/chatService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DocumentPicker from 'react-native-document-picker';
-import { launchImageLibrary } from 'react-native-image-picker';
+import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 
 export default function ChatScreen({ route, navigation }) {
-    const { chatId, chatName, avatar, isOnline: initialOnline, recipientId } = route.params;
+    const { chatId: initialChatId, chatName, avatar, isOnline: initialOnline, recipientId } = route.params;
+    console.log('🔍 ChatScreen route params:', {
+        initialChatId,
+        chatName,
+        recipientId,
+        allParams: route.params
+    });
+    const [chatId, setChatId] = useState(initialChatId);
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
     const [isTyping, setIsTyping] = useState(false);
@@ -34,11 +42,11 @@ export default function ChatScreen({ route, navigation }) {
     const [isSending, setIsSending] = useState(false);
     const [currentUserId, setCurrentUserId] = useState(null);
     const [typingUsers, setTypingUsers] = useState(new Set());
-    const [chat, setChat] = useState(null);
     const [showAttachmentModal, setShowAttachmentModal] = useState(false);
     const [uploadingFile, setUploadingFile] = useState(false);
     const flatListRef = useRef(null);
     const typingTimeoutRef = useRef(null);
+    const currentUserIdRef = useRef(null); // Add ref to maintain userId consistency
     const theme = useTheme();
 
     // Initialize chat and socket connection
@@ -56,28 +64,71 @@ export default function ChatScreen({ route, navigation }) {
             socketService.off('user-stopped-typing');
             socketService.off('user-status-changed');
         };
-    }, [chatId]);
+    }, []);
 
     const initializeChat = async () => {
         try {
             setIsLoading(true);
             
-            // Get current user ID
+            // Get current user ID - MUST be set before loading messages
+            let userIdToUse = null;
             const userId = await AsyncStorage.getItem('userId');
-            console.log('Current user ID from storage:', userId);
+            console.log('🔍 Current user ID from storage:', userId);
+            
             if (!userId) {
-                console.warn('No userId found in storage, trying to get from userData');
+                console.warn('⚠️ No userId found in storage, trying to get from userData');
                 const userData = await AsyncStorage.getItem('userData');
+                console.log('🔍 Raw userData from storage:', userData);
                 if (userData) {
                     const user = JSON.parse(userData);
-                    const extractedUserId = String(user?.user_id || user?.id);
-                    setCurrentUserId(extractedUserId);
+                    console.log('🔍 Parsed user object:', user);
+                    userIdToUse = String(user?.user_id || user?.id);
+                    console.log('🔍 Extracted userIdToUse:', userIdToUse);
+                    setCurrentUserId(userIdToUse);
                     // Store it for next time
-                    await AsyncStorage.setItem('userId', extractedUserId);
+                    await AsyncStorage.setItem('userId', userIdToUse);
                 }
             } else {
-                setCurrentUserId(userId);
+                userIdToUse = String(userId); // Ensure it's a string
+                setCurrentUserId(userIdToUse);
+                console.log('🔍 Using userId from storage:', userIdToUse);
             }
+            
+            // Log all user-related data from storage
+            const token = await AsyncStorage.getItem('token');
+            const authToken = await AsyncStorage.getItem('authToken');
+            const refreshToken = await AsyncStorage.getItem('refreshToken');
+            const userData = await AsyncStorage.getItem('userData');
+            const userProfile = await AsyncStorage.getItem('userProfile');
+            
+            console.log('🔑 CURRENT USER AUTHENTICATION DETAILS:');
+            console.log('🔑 Token (token key):', token ? token.substring(0, 20) + '...' : 'No token');
+            console.log('🔑 AuthToken (authToken key):', authToken ? authToken.substring(0, 20) + '...' : 'No authToken');
+            console.log('🔑 RefreshToken:', refreshToken ? refreshToken.substring(0, 20) + '...' : 'No refreshToken');
+            console.log('🔑 UserData:', userData);
+            console.log('🔑 UserProfile:', userProfile);
+            console.log('🔑 Final userId being used:', userIdToUse);
+            
+            // Parse and show user data details if available
+            if (userData) {
+                try {
+                    const parsedUserData = JSON.parse(userData);
+                    console.log('👤 PARSED USER DATA DETAILS:');
+                    console.log('👤 User ID:', parsedUserData?.user_id || parsedUserData?.id);
+                    console.log('👤 Username:', parsedUserData?.username);
+                    console.log('👤 Email:', parsedUserData?.email);
+                    console.log('👤 Full Name:', parsedUserData?.full_name || parsedUserData?.name);
+                    console.log('👤 Role:', parsedUserData?.role);
+                    console.log('👤 All user fields:', Object.keys(parsedUserData));
+                } catch (e) {
+                    console.error('❌ Failed to parse userData:', e);
+                }
+            }
+            
+            // Store in ref for consistent access in callbacks
+            currentUserIdRef.current = userIdToUse;
+            console.log('✅ Final currentUserId set to:', userIdToUse);
+            console.log('✅ currentUserIdRef.current set to:', currentUserIdRef.current);
 
             // Connect to socket if not connected
             if (!socketService.isSocketConnected()) {
@@ -91,6 +142,7 @@ export default function ChatScreen({ route, navigation }) {
                 const result = await chatService.createDirectChat(recipientId);
                 if (result.success) {
                     actualChatId = result.data.chat_id;
+                    setChatId(actualChatId);
                     // Update route params with new chatId
                     navigation.setParams({ chatId: actualChatId });
                 } else {
@@ -100,17 +152,17 @@ export default function ChatScreen({ route, navigation }) {
                 }
             }
 
-            // Get chat details
-            const chatResult = await chatService.getChatById(actualChatId);
-            if (chatResult.success) {
-                setChat(chatResult.data);
-            }
+            // Get chat details if needed in future
+            // const chatResult = await chatService.getChatById(actualChatId);
+            // if (chatResult.success) {
+            //     // Use chat data if needed
+            // }
 
             // Join chat room
             socketService.joinChat(actualChatId);
 
-            // Load initial messages
-            await loadMessages(actualChatId);
+            // Load initial messages WITH the userId
+            await loadMessages(actualChatId, userIdToUse);
 
             // Setup socket event listeners
             setupSocketListeners();
@@ -126,25 +178,53 @@ export default function ChatScreen({ route, navigation }) {
         }
     };
 
-    const loadMessages = async (chatIdToLoad) => {
+    const loadMessages = async (chatIdToLoad, userIdToUse = null) => {
         try {
+            // Use passed userId or fall back to state (but state might not be set yet)
+            const effectiveUserId = userIdToUse || currentUserId;
+            
+            if (!effectiveUserId) {
+                console.error('No user ID available for loading messages');
+                return;
+            }
+            
+            console.log('Loading messages with userId:', effectiveUserId);
+            
             const result = await chatService.getChatMessages(chatIdToLoad || chatId, {
                 limit: 50,
                 page: 1
             });
 
             if (result.success && result.data.results) {
-                const formattedMessages = result.data.results.map(msg => ({
-                    id: msg.message_id,
-                    text: msg.content,
-                    timestamp: chatService.formatTime(msg.created_at),
-                    isMe: msg.sender_id === currentUserId,
-                    messageType: msg.message_type || 'text',
-                    status: msg.status || 'sent',
-                    attachments: msg.attachments,
-                    sender: msg.sender
-                }));
-                setMessages(formattedMessages.reverse());
+                const formattedMessages = result.data.results.map(msg => {
+                    const isMyMessage = String(msg.sender_id) === String(effectiveUserId);
+                    console.log(`Message ${msg.message_id}: sender_id=${msg.sender_id}, effectiveUserId=${effectiveUserId}, isMe=${isMyMessage}`);
+                    
+                    return {
+                        id: msg.message_id,
+                        text: msg.content,
+                        timestamp: chatService.formatTime(msg.created_at),
+                        isMe: isMyMessage,
+                        messageType: msg.message_type || 'text',
+                        status: msg.status || 'sent',
+                        attachments: msg.attachments,
+                        sender: msg.sender,
+                        senderId: msg.sender_id,
+                        createdAt: msg.created_at // Keep original timestamp for sorting
+                    };
+                });
+                
+                // Remove potential duplicates based on message ID
+                const uniqueMessages = formattedMessages.filter((msg, index, self) => 
+                    self.findIndex(m => m.id === msg.id) === index
+                );
+                
+                // Sort messages by creation date (oldest first)
+                const sortedMessages = uniqueMessages.sort((a, b) => 
+                    new Date(a.createdAt) - new Date(b.createdAt)
+                );
+                
+                setMessages(sortedMessages);
             }
         } catch (error) {
             console.error('Failed to load messages:', error);
@@ -154,15 +234,63 @@ export default function ChatScreen({ route, navigation }) {
     const setupSocketListeners = () => {
         // New message received
         socketService.on('new-message', (data) => {
-            const newMsg = chatService.formatMessage(data.message);
-            newMsg.isMe = data.message.sender_id === currentUserId;
+            const effectiveUserId = currentUserIdRef.current;
             
-            setMessages(prev => [...prev, newMsg]);
+            console.log('📨 New message received via socket:', {
+                messageId: data.message.message_id,
+                senderId: data.message.sender_id,
+                effectiveUserId: effectiveUserId,
+                isSameUser: String(data.message.sender_id) === String(effectiveUserId),
+                content: data.message.content?.substring(0, 20) + '...'
+            });
             
-            // Mark as read if chat is open
-            if (data.message.sender_id !== currentUserId) {
-                chatService.markMessageAsRead(data.message.message_id);
+            // Skip if this is our own message (we already have the optimistic message)
+            if (String(data.message.sender_id) === String(effectiveUserId)) {
+                console.log('📤 This is our own message, updating optimistic message status');
+                // Just update the status of our optimistic message
+                setMessages(prev => prev.map(msg => {
+                    // Find the optimistic message and update it with real data
+                    if (msg.status === 'sending' && msg.text === data.message.content) {
+                        console.log('✅ Found and updated optimistic message');
+                        return {
+                            ...msg,
+                            id: data.message.message_id,
+                            status: 'sent',
+                            createdAt: data.message.created_at
+                        };
+                    }
+                    return msg;
+                }));
+                return;
             }
+            
+            console.log('📥 Message from another user, adding to chat');
+            // This is a message from another user
+            const newMsg = {
+                id: data.message.message_id,
+                text: data.message.content,
+                timestamp: chatService.formatTime(data.message.created_at),
+                isMe: false, // Always false since this is from another user
+                messageType: data.message.message_type || 'text',
+                status: data.message.status || 'sent',
+                attachments: data.message.attachments,
+                sender: data.message.sender,
+                senderId: data.message.sender_id,
+                createdAt: data.message.created_at
+            };
+            
+            // Prevent duplicate messages by checking if message already exists
+            setMessages(prev => {
+                const messageExists = prev.some(msg => msg.id === newMsg.id);
+                if (messageExists) {
+                    console.log('⚠️ Message already exists, not adding duplicate');
+                    return prev; // Don't add duplicate
+                }
+                return [...prev, newMsg];
+            });
+            
+            // Mark as read since chat is open
+            chatService.markMessageAsRead(data.message.message_id);
 
             // Clear typing indicator for this user
             setTypingUsers(prev => {
@@ -223,10 +351,28 @@ export default function ChatScreen({ route, navigation }) {
     };
 
     const sendMessage = async () => {
-        if (newMessage.trim().length === 0 || isSending) return;
+        if (newMessage.trim().length === 0 || isSending || !chatId) return;
 
         const messageText = newMessage.trim();
-        const tempId = `temp-${Date.now()}`;
+        const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+        
+        console.log('🚀 ===== STARTING MESSAGE SEND =====');
+        console.log('📝 Message send initiated with:', {
+            messageText: messageText,
+            tempId: tempId,
+            chatId: chatId,
+            currentUserId: currentUserId,
+            currentUserIdRef: currentUserIdRef.current,
+            recipientId: recipientId,
+            timestamp: new Date().toISOString()
+        });
+        
+        // Log current authentication state
+        const authToken = await AsyncStorage.getItem('authToken');
+        console.log('🔐 Current auth state during send:', {
+            hasAuthToken: !!authToken,
+            authTokenPreview: authToken ? authToken.substring(0, 20) + '...' : 'No token'
+        });
         
         // Add optimistic message
         const optimisticMessage = {
@@ -236,9 +382,22 @@ export default function ChatScreen({ route, navigation }) {
             isMe: true,
             messageType: 'text',
             status: 'sending',
+            senderId: currentUserId,
+            createdAt: new Date().toISOString() // Add for consistent sorting
         };
 
-        setMessages(prev => [...prev, optimisticMessage]);
+        console.log('📤 Creating optimistic message:', optimisticMessage);
+
+        // Check for duplicates before adding
+        setMessages(prev => {
+            const messageExists = prev.some(msg => msg.id === tempId);
+            if (messageExists) {
+                console.log('⚠️ Optimistic message already exists, not adding');
+                return prev;
+            }
+            console.log('✅ Adding optimistic message to UI');
+            return [...prev, optimisticMessage];
+        });
         setNewMessage('');
         setIsSending(true);
 
@@ -246,31 +405,65 @@ export default function ChatScreen({ route, navigation }) {
         socketService.stopTyping(chatId);
 
         try {
+            console.log('🌐 About to call API sendMessage with:', {
+                chatId: chatId,
+                messageText: messageText,
+                messageType: 'text'
+            });
+            
             // Send via API
             const result = await chatService.sendMessage(chatId, messageText);
             
-            if (result.success) {
+            console.log('📤 ===== API RESPONSE RECEIVED =====');
+            console.log('📤 Full API result:', JSON.stringify(result, null, 2));
+            
+            if (result.success && result.data) {
+                console.log('✅ Message sent successfully!');
+                console.log('📤 Response data details:', {
+                    messageId: result.data.message_id,
+                    senderId: result.data.sender_id,
+                    content: result.data.content,
+                    status: result.data.status,
+                    createdAt: result.data.created_at,
+                    allResponseFields: Object.keys(result.data)
+                });
+                
                 // Update optimistic message with real data
-                setMessages(prev => prev.map(msg => 
-                    msg.id === tempId 
-                        ? {
+                setMessages(prev => prev.map(msg => {
+                    if (msg.id === tempId) {
+                        const updatedMsg = {
                             ...msg,
                             id: result.data.message_id,
-                            status: 'sent'
-                        }
-                        : msg
-                ));
+                            status: 'sent',
+                            createdAt: result.data.created_at,
+                            senderId: result.data.sender_id
+                        };
+                        console.log('🔄 Updated optimistic message:', updatedMsg);
+                        return updatedMsg;
+                    }
+                    return msg;
+                }));
             } else {
+                console.error('❌ Failed to send message:', {
+                    success: result.success,
+                    message: result.message,
+                    hasData: !!result.data,
+                    fullResult: result
+                });
                 // Remove optimistic message on failure
                 setMessages(prev => prev.filter(msg => msg.id !== tempId));
-                Alert.alert('Error', 'Failed to send message');
+                Alert.alert('Error', result.message || 'Failed to send message');
             }
         } catch (error) {
-            console.error('Send message error:', error);
+            console.error('❌ ===== MESSAGE SEND ERROR =====');
+            console.error('❌ Error details:', error);
+            console.error('❌ Error message:', error.message);
+            console.error('❌ Error stack:', error.stack);
             setMessages(prev => prev.filter(msg => msg.id !== tempId));
             Alert.alert('Error', 'Failed to send message');
         } finally {
             setIsSending(false);
+            console.log('🏁 ===== MESSAGE SEND COMPLETED =====');
         }
     };
 
@@ -295,48 +488,160 @@ export default function ChatScreen({ route, navigation }) {
         return timestamp;
     };
 
-    const handleImagePicker = () => {
+    const requestGalleryPermission = async () => {
+        if (Platform.OS === 'android') {
+            try {
+                const granted = await PermissionsAndroid.request(
+                    PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+                    {
+                        title: 'Gallery Permission',
+                        message: 'This app needs access to your gallery to send photos',
+                        buttonNeutral: 'Ask Me Later',
+                        buttonNegative: 'Cancel',
+                        buttonPositive: 'OK',
+                    },
+                );
+                return granted === PermissionsAndroid.RESULTS.GRANTED;
+            } catch (err) {
+                console.warn(err);
+                return false;
+            }
+        }
+        return true;
+    };
+
+    const requestCameraPermission = async () => {
+        if (Platform.OS === 'android') {
+            try {
+                const granted = await PermissionsAndroid.request(
+                    PermissionsAndroid.PERMISSIONS.CAMERA,
+                    {
+                        title: 'Camera Permission',
+                        message: 'This app needs access to your camera to take photos',
+                        buttonNeutral: 'Ask Me Later',
+                        buttonNegative: 'Cancel',
+                        buttonPositive: 'OK',
+                    },
+                );
+                return granted === PermissionsAndroid.RESULTS.GRANTED;
+            } catch (err) {
+                console.warn(err);
+                return false;
+            }
+        }
+        return true;
+    };
+
+    const handleImagePicker = async () => {
         setShowAttachmentModal(false);
+        
+        const hasPermission = await requestGalleryPermission();
+        if (!hasPermission) {
+            Alert.alert('Permission Required', 'Gallery permission is required to select photos');
+            return;
+        }
+        
         const options = {
             mediaType: 'photo',
             includeBase64: false,
             maxHeight: 2000,
             maxWidth: 2000,
+            quality: 0.8,
         };
 
-        launchImageLibrary(options, async (response) => {
-            if (response.didCancel || response.errorMessage) {
-                return;
+        launchImageLibrary(options, (response) => {
+            if (response.didCancel) {
+                console.log('User cancelled image picker');
+            } else if (response.errorMessage) {
+                console.log('ImagePicker Error: ', response.errorMessage);
+                Alert.alert('Error', 'Failed to select image');
+            } else if (response.assets && response.assets[0]) {
+                const asset = response.assets[0];
+                // Pass the complete asset object with all properties
+                sendMediaMessage(asset, 'image');
             }
+        });
+    };
 
-            const asset = response.assets[0];
-            if (asset) {
-                await sendMediaMessage(asset, 'image');
+    const handleCameraLaunch = async () => {
+        setShowAttachmentModal(false);
+        
+        const hasPermission = await requestCameraPermission();
+        if (!hasPermission) {
+            Alert.alert('Permission Required', 'Camera permission is required to take photos');
+            return;
+        }
+        
+        const options = {
+            mediaType: 'photo',
+            includeBase64: false,
+            maxHeight: 2000,
+            maxWidth: 2000,
+            quality: 0.8,
+            saveToPhotos: false,
+        };
+
+        launchCamera(options, (response) => {
+            if (response.didCancel) {
+                console.log('User cancelled camera');
+            } else if (response.errorMessage) {
+                console.log('Camera Error: ', response.errorMessage);
+                Alert.alert('Error', 'Failed to take photo');
+            } else if (response.assets && response.assets[0]) {
+                const asset = response.assets[0];
+                // Pass the complete asset object with all properties
+                sendMediaMessage(asset, 'image');
             }
         });
     };
 
     const handleDocumentPicker = async () => {
         setShowAttachmentModal(false);
+        
+        // Document picker doesn't require specific permissions on most platforms
+        // but we handle potential permission issues in the error catch
         try {
+            console.log('Opening document picker...');
             const result = await DocumentPicker.pick({
-                type: [DocumentPicker.types.pdf, DocumentPicker.types.doc, DocumentPicker.types.docx, DocumentPicker.types.plainText],
+                type: [DocumentPicker.types.allFiles],  // Use allFiles to avoid type issues
                 copyTo: 'cachesDirectory',
             });
 
+            console.log('Document picked:', result);
+            
             if (result && result[0]) {
-                await sendMediaMessage(result[0], 'document');
+                const document = result[0];
+                console.log('Sending document:', {
+                    uri: document.uri,
+                    name: document.name,
+                    size: document.size,
+                    type: document.type
+                });
+                await sendMediaMessage(document, 'document');
             }
         } catch (err) {
             if (!DocumentPicker.isCancel(err)) {
-                Alert.alert('Error', 'Failed to pick document');
+                console.error('Document picker error:', err);
+                console.error('Error details:', {
+                    message: err.message,
+                    code: err.code,
+                    stack: err.stack
+                });
+                Alert.alert(
+                    'Error', 
+                    `Failed to pick document: ${err.message || 'Unknown error'}`
+                );
+            } else {
+                console.log('Document picker cancelled');
             }
         }
     };
 
     const sendMediaMessage = async (file, type) => {
+        if (!chatId) return;
+        
         setUploadingFile(true);
-        const tempId = `temp-${Date.now()}`;
+        const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
         
         // Add optimistic message
         const optimisticMessage = {
@@ -352,6 +657,7 @@ export default function ChatScreen({ route, navigation }) {
                 name: file.name || 'file',
                 size: file.fileSize || file.size,
             }],
+            createdAt: new Date().toISOString() // Add for consistent sorting
         };
 
         setMessages(prev => [...prev, optimisticMessage]);
@@ -359,17 +665,37 @@ export default function ChatScreen({ route, navigation }) {
         try {
             // Send via API
             const formData = new FormData();
-            formData.append('file', {
-                uri: file.uri || file.fileCopyUri,
-                type: file.type || (type === 'image' ? 'image/jpeg' : 'application/octet-stream'),
-                name: file.name || file.fileName || `file_${Date.now()}`,
-            });
-            formData.append('messageType', type);
+            
+            // Add other fields first (order matters sometimes)
+            // Backend expects 'message_type' not 'messageType'
             formData.append('content', '');
+            formData.append('message_type', type || 'image');
+            
+            // Prepare file object - ensuring we have all required fields
+            const fileObject = {
+                uri: file.uri || file.fileCopyUri,
+                type: file.type || (type === 'image' ? 'image/jpeg' : 'application/octet-stream'), 
+                name: file.fileName || file.name || (type === 'image' ? `photo_${Date.now()}.jpg` : `document_${Date.now()}`),
+            };
+            
+            // Backend now expects 'file' field name (singular) after route update
+            // Add the file last
+            formData.append('file', fileObject);
+            
+            console.log('Sending media message with FormData:', {
+                fileObject,
+                messageType: type,
+                fileUri: file.uri,
+                fileType: file.type,
+                fileName: file.fileName || file.name
+            });
 
             const result = await chatService.sendMediaMessage(chatId, formData);
             
+            console.log('📱 ChatScreen - Media send result:', result);
+            
             if (result.success) {
+                console.log('✅ ChatScreen - Media sent successfully, updating message');
                 // Update optimistic message with real data
                 setMessages(prev => prev.map(msg => 
                     msg.id === tempId 
@@ -382,12 +708,13 @@ export default function ChatScreen({ route, navigation }) {
                         : msg
                 ));
             } else {
+                console.error('❌ ChatScreen - Media send failed:', result.message);
                 // Remove optimistic message on failure
                 setMessages(prev => prev.filter(msg => msg.id !== tempId));
-                Alert.alert('Error', 'Failed to send file');
+                Alert.alert('Error', result.message || 'Failed to send file');
             }
         } catch (error) {
-            console.error('Send media error:', error);
+            console.error('❌ ChatScreen - Exception in sendMediaMessage:', error);
             setMessages(prev => prev.filter(msg => msg.id !== tempId));
             Alert.alert('Error', 'Failed to send file');
         } finally {
@@ -531,7 +858,7 @@ export default function ChatScreen({ route, navigation }) {
                     ref={flatListRef}
                     data={messages}
                     renderItem={renderMessage}
-                    keyExtractor={(item) => item.id}
+                    keyExtractor={(item, index) => `msg-${item.id}-${index}`}
                     style={styles.messagesList}
                     contentContainerStyle={styles.messagesContainer}
                     showsVerticalScrollIndicator={false}
@@ -614,12 +941,21 @@ export default function ChatScreen({ route, navigation }) {
                         <View style={styles.attachmentOptions}>
                             <TouchableOpacity 
                                 style={styles.attachmentOption}
+                                onPress={handleCameraLaunch}
+                            >
+                                <View style={[styles.attachmentIcon, { backgroundColor: '#F3E5F5' }]}>
+                                    <Icon name="camera" size={24} color="#9C27B0" />
+                                </View>
+                                <Text style={styles.attachmentLabel}>Camera</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={styles.attachmentOption}
                                 onPress={handleImagePicker}
                             >
                                 <View style={[styles.attachmentIcon, { backgroundColor: '#E3F2FD' }]}>
                                     <Icon name="image" size={24} color="#2196F3" />
                                 </View>
-                                <Text style={styles.attachmentLabel}>Photo</Text>
+                                <Text style={styles.attachmentLabel}>Gallery</Text>
                             </TouchableOpacity>
                             <TouchableOpacity 
                                 style={styles.attachmentOption}

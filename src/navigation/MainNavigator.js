@@ -46,13 +46,10 @@ const MainNavigator = () => {
         setAuthLogout(logout);
     }, [logout]);
 
+
     // Handle app state changes
     useEffect(() => {
         const handleAppStateChange = (nextAppState) => {
-            if (appState.match(/inactive|background/) && nextAppState === 'active') {
-                // App has come to the foreground
-                console.log('App has come to the foreground');
-            }
             setAppState(nextAppState);
         };
 
@@ -95,7 +92,6 @@ const MainNavigator = () => {
                     setIsReady(true);
                 }
             } catch (error) {
-                console.log('Error preloading images:', error);
                 // Still set ready after error to avoid infinite loading
                 if (isMounted) {
                     setIsReady(true);
@@ -115,7 +111,6 @@ const MainNavigator = () => {
         // Maximum loading time to prevent infinite loading
         maxLoadTimer = setTimeout(() => {
             if (isMounted && (!isReady || !splashTimerDone)) {
-                console.log('Force ending splash screen due to timeout');
                 setIsReady(true);
                 setSplashTimerDone(true);
             }
@@ -134,11 +129,8 @@ const MainNavigator = () => {
 
     // Show splash screen until both conditions are met
     if (!isReady || !splashTimerDone || authLoading) {
-        console.log('🌊 Showing splash:', { isReady, splashTimerDone, authLoading });
         return <SplashScreen />;
     }
-
-    console.log('🚀 App ready! Authenticated:', isAuthenticated);
 
     return (
         <NavigationContainer ref={navigationRef}>
