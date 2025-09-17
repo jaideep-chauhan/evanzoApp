@@ -206,8 +206,15 @@ export default function Events() {
             );
         }
 
+        console.log('🔍 Filtering events:', {
+            totalEvents: events.length,
+            filteredCount: filtered.length,
+            selectedLocation,
+            selectedCategory
+        });
+        
         return filtered;
-    }, [selectedLocation, selectedCategory]);
+    }, [events, selectedLocation, selectedCategory]);
 
     const handleTabPress = (tabLabel, tabIndex) => {
         console.log('Selected tab:', tabLabel);

@@ -10,6 +10,8 @@ import {
     TextInput,
     Dimensions,
     ImageBackground,
+    Alert,
+    ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -19,6 +21,7 @@ import { useTheme } from '../../ThemeContext';
 import Icon2 from 'react-native-vector-icons/Feather'
 import Icon3 from 'react-native-vector-icons/Entypo'
 import { API_BASE_URL } from '../../services/api';
+import eventDetailsService from '../../services/eventDetailsService';
 const { width } = Dimensions.get('window');
 const AVATAR_SIZE = 60;
 
@@ -29,6 +32,9 @@ export default function EventDetailView() {
 
     const [quoteText, setQuoteText] = useState('');
     const [isFavorited, setIsFavorited] = useState(false);
+    const [isSaved, setIsSaved] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [isCheckingStatus, setIsCheckingStatus] = useState(true);
     const [showFullDesc, setShowFullDesc] = useState(false);
     const [descTruncated, setDescTruncated] = useState(false);
     const descTextRef = useRef(null);
@@ -152,13 +158,84 @@ export default function EventDetailView() {
     
     console.log('🎯 EventDetailView - processed eventData:', JSON.stringify(eventData, null, 2));
 
-    const handleSendQuote = () => {
-        console.log('Sending quote:', quoteText);
-        setQuoteText('');
+    const handleSendQuote = async () => {
+        if (!quoteText.trim()) {
+            Alert.alert('Empty Quote', 'Please enter your quote before sending.');
+            return;
+        }
+
+        try {
+            console.log('Sending quote for event:', {
+                eventId: eventData.id,
+                quote: quoteText,
+                organizerId: eventData.organizer.user_id
+            });
+
+            // Here you would call your event response/quote service
+            // const response = await eventService.sendQuoteResponse(eventData.id, quoteText);
+            
+            // For now, just show success message
+            Alert.alert(
+                'Quote Sent!', 
+                `Your quote has been sent to ${eventData.organizer.name}. They will be able to see your response and contact you if interested.`,
+                [{ text: 'OK', onPress: () => setQuoteText('') }]
+            );
+        } catch (error) {
+            console.error('Error sending quote:', error);
+            Alert.alert('Error', 'Failed to send quote. Please try again.');
+        }
     };
 
     const toggleFavorite = () => {
         setIsFavorited(!isFavorited);
+    };
+
+    // Handle save/unsave event - simple local storage approach
+    const handleSave = async () => {
+        if (isLoading) return;
+        
+        // Simple toggle for event saving (different from vendor approach)
+        const newSavedState = !isSaved;
+        setIsSaved(newSavedState);
+        setIsLoading(true);
+        
+        const eventId = eventData.id || eventData.event_ad_id;
+        
+        console.log('Toggling save for event:', {
+            eventId,
+            title: eventData.title,
+            saved: newSavedState
+        });
+        
+        // Simulate API call with timeout (simpler than vendor implementation)
+        setTimeout(() => {
+            setIsLoading(false);
+            
+            // Show simple feedback
+            const message = newSavedState 
+                ? `"${eventData.title}" saved to your bookmarks!`
+                : `"${eventData.title}" removed from bookmarks.`;
+                
+            Alert.alert(
+                newSavedState ? '🔖 Event Saved' : '📄 Event Removed',
+                message
+            );
+        }, 500);
+    };
+
+    // Handle share event - simpler approach than vendor ads
+    const handleShare = async () => {
+        try {
+            const response = await eventDetailsService.shareEvent(eventData);
+            // Don't show error alerts for cancelled shares, just log success/failure
+            if (response.success) {
+                console.log('Event shared successfully:', response.shared);
+            } else if (response.message !== 'Share cancelled') {
+                console.error('Share error:', response.message);
+            }
+        } catch (error) {
+            console.error('Share exception:', error);
+        }
     };
 
     const renderStars = (rating) => {
@@ -199,6 +276,12 @@ export default function EventDetailView() {
             currentIndex.current = idx;
         }
     };
+
+    // Initialize saved state as false (different approach from vendor ads)
+    useEffect(() => {
+        setIsSaved(false);
+        setIsCheckingStatus(false);
+    }, [eventData.id, eventData.event_ad_id]);
 
     // Reset text measurement when event changes and check description length
     useEffect(() => {
@@ -272,8 +355,23 @@ export default function EventDetailView() {
                             </View>
                         </View>
                         <View style={styles.actionIcons}>
-                            <TouchableOpacity style={styles.actionBtn}>
+                            <TouchableOpacity style={styles.actionBtn} onPress={handleShare}>
                                 <Icon3 name="share" size={20} color="#334462" />
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={styles.actionBtn} 
+                                onPress={handleSave}
+                                disabled={isLoading}
+                            >
+                                {isLoading ? (
+                                    <ActivityIndicator size="small" color="#334462" />
+                                ) : (
+                                    <Icon
+                                        name={isSaved ? "bookmark" : "bookmark-outline"}
+                                        size={20}
+                                        color={isSaved ? theme.colors.primary : "#334462"}
+                                    />
+                                )}
                             </TouchableOpacity>
                             <TouchableOpacity style={styles.actionBtn} onPress={toggleFavorite}>
                                 <Icon
@@ -311,6 +409,67 @@ export default function EventDetailView() {
                                 <Text style={styles.metaValue}>{eventData.guests}</Text>
                             </View>
                         </View>
+                    </View>
+
+                    {/* Event Tags */}
+                    {eventData.event_tags && eventData.event_tags.length > 0 && (
+                        <View style={styles.tagsContainer}>
+                            <Text style={styles.tagsLabel}>Event Tags</Text>
+                            <View style={styles.tagsWrapper}>
+                                {(typeof eventData.event_tags === 'string' 
+                                    ? JSON.parse(eventData.event_tags) 
+                                    : eventData.event_tags
+                                ).map((tag, index) => (
+                                    <View key={index} style={styles.tagPill}>
+                                        <Text style={styles.tagText}>{tag}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
+                    )}
+
+                    {/* Service Type and Event Type */}
+                    <View style={styles.categoryContainer}>
+                        {eventData.service_needed && (
+                            <View style={styles.categoryItem}>
+                                <Text style={styles.categoryLabel}>Service Needed</Text>
+                                <View style={styles.categoryPill}>
+                                    <Text style={styles.categoryText}>{eventData.service_needed}</Text>
+                                </View>
+                            </View>
+                        )}
+                        {eventData.event_type && (
+                            <View style={styles.categoryItem}>
+                                <Text style={styles.categoryLabel}>Event Type</Text>
+                                <View style={styles.categoryPill}>
+                                    <Text style={styles.categoryText}>{eventData.event_type}</Text>
+                                </View>
+                            </View>
+                        )}
+                    </View>
+
+                    {/* Status and Metadata */}
+                    <View style={styles.statusContainer}>
+                        <View style={styles.statusItem}>
+                            <Text style={styles.statusLabel}>Status</Text>
+                            <View style={[styles.statusPill, { backgroundColor: eventData.statusColor + '20' }]}>
+                                <Text style={[styles.statusText, { color: eventData.statusColor }]}>
+                                    {eventData.status.toUpperCase()}
+                                </Text>
+                            </View>
+                        </View>
+                        {eventData.is_urgent && (
+                            <View style={styles.statusItem}>
+                                <View style={[styles.statusPill, { backgroundColor: '#ff4757' + '20' }]}>
+                                    <Text style={[styles.statusText, { color: '#ff4757' }]}>URGENT</Text>
+                                </View>
+                            </View>
+                        )}
+                        {eventData.views_count > 0 && (
+                            <View style={styles.statusItem}>
+                                <Text style={styles.statusLabel}>{eventData.views_count} views</Text>
+                            </View>
+                        )}
                     </View>
                 </View>
 
@@ -411,11 +570,11 @@ export default function EventDetailView() {
 
                                     {/* Duration Tag */}
                                     <View style={styles.durationTag}>
-                                        <Text style={styles.durationText}>2 Hours</Text>
+                                        <Text style={styles.durationText}>{eventData.duration} Hr</Text>
                                     </View>
 
                                     {/* Title */}
-                                    <Text style={styles.suggestionTitle}>Corporate Event</Text>
+                                    <Text style={styles.suggestionTitle}>Similar: {eventData.event_type || 'Event'}</Text>
 
                                     {/* Organizer Info */}
                                     <View style={styles.nameBoxContainer}>
@@ -423,7 +582,7 @@ export default function EventDetailView() {
                                             <View style={styles.iconBox}>
                                                 <Icon name="person" size={12} color="#2C3D5BF5" />
                                             </View>
-                                            <Text style={styles.suggestionOrganizer}>Tushar Dhania</Text>
+                                            <Text style={styles.suggestionOrganizer}>{eventData.organizer.name}</Text>
                                         </View>
                                     </View>
 
@@ -431,11 +590,11 @@ export default function EventDetailView() {
                                     <View style={styles.detailRow}>
                                         <View style={styles.pill}>
                                             <Icon name="location-outline" size={12} color="#334462" style={{ marginRight: 4 }} />
-                                            <Text style={styles.pillText}>Ontario, Canada</Text>
+                                            <Text style={styles.pillText}>{eventData.location}</Text>
                                         </View>
                                         <View style={styles.pill}>
                                             <Icon name="calendar-outline" size={12} color="#334462" style={{ marginRight: 4 }} />
-                                            <Text style={styles.pillText}>October 30, 2023</Text>
+                                            <Text style={styles.pillText}>{eventData.date}</Text>
                                         </View>
                                     </View>
 
@@ -892,6 +1051,89 @@ const styles = StyleSheet.create({
     sendText: {
         color: '#2C3D5B',
         fontSize: 16,
+        fontWeight: '600',
+    },
+    
+    // New styles for dynamic sections
+    tagsContainer: {
+        marginTop: 15,
+        marginBottom: 10,
+    },
+    tagsLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#334462',
+        marginBottom: 8,
+    },
+    tagsWrapper: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    tagPill: {
+        backgroundColor: '#f0f4f8',
+        borderRadius: 15,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+    },
+    tagText: {
+        fontSize: 12,
+        color: '#334462',
+        fontWeight: '500',
+    },
+    
+    categoryContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 15,
+        marginBottom: 10,
+        gap: 10,
+    },
+    categoryItem: {
+        flex: 1,
+    },
+    categoryLabel: {
+        fontSize: 12,
+        color: '#666',
+        marginBottom: 4,
+    },
+    categoryPill: {
+        backgroundColor: '#e3f2fd',
+        borderRadius: 12,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        alignItems: 'center',
+    },
+    categoryText: {
+        fontSize: 12,
+        color: '#1976d2',
+        fontWeight: '600',
+    },
+    
+    statusContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 10,
+        marginBottom: 15,
+        gap: 10,
+        flexWrap: 'wrap',
+    },
+    statusItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+    },
+    statusLabel: {
+        fontSize: 12,
+        color: '#666',
+    },
+    statusPill: {
+        borderRadius: 10,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+    },
+    statusText: {
+        fontSize: 11,
         fontWeight: '600',
     },
 
