@@ -132,9 +132,17 @@ export default function VendorAdDashboard({ navigation }) {
 
                         <TouchableOpacity
                             style={styles.actionBtn}
+                            onPress={() => navigation.navigate('SavedVendors')}
+                        >
+                            <Icon name="heart" size={14} color={theme.colors.primary} style={{ marginRight: 4 }} />
+                            <Text style={[styles.secondaryText, { color: theme.colors.primary }]}>SAVED</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.actionBtn}
                             onPress={() => setShowPreSaved(true)}
                         >
-                            <Text style={[styles.secondaryText, { color: theme.colors.primary }]}>PRE SAVE MESSAGE</Text>
+                            <Text style={[styles.secondaryText, { color: theme.colors.primary }]}>MESSAGE</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity style={styles.bellBtn}>

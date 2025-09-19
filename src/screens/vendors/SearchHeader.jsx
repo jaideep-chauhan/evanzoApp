@@ -15,14 +15,15 @@ import { useTheme } from '../../ThemeContext';
 import img from '../../assets/images/evanzoLogo.png';
 import bg from '../../assets/images/smallHeader.jpg';
 
-export default function SearchHeader() {
+export default function SearchHeader({ onSearchChange, searchValue = '' }) {
     const navigation = useNavigation();
     const theme = useTheme();
 
     const placeholders = [
-        'Search for location',
-        // 'Search for date',
-        'Search for category',
+        'Search for vendors...',
+        'Search by location...',
+        'Search by category...',
+        'Type to search...',
     ];
     const [placeholderIndex, setPlaceholderIndex] = useState(0);
     const [nextIndex, setNextIndex] = useState(1);
@@ -84,64 +85,80 @@ export default function SearchHeader() {
                         <View style={[styles.searchBar, { backgroundColor: theme.colors.lightBackground + '50' }]}>
                             <Icon name="search-outline" size={20} color="#fff" style={styles.searchIcon} />
                             <View style={{ flex: 1, height: 40, justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
-                                <Animated.Text
-                                    style={[
-                                        styles.animatedPlaceholder,
-                                        {
-                                            position: 'absolute',
-                                            left: 0,
-                                            right: 0,
-                                            opacity: anim.interpolate({
-                                                inputRange: [0, 1],
-                                                outputRange: [1, 0],
-                                            }),
-                                            transform: [{
-                                                translateY: anim.interpolate({
-                                                    inputRange: [0, 1],
-                                                    outputRange: [0, -24],
-                                                }),
-                                            }],
-                                        }
-                                    ]}
-                                    numberOfLines={1}
-                                >
-                                    {placeholders[placeholderIndex]}
-                                </Animated.Text>
-                                <Animated.Text
-                                    style={[
-                                        styles.animatedPlaceholder,
-                                        {
-                                            position: 'absolute',
-                                            left: 0,
-                                            right: 0,
-                                            opacity: anim.interpolate({
-                                                inputRange: [0, 1],
-                                                outputRange: [0, 1],
-                                            }),
-                                            transform: [{
-                                                translateY: anim.interpolate({
-                                                    inputRange: [0, 1],
-                                                    outputRange: [24, 0],
-                                                }),
-                                            }],
-                                        }
-                                    ]}
-                                    numberOfLines={1}
-                                >
-                                    {placeholders[nextIndex]}
-                                </Animated.Text>
+                                {!searchValue && (
+                                    <>
+                                        <Animated.Text
+                                            style={[
+                                                styles.animatedPlaceholder,
+                                                {
+                                                    position: 'absolute',
+                                                    left: 0,
+                                                    right: 0,
+                                                    opacity: anim.interpolate({
+                                                        inputRange: [0, 1],
+                                                        outputRange: [1, 0],
+                                                    }),
+                                                    transform: [{
+                                                        translateY: anim.interpolate({
+                                                            inputRange: [0, 1],
+                                                            outputRange: [0, -24],
+                                                        }),
+                                                    }],
+                                                }
+                                            ]}
+                                            numberOfLines={1}
+                                        >
+                                            {placeholders[placeholderIndex]}
+                                        </Animated.Text>
+                                        <Animated.Text
+                                            style={[
+                                                styles.animatedPlaceholder,
+                                                {
+                                                    position: 'absolute',
+                                                    left: 0,
+                                                    right: 0,
+                                                    opacity: anim.interpolate({
+                                                        inputRange: [0, 1],
+                                                        outputRange: [0, 1],
+                                                    }),
+                                                    transform: [{
+                                                        translateY: anim.interpolate({
+                                                            inputRange: [0, 1],
+                                                            outputRange: [24, 0],
+                                                        }),
+                                                    }],
+                                                }
+                                            ]}
+                                            numberOfLines={1}
+                                        >
+                                            {placeholders[nextIndex]}
+                                        </Animated.Text>
+                                    </>
+                                )}
                                 <TextInput
                                     style={[styles.input, { position: 'absolute', left: 0, right: 0, zIndex: 1 }]}
                                     underlineColorAndroid="transparent"
                                     autoCorrect={false}
                                     autoCapitalize="none"
-                                    selectionColor={theme.colors.primary}
-                                    editable={false}
+                                    selectionColor="#fff"
+                                    value={searchValue}
+                                    onChangeText={onSearchChange}
+                                    returnKeyType="search"
+                                    placeholder=""
+                                    placeholderTextColor="transparent"
                                 />
                             </View>
-                            <TouchableOpacity style={styles.filterIconWrapper}>
-                                {/* <Icon name="options-outline" size={20} color="#fff" style={styles.filterIcon} /> */}
-                            </TouchableOpacity>
+                            {searchValue ? (
+                                <TouchableOpacity 
+                                    style={styles.filterIconWrapper}
+                                    onPress={() => onSearchChange('')}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                >
+                                    <Icon name="close-circle" size={20} color="#fff" style={styles.filterIcon} />
+                                </TouchableOpacity>
+                            ) : (
+                                <View style={styles.filterIconWrapper} />
+                            )}
                         </View>
                     </View>
                 </View>
@@ -202,9 +219,10 @@ const styles = StyleSheet.create({
     },
     input: {
         flex: 1,
-        color: 'transparent',
+        color: '#fff',
         fontSize: 14,
         backgroundColor: 'transparent',
+        paddingLeft: 10,
     },
     animatedPlaceholder: {
         fontSize: 14,

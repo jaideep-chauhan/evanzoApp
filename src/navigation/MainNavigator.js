@@ -14,6 +14,7 @@ import TabNavigator from './TabNavigator';
 import TaskDetail from '../screens/tasks/TaskDetail';
 import VendorChat from '../screens/vendors/vendorAddDetails';
 import { ChatList, ChatScreen } from '../screens/chat';
+import SavedVendors from '../screens/profile/SavedVendors';
 import theme from '../theme';
 
 // Settings Screens
@@ -176,6 +177,10 @@ const MainNavigator = () => {
 
                         {/* Vendor Add Detail Screen */}
                         <Stack.Screen name="VendorAddDetail" component={VendorChat} />
+                        <Stack.Screen name="VendorChat" component={VendorChat} />
+                        
+                        {/* Profile Screens */}
+                        <Stack.Screen name="SavedVendors" component={SavedVendors} />
 
                         {/* Settings Screens */}
                         <Stack.Screen name="Settings" component={Settings} />

@@ -20,6 +20,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
 import SearchHeader from '../vendors/SearchHeader';
 import eventService from '../../services/eventService';
+import filterService from '../../services/filterService';
 
 export default function Events() {
     const navigation = useNavigation();
@@ -36,44 +37,147 @@ export default function Events() {
     const [refreshing, setRefreshing] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [events, setEvents] = useState([]);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [currentFilters, setCurrentFilters] = useState({});
+    const [pagination, setPagination] = useState({ page: 1, limit: 10, totalPages: 1, totalResults: 0 });
+    const [isFetchingEvents, setIsFetchingEvents] = useState(false);
+    const [networkError, setNetworkError] = useState(false);
 
-    // Fetch events from API
-    const fetchEvents = async () => {
+    // Fetch events using new filtering service
+    const fetchEvents = async (filters = {}, resetResults = false) => {
+        if (isFetchingEvents) {
+            console.log('Already fetching events, skipping...');
+            return;
+        }
+
         try {
-            setIsLoading(true);
-            console.log('🚀 Fetching public event ads (excluding current user)...');
-            const response = await eventService.getPublicEventAds();
-            console.log('📦 Public events response:', {
-                success: response.success,
-                dataType: typeof response.data,
-                isArray: Array.isArray(response.data),
-                dataLength: response.data?.length,
-                data: response.data
-            });
+            setIsFetchingEvents(true);
+            setNetworkError(false);
             
-            if (response.success && response.data && Array.isArray(response.data) && response.data.length > 0) {
-                // Format events using the same method as profile
-                const formattedEvents = response.data.map(event => {
-                    const formatted = eventService.formatEventForDisplay(event);
-                    return formatted;
-                });
-                console.log('Formatted events:', formattedEvents);
-                setEvents(formattedEvents);
+            if (resetResults) {
+                setIsLoading(true);
+            }
+
+            // Combine current filters with new ones
+            const searchFilters = {
+                ...currentFilters,
+                ...filters,
+                page: resetResults ? 1 : (filters.page || currentFilters.page || 1),
+                limit: 10
+            };
+
+            // If no filters applied, get all events
+            let response;
+            // Check if only pagination params are present (no actual filters)
+            const hasFilters = Object.keys(searchFilters).some(key => 
+                key !== 'page' && key !== 'limit' && searchFilters[key]
+            );
+            
+            if (!hasFilters) {
+                console.log('📋 No filters applied, fetching all events');
+                response = await eventService.getPublicEventAds();
+                if (response.success && response.data) {
+                    const formattedEvents = response.data.map(event => 
+                        eventService.formatEventForDisplay(event)
+                    );
+                    response = {
+                        success: true,
+                        data: formattedEvents,
+                        pagination: { page: 1, limit: 10, totalPages: 1, totalResults: formattedEvents.length }
+                    };
+                }
             } else {
-                console.log('No event ads found or empty response');
-                setEvents([]);
+                // For now, get all events and filter client-side since search endpoint doesn't exist
+                const allEventsResponse = await eventService.getPublicEventAds();
+                if (allEventsResponse.success && allEventsResponse.data) {
+                    let filteredEvents = allEventsResponse.data;
+                    
+                    // Apply client-side filtering - search across multiple fields
+                    if (searchFilters.keyword) {
+                        const keyword = searchFilters.keyword.toLowerCase();
+                        filteredEvents = filteredEvents.filter(event =>
+                            event.title?.toLowerCase().includes(keyword) ||
+                            event.description?.toLowerCase().includes(keyword) ||
+                            event.location?.toLowerCase().includes(keyword) ||
+                            event.category?.toLowerCase().includes(keyword) ||
+                            event.event_type?.toLowerCase().includes(keyword)
+                        );
+                        console.log(`🔍 Event keyword search for "${searchFilters.keyword}" found ${filteredEvents.length} results`);
+                    }
+                    
+                    if (searchFilters.location) {
+                        filteredEvents = filteredEvents.filter(event =>
+                            event.location?.includes(searchFilters.location)
+                        );
+                    }
+                    
+                    if (searchFilters.category) {
+                        const categories = searchFilters.category.split(',');
+                        console.log('🔍 Filtering events by categories:', categories);
+                        console.log('🔍 Events before filter:', filteredEvents.map(e => ({
+                            title: e.title,
+                            category: e.category
+                        })));
+                        
+                        filteredEvents = filteredEvents.filter(event => {
+                            const eventCategory = event.category?.toLowerCase() || event.event_type?.toLowerCase();
+                            const matches = categories.some(cat => eventCategory === cat.toLowerCase());
+                            if (!matches) {
+                                console.log(`❌ Event "${event.title}" with category "${event.category}" doesn't match`);
+                            }
+                            return matches;
+                        });
+                        
+                        console.log('🔍 Events after filter:', filteredEvents.length);
+                    }
+                    
+                    response = {
+                        success: true,
+                        data: filteredEvents.map(event => eventService.formatEventForDisplay(event)),
+                        pagination: { page: 1, limit: 10, totalPages: 1, totalResults: filteredEvents.length }
+                    };
+                } else {
+                    response = allEventsResponse;
+                }
+            }
+            
+            if (response.success) {
+                if (resetResults) {
+                    setEvents(response.data || []);
+                } else {
+                    // For pagination, append results
+                    setEvents(prev => [...prev, ...(response.data || [])]);
+                }
+                setPagination(response.pagination || { page: 1, limit: 10, totalPages: 1, totalResults: 0 });
+                setCurrentFilters(searchFilters);
+            } else {
+                if (resetResults) {
+                    setEvents([]);
+                }
+                setNetworkError(true);
             }
         } catch (error) {
             console.error('Error fetching events:', error);
-            setEvents([]);
+            setNetworkError(true);
+            if (resetResults) {
+                setEvents([]);
+            }
         } finally {
             setIsLoading(false);
+            setIsFetchingEvents(false);
         }
     };
 
     // Fetch events on component mount
     useEffect(() => {
-        fetchEvents();
+        // Initial fetch with a small delay to prevent race conditions
+        const initialFetchTimeout = setTimeout(() => {
+            fetchEvents();
+        }, 100);
+        
+        return () => {
+            clearTimeout(initialFetchTimeout);
+        };
     }, []);
 
     const dummyEvents = [
@@ -189,32 +293,7 @@ export default function Events() {
         },
     ];
 
-    // Filter events based on selected location and category
-    const filteredEvents = useMemo(() => {
-        let filtered = events;
-
-        // Filter by location
-        if (selectedLocation && selectedLocation !== 'Current Location') {
-            filtered = filtered.filter(event => event.location === selectedLocation);
-        }
-
-        // Filter by category
-        if (selectedCategory) {
-            filtered = filtered.filter(event =>
-                event.category.toLowerCase().includes(selectedCategory.toLowerCase()) ||
-                selectedCategory.toLowerCase().includes(event.category.toLowerCase())
-            );
-        }
-
-        console.log('🔍 Filtering events:', {
-            totalEvents: events.length,
-            filteredCount: filtered.length,
-            selectedLocation,
-            selectedCategory
-        });
-        
-        return filtered;
-    }, [events, selectedLocation, selectedCategory]);
+    // Use events directly as filtering is now handled by the API
 
     const handleTabPress = (tabLabel, tabIndex) => {
         console.log('Selected tab:', tabLabel);
@@ -231,14 +310,47 @@ export default function Events() {
 
     const handleLocationSelect = (location) => {
         setSelectedLocation(location);
+        setShowLocationModal(false);
+        
+        // Apply location filter
+        const newFilters = { ...currentFilters, location };
+        if (!location) {
+            delete newFilters.location;
+        }
+        fetchEvents(newFilters, true);
     };
 
     const handleDateRangeSelect = (dateRange) => {
         setSelectedDateRange(dateRange);
+        setShowDateRangeModal(false);
+        
+        // Apply date range filter
+        const newFilters = { ...currentFilters };
+        if (dateRange && dateRange.startDate && dateRange.endDate) {
+            newFilters.dateFrom = dateRange.startDate.toISOString().split('T')[0];
+            newFilters.dateTo = dateRange.endDate.toISOString().split('T')[0];
+        } else {
+            delete newFilters.dateFrom;
+            delete newFilters.dateTo;
+        }
+        fetchEvents(newFilters, true);
     };
 
     const handleCategorySelect = (category) => {
+        console.log('📱 Event category selected:', category);
         setSelectedCategory(category);
+        setShowCategoryModal(false);
+        
+        // Apply category filter
+        const newFilters = { ...currentFilters };
+        if (category && category.length > 0) {
+            newFilters.category = Array.isArray(category) ? category.join(',') : category;
+        } else {
+            delete newFilters.category;
+        }
+        
+        console.log('🎯 Event filters to apply:', newFilters);
+        fetchEvents(newFilters, true);
     };
 
     const handleGiveQuote = (event) => {
@@ -253,13 +365,15 @@ export default function Events() {
         setRefreshing(true);
         
         try {
-            // Reset filters
+            // Reset filters and search
             setSelectedLocation(null);
             setSelectedCategory(null);
             setSelectedDateRange(null);
+            setSearchQuery('');
+            setCurrentFilters({});
             
-            // Fetch fresh data
-            await fetchEvents();
+            // Fetch fresh data with no filters
+            await fetchEvents({}, true);
             
             console.log('Events refreshed successfully');
         } catch (error) {
@@ -301,7 +415,19 @@ export default function Events() {
                     }
                 )}
             >
-                <SearchHeader />
+                <SearchHeader 
+                    searchValue={searchQuery}
+                    onSearchChange={(text) => {
+                        setSearchQuery(text);
+                        // Debounced search
+                        filterService.debouncedSearch(
+                            (filters) => fetchEvents(filters, true),
+                            { ...currentFilters, keyword: text },
+                            500,
+                            'event-header-search'
+                        );
+                    }}
+                />
                 <View style={{ marginBottom: 10 }}>
                     <Tabs
                         tabs={['Location', 'Date', 'Category']}
@@ -318,63 +444,84 @@ export default function Events() {
                     </View>
                 ) : (
                     <>
-                {/* Location Filter Indicator */}
-                {selectedLocation && (
-                    <View style={[styles.locationIndicator, { borderColor: theme.colors.primary + '33' }]}>
-                        <Text style={[styles.locationIndicatorText, { color: theme.colors.primary }]}>
-                            Showing events in: {selectedLocation}
+                {/* Filter status and event count */}
+                {(events.length > 0 || searchQuery || selectedLocation || selectedCategory || selectedDateRange) && (
+                    <View style={[styles.filterIndicator, { backgroundColor: '#f0f4ff', borderColor: theme.colors.primary + '33' }]}>
+                        <Text style={[styles.filterIndicatorText, { color: theme.colors.primary }]}>
+                            {events.length} event{events.length !== 1 ? 's' : ''} {(searchQuery || selectedLocation || selectedCategory || selectedDateRange) ? 'found' : 'available'}
                         </Text>
-                        <Text style={styles.eventCount}>
-                            ({filteredEvents.length} event{filteredEvents.length !== 1 ? 's' : ''} found)
-                        </Text>
-                    </View>
-                )}
-
-                {/* Date Range Filter Indicator */}
-                {selectedDateRange && (
-                    <View style={styles.dateIndicator}>
-                        <Text style={styles.dateIndicatorText}>
-                            Date Range: {selectedDateRange.startDate.toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric'
-                            })} - {selectedDateRange.endDate.toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric'
-                            })}
-                        </Text>
-                        <Text style={styles.eventCount}>
-                            Filter applied for availability
-                        </Text>
-                    </View>
-                )}
-
-                {/* Category Filter Indicator */}
-                {selectedCategory && (
-                    <View style={styles.categoryIndicator}>
-                        <Text style={styles.categoryIndicatorText}>
-                            Category: {selectedCategory}
-                        </Text>
-                        <Text style={styles.eventCount}>
-                            ({filteredEvents.length} event{filteredEvents.length !== 1 ? 's' : ''} found)
-                        </Text>
+                        {(selectedLocation || selectedCategory || selectedDateRange || searchQuery) && (
+                            <View style={styles.activeFilters}>
+                                {searchQuery && (
+                                    <View style={[styles.filterChip, { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary + '30' }]}>
+                                        <Text style={[styles.filterChipText, { color: theme.colors.primary }]}>Search: {searchQuery}</Text>
+                                    </View>
+                                )}
+                                {selectedLocation && (
+                                    <View style={[styles.filterChip, { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary + '30' }]}>
+                                        <Text style={[styles.filterChipText, { color: theme.colors.primary }]}>{selectedLocation}</Text>
+                                    </View>
+                                )}
+                                {selectedDateRange && (
+                                    <View style={[styles.filterChip, { backgroundColor: '#22c55e15', borderColor: '#22c55e30' }]}>
+                                        <Text style={[styles.filterChipText, { color: '#059669' }]}>
+                                            {selectedDateRange.startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {selectedDateRange.endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                        </Text>
+                                    </View>
+                                )}
+                                {selectedCategory && (
+                                    <View style={[styles.filterChip, { backgroundColor: '#e91e6315', borderColor: '#e91e6330' }]}>
+                                        <Text style={[styles.filterChipText, { color: '#e91e63' }]}>
+                                            {Array.isArray(selectedCategory) ? `${selectedCategory.length} categories` : selectedCategory}
+                                        </Text>
+                                    </View>
+                                )}
+                            </View>
+                        )}
                     </View>
                 )}
 
                 {/* No events message */}
-                {filteredEvents.length === 0 ? (
+                {events.length === 0 ? (
                     <View style={styles.noEventsContainer}>
                         <Text style={styles.noEventsText}>
-                            No events found in {selectedLocation}
+                            {networkError ? 'Unable to load events' : 
+                             ((searchQuery || selectedLocation || selectedCategory || selectedDateRange) ? 'No events match your filters' : 'No events found')}
                         </Text>
                         <Text style={styles.noEventsSubtext}>
-                            Try selecting a different location or clear the filter
+                            {networkError ? 'Check your internet connection' : 
+                             ((searchQuery || selectedLocation || selectedCategory || selectedDateRange) ? 'Try adjusting your filters or clear them to see all events' : 'Pull down to refresh')}
                         </Text>
+                        {networkError && (
+                            <TouchableOpacity 
+                                style={[styles.retryButton, { backgroundColor: theme.colors.primary, marginTop: 16 }]}
+                                onPress={() => fetchEvents({}, true)}
+                                disabled={isFetchingEvents}
+                            >
+                                <Text style={styles.retryButtonText}>
+                                    {isFetchingEvents ? 'Retrying...' : 'Retry'}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+                        {!networkError && (searchQuery || selectedLocation || selectedCategory || selectedDateRange) && (
+                            <TouchableOpacity 
+                                style={[styles.clearFiltersButton, { backgroundColor: theme.colors.primary, marginTop: 16 }]}
+                                onPress={() => {
+                                    setSelectedLocation(null);
+                                    setSelectedCategory(null);
+                                    setSelectedDateRange(null);
+                                    setSearchQuery('');
+                                    setCurrentFilters({});
+                                    fetchEvents({}, true);
+                                }}
+                            >
+                                <Text style={styles.clearFiltersButtonText}>Clear All Filters</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 ) : (
-                    filteredEvents.map((event, idx) => (
-                        <View key={idx}   >
+                    events.map((event, idx) => (
+                        <View key={idx}>
                             <EventCard
                                 key={event.id}
                                 event={event}
@@ -413,8 +560,27 @@ export default function Events() {
                             <Icon name="search-outline" size={20} color={theme.colors.primary} style={styles.stickySearchIcon} />
                             <TextInput
                                 style={styles.stickyInput}
-                                placeholder="Search events..."
+                                placeholder="Search by title, location, category..."
                                 placeholderTextColor={theme.colors.primary + '80'}
+                                value={searchQuery}
+                                onChangeText={(text) => {
+                                    setSearchQuery(text);
+                                    // Debounced search
+                                    filterService.debouncedSearch(
+                                        (filters) => fetchEvents(filters, true),
+                                        { ...currentFilters, keyword: text },
+                                        500,
+                                        'event-search'
+                                    );
+                                }}
+                                returnKeyType="search"
+                                onSubmitEditing={() => {
+                                    const filters = { ...currentFilters, keyword: searchQuery };
+                                    if (!searchQuery.trim()) {
+                                        delete filters.keyword;
+                                    }
+                                    fetchEvents(filters, true);
+                                }}
                             />
                         </View>
                         <TouchableOpacity
@@ -433,6 +599,7 @@ export default function Events() {
                 onClose={() => setShowLocationModal(false)}
                 onLocationSelect={handleLocationSelect}
                 currentLocation={selectedLocation}
+                screenType="events"
             />
 
             {/* Date Range Picker Modal */}
@@ -511,6 +678,60 @@ const styles = StyleSheet.create({
     eventCount: {
         fontSize: 12,
         color: '#666',
+    },
+    filterIndicator: {
+        marginTop: 12,
+        marginBottom: 4,
+        padding: 12,
+        borderRadius: 8,
+        borderWidth: 1,
+        marginHorizontal: 16,
+        shadowColor: '#2C3D5B',
+        shadowOpacity: 0.06,
+        shadowOffset: { width: 0, height: 2 },
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    filterIndicatorText: {
+        fontSize: 14,
+        fontWeight: '600',
+        marginBottom: 2,
+    },
+    activeFilters: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        marginTop: 8,
+        gap: 6,
+    },
+    filterChip: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        borderWidth: 1,
+    },
+    filterChipText: {
+        fontSize: 12,
+        fontWeight: '500',
+    },
+    retryButton: {
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 8,
+    },
+    retryButtonText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    clearFiltersButton: {
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        borderRadius: 8,
+    },
+    clearFiltersButtonText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
     },
     noEventsContainer: {
         alignItems: 'center',

@@ -7,9 +7,11 @@ import {
     TouchableOpacity,
     FlatList,
     SafeAreaView,
+    ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../../ThemeContext';
+import categoryService from '../../services/categoryService';
 
 export default function CategorySelectionModal({ visible, onClose, onCategorySelect, currentCategory, screenType = 'vendors' }) {
     const theme = useTheme();
@@ -21,55 +23,151 @@ export default function CategorySelectionModal({ visible, onClose, onCategorySel
             ? [currentCategory]
             : [];
     const [selectedCategories, setSelectedCategories] = useState(initialSelected);
+    const [categories, setCategories] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState(null);
 
+    // Fetch categories when modal becomes visible
     useEffect(() => {
-        // Reset selection when modal opens
         if (visible) {
-            setSelectedCategories(Array.isArray(currentCategory) ? currentCategory : currentCategory ? [currentCategory] : []);
+            fetchCategories();
+            // Initialize selectedCategories - ensure we use proper format
+            const initial = Array.isArray(currentCategory) ? currentCategory : currentCategory ? [currentCategory] : [];
+            setSelectedCategories(initial);
         }
-    }, [visible, currentCategory]);
+    }, [visible, currentCategory, screenType]);
 
-    const categories = [
-        'Photography',
-        'Videography',
-        'Event Decoration',
-        'DJ / Music',
-        'Catering',
-        'Makeup Artist',
-        'Event Planning',
-        'Florist',
-        'Wedding Dress',
-        'Venue Rental',
-        'Transportation',
-        'Security Services',
-        'Audio Visual',
-        'Lighting',
-        'Entertainment',
-        'Photo Booth',
-        'Live Band',
-        'MC / Host',
-        'Wedding Cakes',
-        'Bartending',
-        'Hair Styling',
-        'Jewelry Rental',
-        'Invitation Design',
-        'Gift & Favors'
-    ];
+    const fetchCategories = async () => {
+        setIsLoading(true);
+        setError(null);
+        
+        try {
+            let response;
+            if (screenType === 'vendors') {
+                response = await categoryService.getVendorCategories();
+            } else {
+                response = await categoryService.getEventCategories();
+            }
+            
+            if (response.success && response.data) {
+                console.log('📦 Raw category response:', {
+                    data: response.data,
+                    firstItem: response.data[0],
+                    screenType
+                });
+                
+                try {
+                    const formattedCategories = categoryService.formatCategoriesForUI(response.data, screenType);
+                    console.log('🎨 Formatted categories:', {
+                        count: formattedCategories.length,
+                        first: formattedCategories[0],
+                        sample: formattedCategories.slice(0, 3)
+                    });
+                    
+                    // Find and log Catering category specifically
+                    const cateringCategory = formattedCategories.find(cat => 
+                        cat.name && cat.name.toLowerCase().includes('catering')
+                    );
+                    console.log('🍽️ Catering category:', cateringCategory);
+                    
+                    if (formattedCategories && formattedCategories.length > 0) {
+                        setCategories(formattedCategories);
+                    } else {
+                        // Use fallback categories if formatting returns empty
+                        console.log('No categories after formatting, using fallback');
+                        const fallbackData = screenType === 'vendors' ? 
+                            categoryService.getFallbackVendorCategories().data : 
+                            categoryService.getFallbackEventCategories().data;
+                        const formattedFallback = categoryService.formatCategoriesForUI(fallbackData, screenType);
+                        setCategories(formattedFallback);
+                    }
+                } catch (formatError) {
+                    console.error('Error formatting categories:', formatError);
+                    // Use fallback categories on formatting error
+                    const fallbackData = screenType === 'vendors' ? 
+                        categoryService.getFallbackVendorCategories().data : 
+                        categoryService.getFallbackEventCategories().data;
+                    const formattedFallback = categoryService.formatCategoriesForUI(fallbackData, screenType);
+                    setCategories(formattedFallback);
+                }
+            } else {
+                setError('Failed to load categories');
+                setCategories([]);
+            }
+        } catch (err) {
+            console.error('Error fetching categories:', err);
+            setError('Failed to load categories');
+            setCategories([]);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const handleCategoryToggle = (category) => {
-        setSelectedCategories((prev) =>
-            prev.includes(category)
-                ? prev.filter((c) => c !== category)
-                : [...prev, category]
-        );
+        // For vendors, use category ID, for events use name
+        const categoryValue = screenType === 'vendors' ? 
+            (category.value || category.id || category.category_id || category.name || category) :
+            (category.name || category);
+        
+        console.log('🔄 Category toggled:', {
+            category,
+            extractedValue: categoryValue,
+            screenType,
+            categoryId: category.id,
+            categoryValue: category.value,
+            categoryName: category.name
+        });
+            
+        setSelectedCategories((prev) => {
+            const newCategories = prev.includes(categoryValue)
+                ? prev.filter((c) => c !== categoryValue)
+                : [...prev, categoryValue];
+            
+            console.log('📋 Selected categories updated:', {
+                previous: prev,
+                new: newCategories
+            });
+            
+            return newCategories;
+        });
     };
 
     const handleRemoveCategory = (category) => {
-        setSelectedCategories((prev) => prev.filter((c) => c !== category));
+        // For vendors, use category ID, for events use name
+        const categoryValue = screenType === 'vendors' ? 
+            (category.value || category.id || category.category_id || category.name || category) :
+            (category.name || category);
+        setSelectedCategories((prev) => prev.filter((c) => c !== categoryValue));
     };
 
     const handleSave = () => {
-        onCategorySelect(selectedCategories.length > 0 ? selectedCategories : null);
+        // Pass both selected IDs and the full category data for display
+        const selectedCategoryData = categories.filter(cat => {
+            const catValue = screenType === 'vendors' ? 
+                (cat.value || cat.id || cat.category_id) :
+                cat.name;
+            return selectedCategories.includes(catValue);
+        });
+        
+        console.log('🎯 Category Save Debug:', {
+            screenType,
+            selectedCategories,
+            selectedCategoryData,
+            categoriesAvailable: categories.length,
+            firstCategory: categories[0]
+        });
+        
+        if (screenType === 'vendors') {
+            // For vendors, pass IDs and category data separately
+            console.log('📤 Passing to vendor screen:', {
+                ids: selectedCategories,
+                data: selectedCategoryData
+            });
+            onCategorySelect(selectedCategories.length > 0 ? selectedCategories : null, selectedCategoryData);
+        } else {
+            // For events, just pass the selected categories
+            onCategorySelect(selectedCategories.length > 0 ? selectedCategories : null);
+        }
         onClose();
     };
 
@@ -82,7 +180,11 @@ export default function CategorySelectionModal({ visible, onClose, onCategorySel
     };
 
     const renderCategoryItem = ({ item }) => {
-        const isSelected = selectedCategories.includes(item);
+        const categoryName = item.name || item;
+        const categoryValue = screenType === 'vendors' ? 
+            (item.value || item.id || item.category_id || item.name || item) :
+            (item.name || item);
+        const isSelected = selectedCategories.includes(categoryValue);
         return (
             <TouchableOpacity
                 style={[
@@ -97,7 +199,7 @@ export default function CategorySelectionModal({ visible, onClose, onCategorySel
                         styles.categoryText,
                         { color: isSelected ? '#fff' : theme.colors.primary }
                     ]}>
-                        {item}
+                        {categoryName}
                     </Text>
                     {isSelected && (
                         <TouchableOpacity
@@ -128,21 +230,56 @@ export default function CategorySelectionModal({ visible, onClose, onCategorySel
                     </TouchableOpacity>
                 </View>
 
-                {selectedCategories.length > 0 && (
+                {selectedCategories.length > 0 && !isLoading && (
                     <TouchableOpacity style={[styles.clearFilter, { borderColor: theme.colors.primary + '33', backgroundColor: theme.colors.primary + '10' }]} onPress={clearCategory}>
                         <Text style={[styles.clearFilterText, { color: theme.colors.primary }]}>Clear Category Filter</Text>
                     </TouchableOpacity>
                 )}
 
-                <FlatList
-                    data={categories}
-                    renderItem={renderCategoryItem}
-                    numColumns={3}
-                    keyExtractor={(item, index) => index.toString()}
-                    contentContainerStyle={styles.categoriesContainer}
-                    showsVerticalScrollIndicator={false}
-                    columnWrapperStyle={styles.row}
-                />
+                {/* Loading State */}
+                {isLoading && (
+                    <View style={styles.loadingContainer}>
+                        <ActivityIndicator size="large" color={theme.colors.primary} />
+                        <Text style={[styles.loadingText, { color: theme.colors.primary }]}>
+                            Loading {screenType === 'vendors' ? 'vendor' : 'event'} categories...
+                        </Text>
+                    </View>
+                )}
+
+                {/* Error State */}
+                {error && !isLoading && (
+                    <View style={styles.errorContainer}>
+                        <Icon name="alert-circle-outline" size={32} color="#e74c3c" />
+                        <Text style={styles.errorText}>{error}</Text>
+                        <TouchableOpacity 
+                            style={[styles.retryButton, { backgroundColor: theme.colors.primary }]}
+                            onPress={fetchCategories}
+                        >
+                            <Text style={styles.retryButtonText}>Retry</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+
+                {/* Categories List */}
+                {!isLoading && !error && categories.length > 0 && (
+                    <FlatList
+                        data={categories}
+                        renderItem={renderCategoryItem}
+                        numColumns={3}
+                        keyExtractor={(item, index) => item.id?.toString() || index.toString()}
+                        contentContainerStyle={styles.categoriesContainer}
+                        showsVerticalScrollIndicator={false}
+                        columnWrapperStyle={styles.row}
+                    />
+                )}
+
+                {/* No Categories State */}
+                {!isLoading && !error && categories.length === 0 && (
+                    <View style={styles.emptyContainer}>
+                        <Icon name="list-outline" size={32} color="#999" />
+                        <Text style={styles.emptyText}>No categories available</Text>
+                    </View>
+                )}
 
                 {/* Bottom Buttons */}
                 <View style={styles.bottomButtonsContainer}>
@@ -283,6 +420,53 @@ const styles = StyleSheet.create({
     },
     cancelButtonText: {
         color: '#222',
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 60,
+    },
+    loadingText: {
+        marginTop: 16,
+        fontSize: 16,
+        fontWeight: '500',
+    },
+    errorContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 60,
+        paddingHorizontal: 20,
+    },
+    errorText: {
+        fontSize: 16,
+        color: '#e74c3c',
+        textAlign: 'center',
+        marginTop: 12,
+        marginBottom: 20,
+    },
+    retryButton: {
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 8,
+    },
+    retryButtonText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    emptyContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 60,
+    },
+    emptyText: {
+        fontSize: 16,
+        color: '#999',
+        textAlign: 'center',
+        marginTop: 12,
     },
 });
 

@@ -32,6 +32,25 @@ target 'EVNZO' do
       # :ccache_enabled => true
     )
     
+    # Fix build issues with iOS 17 SDK and warnings
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        # Suppress all warnings for Pods
+        config.build_settings['GCC_WARN_INHIBIT_ALL_WARNINGS'] = 'YES'
+        config.build_settings['SWIFT_SUPPRESS_WARNINGS'] = 'YES'
+        config.build_settings['WARNING_CFLAGS'] = '-w'
+        config.build_settings['CLANG_WARN_DOCUMENTATION_COMMENTS'] = 'NO'
+        
+        # Fix for New Architecture and compilation errors
+        config.build_settings['OTHER_CFLAGS'] = '$(inherited) -w'
+        config.build_settings['OTHER_CPLUSPLUSFLAGS'] = '$(inherited) -w'
+        config.build_settings['OTHER_SWIFT_FLAGS'] = '$(inherited) -suppress-warnings'
+        
+        # Ensure C++ standard is set
+        config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++20'
+      end
+    end
+    
     # Fix RCTThirdPartyComponentsProvider nil value crash
     # This runs after pod install to fix the generated file
     installer.pods_project.targets.each do |target|

@@ -35,9 +35,10 @@ function renderReviews(reviews, styles) {
         return <Text style={{ color: '#888', fontSize: 13 }}>No reviews yet.</Text>;
     }
 }
-import img from '../../../assets/images/evanzoLogo.png'; // Adjust the path as needed
+import defaultImg from '../../../assets/images/dummy.png'; // Default fallback image
 import OfferGrid from './OfferCard';
 import ProfileCardCarousel from './ProfileCardCarousel';
+import { getImageSource } from '../../../utils/imageUtils';
 
 
 export default function VendorDetailsSection({
@@ -50,6 +51,9 @@ export default function VendorDetailsSection({
     vendorId,
 }) {
     console.log('VendorDetailsSection - Received offers:', offers);
+    console.log('VendorDetailsSection - Received photos:', photos);
+    console.log('VendorDetailsSection - Photos length:', photos?.length);
+    
     const [descExpanded, setDescExpanded] = useState(false);
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -59,25 +63,54 @@ export default function VendorDetailsSection({
                     <View style={styles.rowBetween}>
                         <Text style={styles.sectionTitle}>About</Text>
                     </View>
+                    
                     <ScrollView
                         horizontal
                         pagingEnabled
                         showsHorizontalScrollIndicator={false}
                         style={styles.carousel}
-                        contentContainerStyle={{ alignItems: 'center' }}
+                        contentContainerStyle={{ alignItems: 'center', minWidth: 400 }}
+                        nestedScrollEnabled={true}
                     >
-                        {photos.map((photo, idx) => {
-                            // Convert photo to proper format for React Native Image
-                            let imageSource = photo;
-                            if (typeof photo === 'string') {
-                                imageSource = { uri: photo };
-                            }
-                            return (
+                        {photos && photos.length > 0 ? 
+                            photos.map((photo, idx) => {
+                                console.log(`Rendering photo ${idx}:`, photo);
+                                const imageSource = getImageSource(photo, defaultImg);
+                                console.log(`Image source for photo ${idx}:`, imageSource);
+                                
+                                return (
+                                    <View key={idx} style={styles.photoWrapper}>
+                                        <Image 
+                                            source={imageSource}
+                                            style={styles.photo}
+                                            onError={(error) => {
+                                                console.log('Error loading image:', photo, error.nativeEvent?.error);
+                                            }}
+                                            onLoad={() => {
+                                                console.log('Successfully loaded image:', photo);
+                                            }}
+                                            resizeMode="cover"
+                                        />
+                                    </View>
+                                );
+                            })
+                        : 
+                            // Always show at least one image
+                            [0, 1, 2].map((idx) => (
                                 <View key={idx} style={styles.photoWrapper}>
-                                    <Image source={imageSource} style={styles.photo} />
+                                    <Image 
+                                        source={defaultImg} 
+                                        style={styles.photo}
+                                        resizeMode="cover"
+                                    />
+                                    {idx === 1 && (
+                                        <View style={styles.noImageOverlay}>
+                                            <Text style={styles.noImageText}>Sample Images</Text>
+                                        </View>
+                                    )}
                                 </View>
-                            );
-                        })}
+                            ))
+                        }
                     </ScrollView>
                     {/* Description below images */}
                     <View style={styles.descContainer}>
@@ -161,6 +194,7 @@ const styles = StyleSheet.create({
     },
     carousel: {
         marginTop: 12,
+        height: 230, // Ensure the carousel has a fixed height
     },
     photoWrapper: {
         borderRadius: 12,
@@ -178,6 +212,7 @@ const styles = StyleSheet.create({
         height: 230,
         borderRadius: 12,
         opacity: 1,
+        backgroundColor: '#f0f0f0', // Add background color for loading state
     },
     descContainer: {
         marginTop: 14,
@@ -279,5 +314,22 @@ const styles = StyleSheet.create({
     eyeText: {
         fontSize: 12,
         color: '#aaa',
+    },
+    noImageOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.3)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: 12,
+    },
+    noImageText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
+        textAlign: 'center',
     },
 });

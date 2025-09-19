@@ -10,6 +10,7 @@ import {
     Alert,
     ActivityIndicator,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import bg1 from '../../../assets/images/smallHeader.jpg';
 import vendorDetailsService from '../../../services/vendorDetailsService';
 
@@ -27,15 +28,14 @@ const ActionIcons = ({ vendor, navigation }) => {
     const [isSaved, setIsSaved] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [isCheckingStatus, setIsCheckingStatus] = useState(true); // Separate loading state for initial check
-    const [rating, setRating] = useState(vendor?.rating || 0);
+    const [rating, setRating] = useState(Number(vendor?.rating) || 0);
     const [reviewCount, setReviewCount] = useState(vendor?.reviews_count || 0);
 
     useEffect(() => {
-        // Reset state when vendor changes
-        setIsSaved(false);
+        // Don't reset saved state immediately, let checkSavedStatus determine it
         setIsLoading(false);
         
-        // Check if vendor is saved
+        // Check if vendor is saved from backend/storage
         checkSavedStatus();
         // Fetch reviews
         fetchReviews();
@@ -46,24 +46,26 @@ const ActionIcons = ({ vendor, navigation }) => {
                         vendor?.vendor_ad_id || 
                         vendor?.id ||
                         vendor?._id;
-                        
-        console.log('checkSavedStatus - vendorId:', vendorId);
         
         if (vendorId) {
             try {
                 setIsCheckingStatus(true);
-                const saved = await vendorDetailsService.isVendorSaved(vendorId);
-                console.log('checkSavedStatus - vendor', vendorId, 'saved status:', saved);
-                setIsSaved(saved);
+                
+                const authToken = await AsyncStorage.getItem('authToken');
+                if (!authToken) {
+                    setIsSaved(false);
+                    return;
+                }
+                
+                const savedStatus = await vendorDetailsService.isVendorSaved(vendorId);
+                setIsSaved(savedStatus);
+                
             } catch (error) {
-                console.error('Error checking saved status:', error);
                 setIsSaved(false);
             } finally {
                 setIsCheckingStatus(false);
             }
         } else {
-            // If no vendor ID, default to not saved
-            console.log('checkSavedStatus - no vendorId, defaulting to not saved');
             setIsSaved(false);
             setIsCheckingStatus(false);
         }
@@ -79,7 +81,7 @@ const ActionIcons = ({ vendor, navigation }) => {
             const response = await vendorDetailsService.getVendorReviews(vendorId);
             if (response.success && response.data) {
                 setReviewCount(response.data.totalReviews || 0);
-                setRating(response.data.averageRating || vendor?.rating || 0);
+                setRating(Number(response.data.averageRating || vendor?.rating) || 0);
             }
         }
     };
@@ -87,54 +89,49 @@ const ActionIcons = ({ vendor, navigation }) => {
     const handleSave = async () => {
         if (isLoading) return;
         
-        // Optimistically update UI immediately for better UX
-        const newSavedState = !isSaved;
-        setIsSaved(newSavedState);
-        setIsLoading(true);
-        
-        // Try to get vendor ID from different possible sources
+        // Get vendor ID
         const vendorId = vendor?._original?.vendor_ad_id || 
                         vendor?.vendor_ad_id || 
                         vendor?.id ||
                         vendor?._id;
         
-        console.log('Full vendor object:', JSON.stringify(vendor, null, 2));
-        console.log('Vendor._original:', vendor?._original);
-        console.log('Attempting to save vendor with ID:', vendorId);
-        
         if (!vendorId) {
-            console.warn('Vendor ID not found - using mock save for demo');
-            // For demo purposes, just keep the UI state change
-            // In production, this should show an error
-            setTimeout(() => {
-                setIsLoading(false);
-            }, 500);
+            Alert.alert('Error', 'Cannot save vendor: ID not found');
             return;
         }
         
+        // Optimistically update UI immediately for better UX
+        const newSavedState = !isSaved;
+        setIsSaved(newSavedState);
+        setIsLoading(true);
+        
+        // Prepare vendor data to save
+        const vendorData = {
+            name: vendor?.name || vendor?.company_name || vendor?.title,
+            type: vendor?.type || vendor?.category,
+            location: vendor?.location,
+            rating: Number(rating || vendor?.rating) || 0,
+            reviewCount: reviewCount || 0,
+            image: vendor?.images?.[0] || vendor?.image || vendor?.logo,
+            description: vendor?.description,
+            price: vendor?.price,
+            offers: vendor?.offers,
+            vendor_ad_id: vendorId
+        };
+        
         try {
-            const response = await vendorDetailsService.toggleSaveVendor(vendorId);
+            const response = await vendorDetailsService.toggleSaveVendor(vendorId, vendorData);
             
             if (response.success) {
-                console.log('Save successful, saved state from backend:', response.saved);
-                
-                // If backend returns a definitive saved state, use it
-                if (response.saved !== undefined && response.saved !== null) {
-                    setIsSaved(response.saved);
-                } else {
-                    // If backend doesn't return saved state, keep our optimistic update
-                    console.log('Backend did not return saved state, keeping local state:', newSavedState);
-                    // The state is already set optimistically, so we don't need to do anything
-                }
+                const finalSavedState = response.saved !== undefined ? response.saved : newSavedState;
+                setIsSaved(finalSavedState);
             } else {
-                console.error('Save vendor error:', response.message);
-                // Revert optimistic update on error
                 setIsSaved(!newSavedState);
+                Alert.alert('Error', response.message || 'Failed to save vendor');
             }
         } catch (error) {
-            console.error('Save vendor exception:', error);
-            // Revert optimistic update on error
             setIsSaved(!newSavedState);
+            Alert.alert('Error', 'Failed to save vendor. Please try again.');
         }
         
         setIsLoading(false);
@@ -181,7 +178,7 @@ const ActionIcons = ({ vendor, navigation }) => {
             <TouchableOpacity style={actionIconStyles.item} onPress={handleRatingPress}>
                 <View style={actionIconStyles.iconCircle}>
                     <FontAwesome name="star" size={12} color="#2c2c3d" />
-                    <Text style={actionIconStyles.iconText}>{rating.toFixed(1)}</Text>
+                    <Text style={actionIconStyles.iconText}>{Number(rating || 0).toFixed(1)}</Text>
                 </View>
                 <Text style={actionIconStyles.label}>Rating</Text>
             </TouchableOpacity>

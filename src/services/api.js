@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 import { logout } from './navigationService';
 
 const BASE_URL = Platform.select({
-    ios: 'http://localhost:3000/api',
+    ios: 'http://10.98.233.131:3000/api', // Your machine's IP for iOS Simulator
     android: 'http://10.0.2.2:3000/api',
 });
 

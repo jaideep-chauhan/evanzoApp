@@ -46,22 +46,48 @@ export default function VendorChat({ navigation }) {
     
     
     // Format images to ensure they're in the correct format
-    const formattedImages = vendor?.images?.map(image => {
-        // If it's already an object with uri, use it as is
-        if (typeof image === 'object' && image.uri) {
-            return image.uri;
+    const formattedImages = (() => {
+        console.log('Formatting images for vendor:', vendor?.name);
+        console.log('Raw vendor images:', vendor?.images);
+        
+        if (vendor?.images && Array.isArray(vendor.images) && vendor.images.length > 0) {
+            const formatted = vendor.images.map((image, index) => {
+                console.log(`Processing image ${index}:`, image);
+                
+                // If it's already an object with uri, use the uri
+                if (typeof image === 'object' && image.uri) {
+                    console.log(`Image ${index} is object with uri:`, image.uri);
+                    return image.uri;
+                }
+                // If it's a string URL, return it as is
+                if (typeof image === 'string') {
+                    if (image.startsWith('http') || image.startsWith('https')) {
+                        console.log(`Image ${index} is HTTP URL:`, image);
+                        return image;
+                    } else if (image.startsWith('file://') || image.startsWith('/')) {
+                        console.log(`Image ${index} is file path:`, image);
+                        return image;
+                    } else {
+                        console.log(`Image ${index} is invalid string, using fallback:`, image);
+                        return img;
+                    }
+                }
+                // If it's a local image (number from require), return it as is
+                if (typeof image === 'number') {
+                    console.log(`Image ${index} is require() number:`, image);
+                    return image;
+                }
+                // Default fallback
+                console.log(`Image ${index} unknown format, using fallback:`, image);
+                return img;
+            });
+            console.log('Formatted images:', formatted);
+            return formatted;
+        } else {
+            console.log('No images provided, using fallback images');
+            return [img, img, img, img, img];
         }
-        // If it's a string URL, return it as is
-        if (typeof image === 'string' && image.startsWith('http')) {
-            return image;
-        }
-        // If it's a local image (number from require), return it as is
-        if (typeof image === 'number') {
-            return image;
-        }
-        // Default fallback
-        return img;
-    }) || [img, img, img, img, img];
+    })();
 
     const handleSendQuote = async () => {
         if (!quoteText.trim()) {

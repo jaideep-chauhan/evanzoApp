@@ -3,12 +3,10 @@ import {
     View,
     Text,
     StyleSheet,
-    SafeAreaView,
     ScrollView,
     TouchableOpacity,
     Image,
     TextInput,
-    Dimensions,
     ImageBackground,
     Alert,
     ActivityIndicator,
@@ -17,21 +15,17 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import img from '../../assets/images/dummy.png';
 import bg1 from '../../assets/images/smallHeader.jpg';
-import { useTheme } from '../../ThemeContext';
 import Icon2 from 'react-native-vector-icons/Feather'
 import Icon3 from 'react-native-vector-icons/Entypo'
 import { API_BASE_URL } from '../../services/api';
 import eventDetailsService from '../../services/eventDetailsService';
-const { width } = Dimensions.get('window');
 const AVATAR_SIZE = 60;
 
 export default function EventDetailView() {
     const navigation = useNavigation();
     const route = useRoute();
-    const theme = useTheme();
 
     const [quoteText, setQuoteText] = useState('');
-    const [isFavorited, setIsFavorited] = useState(false);
     const [isSaved, setIsSaved] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [isCheckingStatus, setIsCheckingStatus] = useState(true);
@@ -186,41 +180,47 @@ export default function EventDetailView() {
         }
     };
 
-    const toggleFavorite = () => {
-        setIsFavorited(!isFavorited);
-    };
 
-    // Handle save/unsave event - simple local storage approach
+    // Handle save/unsave event - using real API
     const handleSave = async () => {
         if (isLoading) return;
         
-        // Simple toggle for event saving (different from vendor approach)
-        const newSavedState = !isSaved;
-        setIsSaved(newSavedState);
         setIsLoading(true);
-        
         const eventId = eventData.id || eventData.event_ad_id;
         
-        console.log('Toggling save for event:', {
-            eventId,
-            title: eventData.title,
-            saved: newSavedState
-        });
-        
-        // Simulate API call with timeout (simpler than vendor implementation)
-        setTimeout(() => {
-            setIsLoading(false);
+        try {
+            console.log('Toggling save for event:', {
+                eventId,
+                title: eventData.title,
+                currentState: isSaved
+            });
             
-            // Show simple feedback
-            const message = newSavedState 
-                ? `"${eventData.title}" saved to your bookmarks!`
-                : `"${eventData.title}" removed from bookmarks.`;
+            // Use the real API service
+            const response = await eventDetailsService.toggleSaveEvent(eventId);
+            
+            if (response.success) {
+                const newSavedState = response.saved;
+                setIsSaved(newSavedState);
                 
-            Alert.alert(
-                newSavedState ? '🔖 Event Saved' : '📄 Event Removed',
-                message
-            );
-        }, 500);
+                // Show Instagram-like feedback
+                const message = newSavedState 
+                    ? `Added to saved events`
+                    : `Removed from saved events`;
+                    
+                Alert.alert(
+                    newSavedState ? '❤️ Saved' : '💔 Removed',
+                    message
+                );
+            } else {
+                console.error('Failed to toggle save event:', response.message);
+                Alert.alert('Error', response.message || 'Failed to save event');
+            }
+        } catch (error) {
+            console.error('Error toggling save event:', error);
+            Alert.alert('Error', 'Failed to save event. Please try again.');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     // Handle share event - simpler approach than vendor ads
@@ -277,10 +277,29 @@ export default function EventDetailView() {
         }
     };
 
-    // Initialize saved state as false (different approach from vendor ads)
+    // Check if event is already saved when component loads
     useEffect(() => {
-        setIsSaved(false);
-        setIsCheckingStatus(false);
+        const checkSavedStatus = async () => {
+            const eventId = eventData.id || eventData.event_ad_id;
+            if (!eventId) {
+                setIsCheckingStatus(false);
+                return;
+            }
+            
+            try {
+                console.log('Checking if event is saved:', eventId);
+                const isSaved = await eventDetailsService.isEventSaved(eventId);
+                setIsSaved(isSaved);
+            } catch (error) {
+                console.error('Error checking saved status:', error);
+                setIsSaved(false);
+            } finally {
+                setIsCheckingStatus(false);
+            }
+        };
+        
+        setIsCheckingStatus(true);
+        checkSavedStatus();
     }, [eventData.id, eventData.event_ad_id]);
 
     // Reset text measurement when event changes and check description length
@@ -361,24 +380,17 @@ export default function EventDetailView() {
                             <TouchableOpacity 
                                 style={styles.actionBtn} 
                                 onPress={handleSave}
-                                disabled={isLoading}
+                                disabled={isLoading || isCheckingStatus}
                             >
-                                {isLoading ? (
-                                    <ActivityIndicator size="small" color="#334462" />
+                                {(isLoading || isCheckingStatus) ? (
+                                    <ActivityIndicator size="small" color="#e91e63" />
                                 ) : (
                                     <Icon
-                                        name={isSaved ? "bookmark" : "bookmark-outline"}
+                                        name={isSaved ? "heart" : "heart-outline"}
                                         size={20}
-                                        color={isSaved ? theme.colors.primary : "#334462"}
+                                        color={isSaved ? "#e91e63" : "#334462"}
                                     />
                                 )}
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.actionBtn} onPress={toggleFavorite}>
-                                <Icon
-                                    name={isFavorited ? "heart" : "heart-outline"}
-                                    size={20}
-                                    color={isFavorited ? "#e91e63" : "#334462"}
-                                />
                             </TouchableOpacity>
                         </View>
                     </View>
