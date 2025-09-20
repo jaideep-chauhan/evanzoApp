@@ -3,10 +3,10 @@ import {
     StyleSheet,
     ScrollView,
     View,
+    Animated,
     Text,
     TextInput,
     TouchableOpacity,
-    Animated,
     RefreshControl,
     ActivityIndicator,
 } from 'react-native';

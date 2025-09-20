@@ -19,6 +19,7 @@ import Icon2 from 'react-native-vector-icons/Feather'
 import Icon3 from 'react-native-vector-icons/Entypo'
 import { API_BASE_URL } from '../../services/api';
 import eventDetailsService from '../../services/eventDetailsService';
+import EventCardCarousel from './EventCardCarousel';
 const AVATAR_SIZE = 60;
 
 export default function EventDetailView() {
@@ -34,23 +35,19 @@ export default function EventDetailView() {
     const descTextRef = useRef(null);
     const [textMeasured, setTextMeasured] = useState(false);
     const scrollViewRef = useRef(null);
-    const currentIndex = useRef(1);
-    const intervalRef = useRef(null);
-    const [suggestionCards] = useState([1, 2, 3, 4]);
-    const cardWidth = 336; // 320 width + 16 gap
 
     // Get event data from navigation params
     const eventFromParams = route.params?.event || {};
-    
+
     console.log('🎯 EventDetailView - eventFromParams:', JSON.stringify(eventFromParams, null, 2));
-    
+
     // Parse additional fields from event data
     const parseDuration = (duration) => {
         if (!duration) return '2';
         const match = duration.match(/(\d+)/);
         return match ? match[1] : '2';
     };
-    
+
     const parseDate = (date) => {
         if (!date) return 'Date TBD';
         // If it's already formatted, return as is
@@ -58,7 +55,7 @@ export default function EventDetailView() {
         // Parse ISO date or date string
         try {
             const dateObj = new Date(date);
-            return dateObj.toLocaleDateString('en-US', { 
+            return dateObj.toLocaleDateString('en-US', {
                 day: 'numeric',
                 month: 'long',
                 year: 'numeric'
@@ -83,13 +80,13 @@ export default function EventDetailView() {
         // Try to get organizer info from various possible fields
         if (event.organizer) return event.organizer;
         if (event.profile) return event.profile;
-        
+
         // Create organizer from user data if available
-        const organizerName = event.organizer_name || 
-                             event.user_name || 
-                             event.created_by_name || 
-                             `User ${event.user_id || 'Unknown'}`;
-        
+        const organizerName = event.organizer_name ||
+            event.user_name ||
+            event.created_by_name ||
+            `User ${event.user_id || 'Unknown'}`;
+
         return {
             name: organizerName,
             avatar: event.organizer_avatar || img,
@@ -110,19 +107,35 @@ export default function EventDetailView() {
         budget: parseBudget(eventFromParams.budget),
         guests: eventFromParams.guests || eventFromParams.guests_count || '50',
         description: eventFromParams.description || 'Event description not available.',
-        
+
         // Event categories
         service_needed: eventFromParams.service_needed,
         event_type: eventFromParams.event_type,
-        event_tags: eventFromParams.event_tags || [],
-        
+        event_tags: (() => {
+            // Handle different formats of event_tags
+            const tags = eventFromParams.event_tags;
+            if (!tags) return [];
+            if (Array.isArray(tags)) return tags;
+            if (typeof tags === 'string') {
+                // Try to parse if it's JSON string
+                try {
+                    const parsed = JSON.parse(tags);
+                    return Array.isArray(parsed) ? parsed : [];
+                } catch {
+                    // If not JSON, split by comma or return as single item
+                    return tags.includes(',') ? tags.split(',').map(t => t.trim()) : [tags];
+                }
+            }
+            return [];
+        })(),
+
         // Requirements and additional info
         requirements: eventFromParams.requirements || [],
         is_urgent: eventFromParams.is_urgent || false,
         visibility: eventFromParams.visibility || 'public',
-        
+
         // Images - handle both attachments and images fields
-        images: (eventFromParams.attachments || eventFromParams.images || []).length > 0 
+        images: (eventFromParams.attachments || eventFromParams.images || []).length > 0
             ? (eventFromParams.attachments || eventFromParams.images).map(att => {
                 // Handle different attachment formats
                 if (typeof att === 'string') {
@@ -135,21 +148,21 @@ export default function EventDetailView() {
                 return img;
             })
             : [img, bg1, img], // Fallback images
-            
+
         // Organizer info
         organizer: getOrganizerData(eventFromParams),
-        
+
         // Status and metadata
         status: eventFromParams.status || 'active',
-        statusColor: eventFromParams.status === 'completed' ? '#28a745' : 
-                    eventFromParams.status === 'cancelled' ? '#dc3545' : '#2ECC71',
+        statusColor: eventFromParams.status === 'completed' ? '#28a745' :
+            eventFromParams.status === 'cancelled' ? '#dc3545' : '#2ECC71',
         views_count: eventFromParams.views_count || 0,
         responses_count: eventFromParams.responses_count || 0,
         boosted: eventFromParams.boosted || false,
         created_at: eventFromParams.created_at,
         updated_at: eventFromParams.updated_at
     };
-    
+
     console.log('🎯 EventDetailView - processed eventData:', JSON.stringify(eventData, null, 2));
 
     const handleSendQuote = async () => {
@@ -167,10 +180,10 @@ export default function EventDetailView() {
 
             // Here you would call your event response/quote service
             // const response = await eventService.sendQuoteResponse(eventData.id, quoteText);
-            
+
             // For now, just show success message
             Alert.alert(
-                'Quote Sent!', 
+                'Quote Sent!',
                 `Your quote has been sent to ${eventData.organizer.name}. They will be able to see your response and contact you if interested.`,
                 [{ text: 'OK', onPress: () => setQuoteText('') }]
             );
@@ -184,29 +197,29 @@ export default function EventDetailView() {
     // Handle save/unsave event - using real API
     const handleSave = async () => {
         if (isLoading) return;
-        
+
         setIsLoading(true);
         const eventId = eventData.id || eventData.event_ad_id;
-        
+
         try {
             console.log('Toggling save for event:', {
                 eventId,
                 title: eventData.title,
                 currentState: isSaved
             });
-            
+
             // Use the real API service
             const response = await eventDetailsService.toggleSaveEvent(eventId);
-            
+
             if (response.success) {
                 const newSavedState = response.saved;
                 setIsSaved(newSavedState);
-                
+
                 // Show Instagram-like feedback
-                const message = newSavedState 
+                const message = newSavedState
                     ? `Added to saved events`
                     : `Removed from saved events`;
-                    
+
                 Alert.alert(
                     newSavedState ? '❤️ Saved' : '💔 Removed',
                     message
@@ -252,30 +265,6 @@ export default function EventDetailView() {
     };
 
     // Handle scroll end to create infinite loop effect
-    const handleScrollEnd = (e) => {
-        const offsetX = e.nativeEvent.contentOffset.x;
-        const slideWidth = cardWidth;
-        let idx = Math.round(offsetX / slideWidth);
-
-        // Create array with duplicated cards for infinite scroll
-        const extendedCards = suggestionCards.length + 2; // +1 at start, +1 at end
-
-        if (idx === extendedCards - 1) {
-            // At the end duplicate, jump to first real card
-            currentIndex.current = 1;
-            if (scrollViewRef.current) {
-                scrollViewRef.current.scrollTo({ x: slideWidth, animated: false });
-            }
-        } else if (idx === 0) {
-            // At the start duplicate, jump to last real card
-            currentIndex.current = suggestionCards.length;
-            if (scrollViewRef.current) {
-                scrollViewRef.current.scrollTo({ x: slideWidth * suggestionCards.length, animated: false });
-            }
-        } else {
-            currentIndex.current = idx;
-        }
-    };
 
     // Check if event is already saved when component loads
     useEffect(() => {
@@ -285,7 +274,7 @@ export default function EventDetailView() {
                 setIsCheckingStatus(false);
                 return;
             }
-            
+
             try {
                 console.log('Checking if event is saved:', eventId);
                 const isSaved = await eventDetailsService.isEventSaved(eventId);
@@ -297,7 +286,7 @@ export default function EventDetailView() {
                 setIsCheckingStatus(false);
             }
         };
-        
+
         setIsCheckingStatus(true);
         checkSavedStatus();
     }, [eventData.id, eventData.event_ad_id]);
@@ -314,32 +303,6 @@ export default function EventDetailView() {
         }
     }, [eventFromParams.description, eventData.description]);
 
-    // Carousel auto-scroll functionality (similar to VendorCard)
-    useEffect(() => {
-        // Initial positioning to first real card
-        setTimeout(() => {
-            if (scrollViewRef.current) {
-                scrollViewRef.current.scrollTo({ x: cardWidth * 1, animated: false });
-            }
-        }, 10);
-
-        // Auto-scroll interval
-        intervalRef.current = setInterval(() => {
-            if (scrollViewRef.current) {
-                currentIndex.current += 1;
-                scrollViewRef.current.scrollTo({
-                    x: cardWidth * currentIndex.current,
-                    animated: true
-                });
-            }
-        }, 2500); // Change slide every 2.5 seconds
-
-        return () => {
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-            }
-        };
-    }, [cardWidth]);
 
     return (
         <View style={styles.container}>
@@ -377,8 +340,8 @@ export default function EventDetailView() {
                             <TouchableOpacity style={styles.actionBtn} onPress={handleShare}>
                                 <Icon3 name="share" size={20} color="#334462" />
                             </TouchableOpacity>
-                            <TouchableOpacity 
-                                style={styles.actionBtn} 
+                            <TouchableOpacity
+                                style={styles.actionBtn}
                                 onPress={handleSave}
                                 disabled={isLoading || isCheckingStatus}
                             >
@@ -428,8 +391,8 @@ export default function EventDetailView() {
                         <View style={styles.tagsContainer}>
                             <Text style={styles.tagsLabel}>Event Tags</Text>
                             <View style={styles.tagsWrapper}>
-                                {(typeof eventData.event_tags === 'string' 
-                                    ? JSON.parse(eventData.event_tags) 
+                                {(typeof eventData.event_tags === 'string'
+                                    ? JSON.parse(eventData.event_tags)
                                     : eventData.event_tags
                                 ).map((tag, index) => (
                                     <View key={index} style={styles.tagPill}>
@@ -440,48 +403,97 @@ export default function EventDetailView() {
                         </View>
                     )}
 
-                    {/* Service Type and Event Type */}
-                    <View style={styles.categoryContainer}>
-                        {eventData.service_needed && (
-                            <View style={styles.categoryItem}>
-                                <Text style={styles.categoryLabel}>Service Needed</Text>
-                                <View style={styles.categoryPill}>
-                                    <Text style={styles.categoryText}>{eventData.service_needed}</Text>
+                    {/* Event Type and Service Needed Section */}
+                    <View style={styles.eventDetailsContainer}>
+                        {/* Event Type Card */}
+                        {eventData.event_type && (
+                            <View style={styles.detailCard}>
+                                <View style={styles.detailCardHeader}>
+                                    <Icon name="calendar-outline" size={16} color="#2C3D5B" />
+                                    <Text style={styles.detailCardTitle}>Event Type</Text>
+                                </View>
+                                <View style={styles.detailCardContent}>
+                                    <View style={styles.eventTypePill}>
+                                        <Text style={styles.eventTypeText}>{eventData.event_type}</Text>
+                                    </View>
                                 </View>
                             </View>
                         )}
-                        {eventData.event_type && (
-                            <View style={styles.categoryItem}>
-                                <Text style={styles.categoryLabel}>Event Type</Text>
-                                <View style={styles.categoryPill}>
-                                    <Text style={styles.categoryText}>{eventData.event_type}</Text>
+
+                        {/* Service Needed Card */}
+                        {eventData.service_needed && (
+                            <View style={styles.detailCard}>
+                                <View style={styles.detailCardHeader}>
+                                    <Icon name="briefcase-outline" size={16} color="#2C3D5B" />
+                                    <Text style={styles.detailCardTitle}>Service Needed</Text>
+                                </View>
+                                <View style={styles.detailCardContent}>
+                                    <View style={styles.serviceNeededPill}>
+                                        <Text style={styles.serviceNeededText}>{eventData.service_needed}</Text>
+                                    </View>
                                 </View>
                             </View>
                         )}
                     </View>
 
-                    {/* Status and Metadata */}
-                    <View style={styles.statusContainer}>
-                        <View style={styles.statusItem}>
-                            <Text style={styles.statusLabel}>Status</Text>
-                            <View style={[styles.statusPill, { backgroundColor: eventData.statusColor + '20' }]}>
-                                <Text style={[styles.statusText, { color: eventData.statusColor }]}>
-                                    {eventData.status.toUpperCase()}
-                                </Text>
+                    {/* Event Tags Section */}
+                    {/* {eventData.event_tags && Array.isArray(eventData.event_tags) && eventData.event_tags.length > 0 && (
+                        <View style={styles.tagsContainer}>
+                            <View style={styles.tagsHeader}>
+                                <Icon name="pricetags-outline" size={16} color="#666" />
+                                <Text style={styles.tagsTitle}>Event Tags</Text>
+                            </View>
+                            <View style={styles.tagsContent}>
+                                {eventData.event_tags.map((tag, index) => (
+                                    <View key={index} style={styles.tagPill}>
+                                        <Text style={styles.tagText}>#{typeof tag === 'string' ? tag : String(tag)}</Text>
+                                    </View>
+                                ))}
                             </View>
                         </View>
-                        {eventData.is_urgent && (
-                            <View style={styles.statusItem}>
-                                <View style={[styles.statusPill, { backgroundColor: '#ff4757' + '20' }]}>
-                                    <Text style={[styles.statusText, { color: '#ff4757' }]}>URGENT</Text>
+                    )} */}
+
+                    {/* Status Section */}
+                    <View style={styles.statusSection}>
+                        <View style={styles.statusHeader}>
+                            <View style={styles.statusMainInfo}>
+                                <Text style={styles.statusSectionTitle}>Event Status</Text>
+                                <View style={[styles.statusBadge, { backgroundColor: eventData.statusColor + '20' }]}>
+                                    <View style={[styles.statusDot, { backgroundColor: eventData.statusColor }]} />
+                                    <Text style={[styles.statusBadgeText, { color: eventData.statusColor }]}>
+                                        {eventData.status.toUpperCase()}
+                                    </Text>
                                 </View>
                             </View>
-                        )}
-                        {eventData.views_count > 0 && (
-                            <View style={styles.statusItem}>
-                                <Text style={styles.statusLabel}>{eventData.views_count} views</Text>
+                            {eventData.is_urgent && (
+                                <View style={styles.urgentBadge}>
+                                    <Icon name="alert-circle" size={14} color="#ff4757" />
+                                    <Text style={styles.urgentText}>URGENT</Text>
+                                </View>
+                            )}
+                        </View>
+
+                        {/* Metadata Row */}
+                        {/* <View style={styles.metadataRow}> */}
+                        {/* {eventData.views_count > 0 && (
+                            <View style={styles.metadataItem}>
+                                <Icon name="eye-outline" size={14} color="#666" />
+                                <Text style={styles.metadataText}>{eventData.views_count} views</Text>
                             </View>
                         )}
+                        {eventData.responses_count > 0 && (
+                            <View style={styles.metadataItem}>
+                                <Icon name="chatbubbles-outline" size={14} color="#666" />
+                                <Text style={styles.metadataText}>{eventData.responses_count} responses</Text>
+                            </View>
+                        )}
+                        {eventData.boosted && (
+                            <View style={styles.metadataItem}>
+                                <Icon name="trending-up" size={14} color="#f39c12" />
+                                <Text style={[styles.metadataText, { color: '#f39c12' }]}>Boosted</Text>
+                            </View>
+                        )} */}
+                        {/* </View>  */}
                     </View>
                 </View>
 
@@ -540,13 +552,13 @@ export default function EventDetailView() {
                     <View style={styles.userInfo}>
                         <View style={styles.userInfoContent}>
                             <View style={styles.leftSection}>
-                                <Image 
+                                <Image
                                     source={
                                         typeof eventData.organizer.avatar === 'string' && eventData.organizer.avatar.startsWith('http')
                                             ? { uri: eventData.organizer.avatar }
                                             : eventData.organizer.avatar
-                                    } 
-                                    style={styles.avatar} 
+                                    }
+                                    style={styles.avatar}
                                 />
                                 <Text style={styles.organizerName}>{eventData.organizer.name}</Text>
                             </View>
@@ -557,67 +569,12 @@ export default function EventDetailView() {
                         </View>
                     </View>
 
-                    {/* Suggestion Section */}
-                    <View style={styles.suggestionSection}>
-                        <Text style={styles.suggestionText}>You might also like</Text>
-
-                        <ScrollView
-                            ref={scrollViewRef}
-                            horizontal
-                            pagingEnabled
-                            showsHorizontalScrollIndicator={false}
-                            contentContainerStyle={styles.suggestionList}
-                            scrollEventThrottle={16}
-                            onMomentumScrollEnd={handleScrollEnd}
-                            snapToInterval={cardWidth}
-                            decelerationRate="fast"
-                        >
-                            {/* Add last card at beginning and first card at end for infinite scroll */}
-                            {[suggestionCards[suggestionCards.length - 1], ...suggestionCards, suggestionCards[0]].map((_, index) => (
-                                <View key={index} style={styles.suggestionCard}>
-                                    {/* Close Button */}
-                                    <TouchableOpacity style={styles.closeIcon}>
-                                        <Icon name="close" size={16} color="#334462" />
-                                    </TouchableOpacity>
-
-                                    {/* Duration Tag */}
-                                    <View style={styles.durationTag}>
-                                        <Text style={styles.durationText}>{eventData.duration} Hr</Text>
-                                    </View>
-
-                                    {/* Title */}
-                                    <Text style={styles.suggestionTitle}>Similar: {eventData.event_type || 'Event'}</Text>
-
-                                    {/* Organizer Info */}
-                                    <View style={styles.nameBoxContainer}>
-                                        <View style={styles.nameBox}>
-                                            <View style={styles.iconBox}>
-                                                <Icon name="person" size={12} color="#2C3D5BF5" />
-                                            </View>
-                                            <Text style={styles.suggestionOrganizer}>{eventData.organizer.name}</Text>
-                                        </View>
-                                    </View>
-
-                                    {/* Location and Date */}
-                                    <View style={styles.detailRow}>
-                                        <View style={styles.pill}>
-                                            <Icon name="location-outline" size={12} color="#334462" style={{ marginRight: 4 }} />
-                                            <Text style={styles.pillText}>{eventData.location}</Text>
-                                        </View>
-                                        <View style={styles.pill}>
-                                            <Icon name="calendar-outline" size={12} color="#334462" style={{ marginRight: 4 }} />
-                                            <Text style={styles.pillText}>{eventData.date}</Text>
-                                        </View>
-                                    </View>
-
-                                    {/* View Button */}
-                                    <TouchableOpacity style={styles.viewBtn}>
-                                        <Text style={styles.viewText}>View</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            ))}
-                        </ScrollView>
-                    </View>
+                    {/* Suggestion Section - Dynamic Similar Events */}
+                    <EventCardCarousel
+                        eventId={eventData.id}
+                        eventCategory={eventData.category || eventData.event_type}
+                        eventLocation={eventData.location}
+                    />
 
 
                 </View>
@@ -1065,7 +1022,7 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
     },
-    
+
     // New styles for dynamic sections
     tagsContainer: {
         marginTop: 15,
@@ -1093,7 +1050,177 @@ const styles = StyleSheet.create({
         color: '#334462',
         fontWeight: '500',
     },
-    
+
+    // New Event Details Styles
+    eventDetailsContainer: {
+        flexDirection: 'row',
+        gap: 12,
+        marginTop: 15,
+        marginBottom: 10,
+    },
+    detailCard: {
+        flex: 1,
+        backgroundColor: '#f8f9fa',
+        borderRadius: 12,
+        padding: 12,
+        borderWidth: 1,
+        borderColor: '#e9ecef',
+    },
+    detailCardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 8,
+    },
+    detailCardTitle: {
+        fontSize: 12,
+        color: '#666',
+        fontWeight: '500',
+    },
+    detailCardContent: {
+        alignItems: 'center',
+    },
+    eventTypePill: {
+        backgroundColor: '#e3f2fd',
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+    },
+    eventTypeText: {
+        fontSize: 13,
+        color: '#1976d2',
+        fontWeight: '600',
+    },
+    serviceNeededPill: {
+        backgroundColor: '#f3e5f5',
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+    },
+    serviceNeededText: {
+        fontSize: 13,
+        color: '#8e24aa',
+        fontWeight: '600',
+    },
+
+    // Tags Section Styles
+    tagsContainer: {
+        backgroundColor: '#fafafa',
+        borderRadius: 12,
+        padding: 14,
+        marginTop: 10,
+        marginBottom: 10,
+        borderWidth: 1,
+        borderColor: '#f0f0f0',
+    },
+    tagsHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 10,
+    },
+    tagsTitle: {
+        fontSize: 13,
+        color: '#666',
+        fontWeight: '500',
+    },
+    tagsContent: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    tagPill: {
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        paddingHorizontal: 12,
+        paddingVertical: 5,
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+    },
+    tagText: {
+        fontSize: 12,
+        color: '#555',
+        fontWeight: '500',
+    },
+
+    // Status Section Styles
+    statusSection: {
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        padding: 14,
+        marginTop: 10,
+        marginBottom: 15,
+        borderWidth: 1,
+        borderColor: '#e9ecef',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+        elevation: 2,
+    },
+    statusHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    statusMainInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    statusSectionTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#333',
+    },
+    statusBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    statusDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+    },
+    statusBadgeText: {
+        fontSize: 11,
+        fontWeight: '600',
+    },
+    urgentBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#ff475720',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    urgentText: {
+        fontSize: 11,
+        color: '#ff4757',
+        fontWeight: '600',
+    },
+    metadataRow: {
+        flexDirection: 'row',
+        gap: 16,
+        flexWrap: 'wrap',
+    },
+    metadataItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    metadataText: {
+        fontSize: 12,
+        color: '#666',
+    },
+
+    // Keep old styles for compatibility
     categoryContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -1121,7 +1248,7 @@ const styles = StyleSheet.create({
         color: '#1976d2',
         fontWeight: '600',
     },
-    
+
     statusContainer: {
         flexDirection: 'row',
         alignItems: 'center',

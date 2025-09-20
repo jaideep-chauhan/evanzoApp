@@ -404,6 +404,18 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    // Direct user state update function
+    const updateUser = async (updatedUserData) => {
+        try {
+            // Update stored user data
+            await AsyncStorage.setItem('userData', JSON.stringify(updatedUserData));
+            // Update state
+            setUser(updatedUserData);
+        } catch (error) {
+            console.error('Error updating user data:', error);
+        }
+    };
+
     const logout = async (navigateToLogin = false) => {
         try {
             
@@ -483,6 +495,7 @@ export const AuthProvider = ({ children }) => {
         forgotPassword,
         resetPassword,
         updateProfile,
+        updateUser,
         checkAuthState,
     };
 

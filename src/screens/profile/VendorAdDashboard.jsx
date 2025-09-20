@@ -19,6 +19,7 @@ import PreSavedMessage from './PreSavedMessage';
 import ChangeProfile from './ChangeProfile';
 import CreateAd from './CreateAd';
 import CreateAddForm from './CreateAddForm';
+import EditProfileModal from './EditProfileModal';
 import img from '../../assets/images/dummy.png';
 import bg from '../../assets/images/profileBG.png';
 
@@ -38,6 +39,7 @@ export default function VendorAdDashboard({ navigation }) {
     const [showChangeProfile, setShowChangeProfile] = useState(false);
     const [showCreateAd, setShowCreateAd] = useState(false);
     const [showCreateAddForm, setShowCreateAddForm] = useState(false);
+    const [showEditProfile, setShowEditProfile] = useState(false);
     const [createAddFormType, setCreateAddFormType] = useState('vendor');
     const [vendorAds, setVendorAds] = useState([]);
     const [eventAds, setEventAds] = useState([]);
@@ -119,8 +121,14 @@ export default function VendorAdDashboard({ navigation }) {
                                 <Text style={[styles.name, { color: theme.colors.primary }]}>
                                     {user?.full_name || 'User'}
                                 </Text>
+                                <TouchableOpacity 
+                                    onPress={() => setShowEditProfile(true)}
+                                    style={styles.editButton}
+                                >
+                                    <Icon name="create-outline" size={20} color={theme.colors.primary} />
+                                </TouchableOpacity>
                             </View>
-                            <Text style={[styles.location, { color: theme.colors.primary }]}>Ontario, Canada</Text>
+                            <Text style={[styles.location, { color: theme.colors.primary }]}>{user?.location || 'Add Location'}</Text>
                         </View>
                     </View>
 
@@ -388,6 +396,16 @@ export default function VendorAdDashboard({ navigation }) {
                         </View>
                     </View>
                 </Modal>
+
+            {/* Edit Profile Modal */}
+            <EditProfileModal
+                visible={showEditProfile}
+                onClose={() => setShowEditProfile(false)}
+                onUpdate={() => {
+                    // Optionally refresh user data after update
+                    setShowEditProfile(false);
+                }}
+            />
         </View>
     );
 }
@@ -431,7 +449,10 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         marginTop: 8,
-        gap: 4,
+        gap: 8,
+    },
+    editButton: {
+        padding: 4,
     },
     profileImage: {
         width: 100,

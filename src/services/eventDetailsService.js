@@ -176,6 +176,61 @@ View more details on Evanzo app!
             };
         }
     }
+
+    // Get similar events based on category and location
+    async getSimilarEvents(eventId, currentCategory, currentLocation) {
+        try {
+            console.log('Fetching similar events for:', { eventId, currentCategory, currentLocation });
+            
+            // Get all public events
+            const response = await api.get('/events/public');
+            
+            if (response.data.status && response.data.data) {
+                const allEvents = response.data.data;
+                
+                // Filter out the current event and find similar ones
+                const similarEvents = allEvents.filter(event => {
+                    // Exclude current event
+                    if (event.event_ad_id === eventId || event.id === eventId) {
+                        return false;
+                    }
+                    
+                    // Check for similar category or location
+                    const sameCategory = currentCategory && 
+                        (event.category?.toLowerCase() === currentCategory.toLowerCase() || 
+                         event.event_type?.toLowerCase() === currentCategory.toLowerCase());
+                    
+                    const sameLocation = currentLocation && 
+                        event.location?.toLowerCase().includes(currentLocation.toLowerCase());
+                    
+                    // Return events with same category or location
+                    return sameCategory || sameLocation;
+                });
+                
+                // Limit to 10 similar events and shuffle for variety
+                const shuffled = similarEvents.sort(() => Math.random() - 0.5).slice(0, 10);
+                
+                console.log(`Found ${shuffled.length} similar events`);
+                
+                return {
+                    success: true,
+                    data: shuffled
+                };
+            }
+            
+            return {
+                success: false,
+                data: []
+            };
+        } catch (error) {
+            console.error('Get similar events error:', error);
+            return {
+                success: false,
+                message: error.response?.data?.message || 'Failed to fetch similar events',
+                data: []
+            };
+        }
+    }
 }
 
 const eventDetailsService = new EventDetailsService();
