@@ -44,7 +44,7 @@ export default function Events() {
     const [networkError, setNetworkError] = useState(false);
 
     // Fetch events using new filtering service
-    const fetchEvents = async (filters = {}, resetResults = false) => {
+    const fetchEvents = async (filters = {}, resetResults = false, clearAllFilters = false) => {
         if (isFetchingEvents) {
             console.log('Already fetching events, skipping...');
             return;
@@ -58,8 +58,11 @@ export default function Events() {
                 setIsLoading(true);
             }
 
-            // Combine current filters with new ones
-            const searchFilters = {
+            // If clearing all filters, use empty filters, otherwise combine with current
+            const searchFilters = clearAllFilters ? {
+                page: 1,
+                limit: 10
+            } : {
                 ...currentFilters,
                 ...filters,
                 page: resetResults ? 1 : (filters.page || currentFilters.page || 1),
@@ -87,57 +90,106 @@ export default function Events() {
                     };
                 }
             } else {
-                // For now, get all events and filter client-side since search endpoint doesn't exist
-                const allEventsResponse = await eventService.getPublicEventAds();
-                if (allEventsResponse.success && allEventsResponse.data) {
-                    let filteredEvents = allEventsResponse.data;
+                // Try to use search endpoint if available, otherwise filter client-side
+                try {
+                    // Try using the search endpoint first
+                    response = await eventService.searchEventAds({
+                        keyword: searchFilters.keyword,
+                        location: searchFilters.location,
+                        eventType: searchFilters.category,
+                        dateFrom: searchFilters.dateFrom,
+                        dateTo: searchFilters.dateTo,
+                        page: searchFilters.page,
+                        limit: searchFilters.limit
+                    });
                     
-                    // Apply client-side filtering - search across multiple fields
-                    if (searchFilters.keyword) {
-                        const keyword = searchFilters.keyword.toLowerCase();
-                        filteredEvents = filteredEvents.filter(event =>
-                            event.title?.toLowerCase().includes(keyword) ||
-                            event.description?.toLowerCase().includes(keyword) ||
-                            event.location?.toLowerCase().includes(keyword) ||
-                            event.category?.toLowerCase().includes(keyword) ||
-                            event.event_type?.toLowerCase().includes(keyword)
-                        );
-                        console.log(`🔍 Event keyword search for "${searchFilters.keyword}" found ${filteredEvents.length} results`);
+                    if (response.success && response.data) {
+                        response = {
+                            success: true,
+                            data: response.data.map(event => eventService.formatEventForDisplay(event)),
+                            pagination: response.pagination || { page: 1, limit: 10, totalPages: 1, totalResults: response.data.length }
+                        };
                     }
+                } catch (searchError) {
+                    // If search endpoint fails, fall back to client-side filtering
+                    console.log('📱 Search endpoint not available, using client-side filtering');
                     
-                    if (searchFilters.location) {
-                        filteredEvents = filteredEvents.filter(event =>
-                            event.location?.includes(searchFilters.location)
-                        );
-                    }
-                    
-                    if (searchFilters.category) {
-                        const categories = searchFilters.category.split(',');
-                        console.log('🔍 Filtering events by categories:', categories);
-                        console.log('🔍 Events before filter:', filteredEvents.map(e => ({
-                            title: e.title,
-                            category: e.category
-                        })));
+                    const allEventsResponse = await eventService.getPublicEventAds();
+                    if (allEventsResponse.success && allEventsResponse.data) {
+                        let filteredEvents = allEventsResponse.data;
                         
-                        filteredEvents = filteredEvents.filter(event => {
-                            const eventCategory = event.category?.toLowerCase() || event.event_type?.toLowerCase();
-                            const matches = categories.some(cat => eventCategory === cat.toLowerCase());
-                            if (!matches) {
-                                console.log(`❌ Event "${event.title}" with category "${event.category}" doesn't match`);
-                            }
-                            return matches;
-                        });
+                        // Apply client-side filtering - search across multiple fields
+                        if (searchFilters.keyword) {
+                            const keyword = searchFilters.keyword.toLowerCase();
+                            filteredEvents = filteredEvents.filter(event =>
+                                event.title?.toLowerCase().includes(keyword) ||
+                                event.description?.toLowerCase().includes(keyword) ||
+                                event.location?.toLowerCase().includes(keyword) ||
+                                event.category?.toLowerCase().includes(keyword) ||
+                                event.event_type?.toLowerCase().includes(keyword)
+                            );
+                            console.log(`🔍 Event keyword search for "${searchFilters.keyword}" found ${filteredEvents.length} results`);
+                        }
                         
-                        console.log('🔍 Events after filter:', filteredEvents.length);
+                        if (searchFilters.location) {
+                            filteredEvents = filteredEvents.filter(event =>
+                                event.location?.includes(searchFilters.location)
+                            );
+                        }
+                        
+                        if (searchFilters.category) {
+                            const categories = searchFilters.category.split(',');
+                            console.log('🔍 Filtering events by categories:', categories);
+                            
+                            filteredEvents = filteredEvents.filter(event => {
+                                const eventCategory = event.category?.toLowerCase() || event.event_type?.toLowerCase();
+                                const matches = categories.some(cat => eventCategory === cat.toLowerCase());
+                                return matches;
+                            });
+                            
+                            console.log('🔍 Events after category filter:', filteredEvents.length);
+                        }
+                        
+                        // Apply date range filtering
+                        if (searchFilters.dateFrom && searchFilters.dateTo) {
+                            const startDate = new Date(searchFilters.dateFrom);
+                            const endDate = new Date(searchFilters.dateTo);
+                            endDate.setHours(23, 59, 59, 999); // Include the entire end date
+                            
+                            console.log('📅 Filtering events by date range:', {
+                                from: startDate.toLocaleDateString(),
+                                to: endDate.toLocaleDateString()
+                            });
+                            
+                            filteredEvents = filteredEvents.filter(event => {
+                                if (!event.date) return false;
+                                
+                                try {
+                                    const eventDate = new Date(event.date);
+                                    const isInRange = eventDate >= startDate && eventDate <= endDate;
+                                    
+                                    if (!isInRange) {
+                                        console.log(`❌ Event "${event.title}" date ${eventDate.toLocaleDateString()} is outside range`);
+                                    }
+                                    
+                                    return isInRange;
+                                } catch (e) {
+                                    console.error(`Error parsing date for event "${event.title}":`, e);
+                                    return false;
+                                }
+                            });
+                            
+                            console.log('📅 Events after date filter:', filteredEvents.length);
+                        }
+                        
+                        response = {
+                            success: true,
+                            data: filteredEvents.map(event => eventService.formatEventForDisplay(event)),
+                            pagination: { page: 1, limit: 10, totalPages: 1, totalResults: filteredEvents.length }
+                        };
+                    } else {
+                        response = allEventsResponse;
                     }
-                    
-                    response = {
-                        success: true,
-                        data: filteredEvents.map(event => eventService.formatEventForDisplay(event)),
-                        pagination: { page: 1, limit: 10, totalPages: 1, totalResults: filteredEvents.length }
-                    };
-                } else {
-                    response = allEventsResponse;
                 }
             }
             
@@ -313,11 +365,19 @@ export default function Events() {
         setShowLocationModal(false);
         
         // Apply location filter
-        const newFilters = { ...currentFilters, location };
-        if (!location) {
+        const newFilters = { ...currentFilters };
+        if (location) {
+            newFilters.location = location;
+        } else {
             delete newFilters.location;
         }
-        fetchEvents(newFilters, true);
+        
+        // Check if we're clearing all filters
+        const hasAnyFilter = Object.keys(newFilters).some(key => 
+            key !== 'page' && key !== 'limit' && newFilters[key]
+        );
+        
+        fetchEvents(newFilters, true, !hasAnyFilter);
     };
 
     const handleDateRangeSelect = (dateRange) => {
@@ -333,7 +393,13 @@ export default function Events() {
             delete newFilters.dateFrom;
             delete newFilters.dateTo;
         }
-        fetchEvents(newFilters, true);
+        
+        // Check if we're clearing all filters
+        const hasAnyFilter = Object.keys(newFilters).some(key => 
+            key !== 'page' && key !== 'limit' && newFilters[key]
+        );
+        
+        fetchEvents(newFilters, true, !hasAnyFilter);
     };
 
     const handleCategorySelect = (category) => {
@@ -350,7 +416,13 @@ export default function Events() {
         }
         
         console.log('🎯 Event filters to apply:', newFilters);
-        fetchEvents(newFilters, true);
+        
+        // Check if we're clearing all filters
+        const hasAnyFilter = Object.keys(newFilters).some(key => 
+            key !== 'page' && key !== 'limit' && newFilters[key]
+        );
+        
+        fetchEvents(newFilters, true, !hasAnyFilter);
     };
 
     const handleGiveQuote = (event) => {
@@ -372,8 +444,8 @@ export default function Events() {
             setSearchQuery('');
             setCurrentFilters({});
             
-            // Fetch fresh data with no filters
-            await fetchEvents({}, true);
+            // Fetch fresh data with no filters - pass true for clearAllFilters
+            await fetchEvents({}, true, true);
             
             console.log('Events refreshed successfully');
         } catch (error) {
@@ -512,7 +584,7 @@ export default function Events() {
                                     setSelectedDateRange(null);
                                     setSearchQuery('');
                                     setCurrentFilters({});
-                                    fetchEvents({}, true);
+                                    fetchEvents({}, true, true); // Pass true for clearAllFilters
                                 }}
                             >
                                 <Text style={styles.clearFiltersButtonText}>Clear All Filters</Text>

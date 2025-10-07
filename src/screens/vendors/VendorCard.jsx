@@ -30,7 +30,8 @@ export default function VendorCard({
     isChat = true,
     isFocused = false,
     vendorId,
-    fullVendorData // Full vendor object with all data
+    fullVendorData, // Full vendor object with all data
+    approval_status, // Approval status for the ad
 }) {
     const navigation = useNavigation();
     const theme = useTheme();
@@ -170,6 +171,18 @@ export default function VendorCard({
 
     return (
         <TouchableOpacity onPress={handleCardPress} style={styles.cardWrapper}>
+            {/* Approval Status Banner for pending/rejected ads */}
+            {approval_status && approval_status !== 'approved' && (
+                <View style={[
+                    styles.approvalBanner,
+                    { backgroundColor: approval_status === 'pending' ? '#FFA500' : '#FF4444' }
+                ]}>
+                    <Text style={styles.approvalBannerText}>
+                        {approval_status === 'pending' ? '⏳ Waiting for approval' : '❌ Rejected - Please review and resubmit'}
+                    </Text>
+                </View>
+            )}
+            
             {/* Header OUTSIDE the card */}
             <View style={styles.header}>
                 <View style={[styles.avatarShadow, { shadowColor: theme.colors.primary }]}>
@@ -285,6 +298,18 @@ const styles = StyleSheet.create({
         marginBottom: 18,
         backgroundColor: '#fff',
         marginTop: 12,
+    },
+    approvalBanner: {
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 10,
+        marginBottom: 8,
+        alignItems: 'center',
+    },
+    approvalBannerText: {
+        color: '#fff',
+        fontSize: 13,
+        fontWeight: '600',
     },
     header: {
         flexDirection: 'row',

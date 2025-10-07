@@ -4,8 +4,8 @@ import { Platform } from 'react-native';
 import { logout } from './navigationService';
 
 const BASE_URL = Platform.select({
-    ios: 'http://10.76.67.131:3000/api', // Your machine's IP for iOS Simulator
-    android: 'http://10.0.2.2:3000/api',
+    ios: 'https://api.evnzo.com/api',
+    android: 'https://api.evnzo.com/api',
 });
 
 export const API_BASE_URL = BASE_URL; // Export for socket service
@@ -22,7 +22,7 @@ const processQueue = (error, token = null) => {
             resolve(token);
         }
     });
-    
+
     failedQueue = [];
 };
 
@@ -48,7 +48,7 @@ const api = axios.create({
 
 api.interceptors.request.use(
     async (config) => {
-        
+
         // Check if the data is FormData
         if (config.data instanceof FormData) {
             // For FormData, let axios set the Content-Type with boundary
@@ -58,7 +58,7 @@ api.interceptors.request.use(
             // For regular JSON data, set Content-Type to application/json
             config.headers['Content-Type'] = 'application/json';
         }
-        
+
         const token = await AsyncStorage.getItem('authToken');
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
@@ -76,21 +76,21 @@ api.interceptors.response.use(
     },
     async (error) => {
         const originalRequest = error.config;
-        
+
         // Check if this is a 401 error and we haven't already tried to refresh for this request
         if (error.response?.status === 401 && !originalRequest._retry) {
-            
+
             // Check if this is an authentication error
             const errorMessage = error.response?.data?.message || '';
-            
-            const isAuthError = errorMessage.includes('expired') || 
-                               errorMessage.includes('authenticate') ||
-                               errorMessage.includes('jwt expired') ||
-                               errorMessage.includes('Please authenticate') ||
-                               errorMessage === 'Please authenticate' ||
-                               error.response?.status === 401;
-            
-            
+
+            const isAuthError = errorMessage.includes('expired') ||
+                errorMessage.includes('authenticate') ||
+                errorMessage.includes('jwt expired') ||
+                errorMessage.includes('Please authenticate') ||
+                errorMessage === 'Please authenticate' ||
+                error.response?.status === 401;
+
+
             if (isAuthError) {
                 // If we're already refreshing, queue this request
                 if (isRefreshing) {
@@ -109,23 +109,23 @@ api.interceptors.response.use(
 
                 try {
                     const refreshToken = await AsyncStorage.getItem('refreshToken');
-                    
+
                     if (!refreshToken) {
                         processQueue(error, null);
                         isRefreshing = false;
-                        
+
                         // Force logout
                         setTimeout(async () => {
                             await logout();
                         }, 100);
-                        
+
                         return Promise.reject({
                             ...error,
                             shouldLogout: true,
                             message: 'Session expired. Please login again.'
                         });
                     }
-                    
+
                     const response = await axios.post(`${BASE_URL}/auth/refresh-tokens`, {
                         refreshToken: refreshToken
                     }, {
@@ -134,35 +134,35 @@ api.interceptors.response.use(
                             'Content-Type': 'application/json'
                         }
                     });
-                    
+
                     const { accessToken, refreshToken: newRefreshToken } = response.data.tokens;
-                    
+
                     await AsyncStorage.setItem('authToken', accessToken);
                     if (newRefreshToken) {
                         await AsyncStorage.setItem('refreshToken', newRefreshToken);
                     }
-                    
+
                     // Update the authorization header for all pending requests
                     api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
                     originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-                    
+
                     // Process the queue with the new token
                     processQueue(null, accessToken);
                     isRefreshing = false;
-                    
+
                     return api(originalRequest);
-                    
+
                 } catch (refreshError) {
-                    
+
                     // Process queue with error and reset state
                     processQueue(refreshError, null);
                     isRefreshing = false;
-                    
+
                     // Force logout
                     setTimeout(async () => {
                         await logout();
                     }, 100);
-                    
+
                     return Promise.reject({
                         ...refreshError,
                         shouldLogout: true,
@@ -171,7 +171,7 @@ api.interceptors.response.use(
                 }
             }
         }
-        
+
         return Promise.reject(error);
     }
 );

@@ -35,7 +35,7 @@ const registerSchema = Yup.object().shape({
     phone: Yup.string()
         .required('Phone number is required')
         .matches(/^[\d\s\-\+\(\)]+$/, 'Invalid phone number format')
-        .test('phone-length', 'Phone number must be at least 10 digits', function(value) {
+        .test('phone-length', 'Phone number must be at least 10 digits', function (value) {
             if (!value) return false;
             const cleanPhone = value.replace(/[\s\-\(\)\+]/g, '');
             return cleanPhone.length >= 10;
@@ -63,23 +63,23 @@ export default function Register() {
     const [isLoading, setIsLoading] = useState(false);
     const [selectedCountryCode, setSelectedCountryCode] = useState('+1');
     const [showCountryPicker, setShowCountryPicker] = useState(false);
-    
+
     // Modal state
     const [modalVisible, setModalVisible] = useState(false);
     const [modalConfig, setModalConfig] = useState({});
-    
+
     // Toast state
     const [toastVisible, setToastVisible] = useState(false);
     const [toastMessage, setToastMessage] = useState('');
     const [toastType, setToastType] = useState('success');
-    
+
     // Common country codes
     const showToast = (message, type = 'info') => {
         setToastMessage(message);
         setToastType(type);
         setToastVisible(true);
     };
-    
+
     const countryCodes = [
         { code: '+1', country: 'USA/Canada', flag: '🇺🇸' },
         { code: '+44', country: 'UK', flag: '🇬🇧' },
@@ -105,20 +105,20 @@ export default function Register() {
             // Remove any non-digit characters from phone input
             const cleanPhone = values.phone.replace(/\D/g, '');
             const fullPhoneNumber = `${selectedCountryCode}${cleanPhone}`;
-            
+
             console.log('📱 Registration data:', {
                 fullName: values.fullName,
                 phone: fullPhoneNumber,
                 email: values.email
             });
-            
+
             const result = await register({
                 fullName: values.fullName,
                 phone: fullPhoneNumber,
                 email: values.email,
                 password: values.password,
             });
-
+            console.log("Register-==-=", result);
             if (result.success) {
                 setModalConfig({
                     visible: true,
@@ -129,10 +129,10 @@ export default function Register() {
                     onPrimaryPress: () => {
                         setModalVisible(false);
                         // Navigate to OTP verification screen
-                        navigation.navigate('OTPVerify', { 
+                        navigation.navigate('OTPVerify', {
                             email: values.email,
                             phone: fullPhoneNumber,
-                            fromScreen: 'Register' 
+                            fromScreen: 'Register'
                         });
                     },
                 });
@@ -197,7 +197,7 @@ export default function Register() {
                             <View style={styles.inputGroup}>
                                 <Text style={[styles.label, { color: theme.colors.primary }]}>Phone Number</Text>
                                 <View style={styles.phoneInputContainer}>
-                                    <TouchableOpacity 
+                                    <TouchableOpacity
                                         style={[styles.countryCodeButton, touched.phone && errors.phone && styles.inputError]}
                                         onPress={() => setShowCountryPicker(true)}
                                     >
@@ -266,10 +266,10 @@ export default function Register() {
                                         style={styles.eyeIcon}
                                         onPress={() => setShowPassword(!showPassword)}
                                     >
-                                        <Icon 
-                                            name={showPassword ? 'eye-off-outline' : 'eye-outline'} 
-                                            size={20} 
-                                            color="#666" 
+                                        <Icon
+                                            name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                                            size={20}
+                                            color="#666"
                                         />
                                     </TouchableOpacity>
                                 </View>
@@ -300,10 +300,10 @@ export default function Register() {
                                         style={styles.eyeIcon}
                                         onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                                     >
-                                        <Icon 
-                                            name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} 
-                                            size={20} 
-                                            color="#666" 
+                                        <Icon
+                                            name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
+                                            size={20}
+                                            color="#666"
                                         />
                                     </TouchableOpacity>
                                 </View>
@@ -312,15 +312,15 @@ export default function Register() {
                                 )}
                             </View>
 
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 style={[
-                                    styles.signUpBtn, 
-                                    { 
-                                        backgroundColor: theme.colors.primary, 
+                                    styles.signUpBtn,
+                                    {
+                                        backgroundColor: theme.colors.primary,
                                         shadowColor: theme.colors.primary,
                                         opacity: isLoading ? 0.7 : 1
                                     }
-                                ]} 
+                                ]}
                                 onPress={handleSubmit}
                                 disabled={isLoading}
                             >
@@ -331,8 +331,8 @@ export default function Register() {
                                 )}
                             </TouchableOpacity>
 
-                            <TouchableOpacity 
-                                style={[styles.loginBtn, { borderColor: theme.colors.primary }]} 
+                            <TouchableOpacity
+                                style={[styles.loginBtn, { borderColor: theme.colors.primary }]}
                                 onPress={() => navigation.navigate('Login')}
                             >
                                 <Text style={[styles.loginText, { color: theme.colors.primary }]}>Already have an account</Text>
@@ -359,7 +359,7 @@ export default function Register() {
                     )}
                 </Formik>
             </KeyboardAvoidingView>
-            
+
             {/* Country Code Picker Modal */}
             <Modal
                 visible={showCountryPicker}
@@ -405,7 +405,7 @@ export default function Register() {
                     </View>
                 </View>
             </Modal>
-            
+
             <CustomModal
                 visible={modalVisible}
                 title={modalConfig.title}
@@ -415,7 +415,7 @@ export default function Register() {
                 onPrimaryPress={modalConfig.onPrimaryPress}
                 onClose={() => setModalVisible(false)}
             />
-            
+
             <CustomToast
                 visible={toastVisible}
                 message={toastMessage}

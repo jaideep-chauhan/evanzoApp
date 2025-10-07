@@ -24,6 +24,7 @@ export default function EventAdCard({
     event_type,
     status = 'LIVE',
     statusColor = '#2ECC71',
+    approval_status,  // New prop for approval status
     profile = {
         name: 'Rachel Swan',
         image: img,
@@ -60,6 +61,23 @@ export default function EventAdCard({
 
     return (
         <TouchableOpacity style={[styles.card, { padding: 16, marginBottom: 18 }]} onPress={handleCardPress}>
+            {/* Approval Status Banner for pending/rejected ads */}
+            {approval_status && approval_status !== 'approved' && (
+                <View style={[
+                    styles.approvalBanner,
+                    { backgroundColor: approval_status === 'pending' ? '#FFA500' : '#FF4444' }
+                ]}>
+                    <Icon 
+                        name={approval_status === 'pending' ? 'time-outline' : 'close-circle-outline'} 
+                        size={16} 
+                        color="#fff" 
+                    />
+                    <Text style={styles.approvalBannerText}>
+                        {approval_status === 'pending' ? 'Waiting for approval' : 'Rejected - Please review and resubmit'}
+                    </Text>
+                </View>
+            )}
+            
             {/* Title, Status, and More Icon Row */}
             <View style={styles.rowBetween}>
                 <Text style={[styles.title, { color: theme.colors.primary }]} numberOfLines={1} ellipsizeMode="tail">{title}</Text>
@@ -144,6 +162,22 @@ const styles = StyleSheet.create({
         borderColor: '#F1F3F8',
         marginHorizontal: 10,
 
+    },
+    approvalBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 10,
+        marginBottom: 12,
+        marginTop: -8,
+        marginHorizontal: -8,
+    },
+    approvalBannerText: {
+        color: '#fff',
+        fontSize: 13,
+        fontWeight: '600',
+        marginLeft: 6,
     },
     rowBetween: {
         flexDirection: 'row',

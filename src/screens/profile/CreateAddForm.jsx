@@ -316,8 +316,8 @@ const CreateAddForm = ({ type, onClose }) => {
                 if (response.success) {
                     setModalState({
                         visible: true,
-                        title: 'Success',
-                        message: 'Event ad created successfully',
+                        title: 'Success! Waiting for Approval',
+                        message: 'Your event ad has been created successfully and is now waiting for approval from the Evanzo team. Once approved, it will be visible to all vendors.',
                         type: 'success'
                     });
                 } else {
@@ -377,8 +377,8 @@ const CreateAddForm = ({ type, onClose }) => {
                 if (response.success) {
                     setModalState({
                         visible: true,
-                        title: 'Success',
-                        message: 'Vendor ad created successfully',
+                        title: 'Success! Waiting for Approval',
+                        message: 'Your vendor ad has been created successfully and is now waiting for approval from the Evanzo team. Once approved, it will be visible to all users.',
                         type: 'success'
                     });
                 } else {

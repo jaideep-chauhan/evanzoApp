@@ -29,17 +29,17 @@ export const AuthProvider = ({ children }) => {
         try {
             const token = await AsyncStorage.getItem('authToken');
             const userData = await AsyncStorage.getItem('userData');
-            
+
             if (token && userData) {
                 // Set the token in API headers
                 api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-                
+
                 // Parse and verify user data
                 const user = JSON.parse(userData);
-                
+
                 setUser(user);
                 setIsAuthenticated(true);
-                
+
                 // Test token validity with a lightweight endpoint
                 try {
                     await api.get('/auth/check-auth');
@@ -65,89 +65,89 @@ export const AuthProvider = ({ children }) => {
                 username: emailOrPhone,
                 password,
             };
-            
-            
+
+
             const response = await api.post('/auth/login', loginPayload);
-            
+            console.log("Response 0-0-0-0-,", response);
 
             // Check if response has the expected structure
             if (response.data && response.data.tokens) {
                 // Backend returns tokens object with accessToken and refreshToken
                 const { accessToken, refreshToken } = response.data.tokens;
                 const user = response.data.user;
-                
-                
+
+
                 // Clear any old data first
                 await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'userData']);
-                
+
                 // Store NEW token and user data
                 await AsyncStorage.setItem('authToken', accessToken);
                 await AsyncStorage.setItem('refreshToken', refreshToken);
                 await AsyncStorage.setItem('userData', JSON.stringify(user));
                 // Store userId separately for easy access
                 await AsyncStorage.setItem('userId', String(user?.user_id || user?.id));
-                
-                
+
+
                 // Set token in API headers
                 api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
-                
+
                 // Update state
                 setUser(user);
                 setIsAuthenticated(true);
-                
-                
+
+
                 return { success: true, user };
             } else if (response.data) {
                 // Try alternative response structure
-                
+
                 // Maybe the response is directly in response.data
                 if (response.data.user && (response.data.accessToken || response.data.token)) {
                     const token = response.data.accessToken || response.data.token;
                     const user = response.data.user;
-                    
+
                     await AsyncStorage.setItem('authToken', token);
                     await AsyncStorage.setItem('userData', JSON.stringify(user));
                     await AsyncStorage.setItem('userId', String(user?.user_id || user?.id));
                     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-                    
+
                     setUser(user);
                     setIsAuthenticated(true);
-                    
+
                     return { success: true, user };
                 }
-                
-                return { 
-                    success: false, 
-                    error: response.data.message || 'Unexpected response format' 
+
+                return {
+                    success: false,
+                    error: response.data.message || 'Unexpected response format'
                 };
             } else {
-                return { 
-                    success: false, 
-                    error: 'Invalid response from server' 
+                return {
+                    success: false,
+                    error: 'Invalid response from server'
                 };
             }
         } catch (error) {
-            return { 
-                success: false, 
-                error: error.response?.data?.message || 'Network error. Please try again.' 
+            return {
+                success: false,
+                error: error.response?.data?.message || 'Network error. Please try again.'
             };
         }
     };
 
     const sendOTP = async (userData) => {
         try {
-            
+
             // Extract country code and phone number
             // Phone comes in format like "+11234567890" where +1 is country code
             let countryCode = '+1';  // default
             let phoneNumber = userData.phone;
-            
+
             // Check if phone starts with a country code
             if (userData.phone.startsWith('+')) {
                 // Try to extract country code - it could be 1-4 digits after the +
                 // Common patterns: +1, +44, +91, +86, +234, +971, etc.
                 const phoneWithoutPlus = userData.phone.substring(1);
-                
+
                 // Check for known country code lengths
                 if (phoneWithoutPlus.length > 10) {
                     // If total length > 10, there must be a country code
@@ -155,7 +155,7 @@ export const AuthProvider = ({ children }) => {
                     for (let ccLength = 1; ccLength <= 4; ccLength++) {
                         const possibleCC = phoneWithoutPlus.substring(0, ccLength);
                         const remainingDigits = phoneWithoutPlus.substring(ccLength);
-                        
+
                         // Check if remaining digits form a valid phone number (10-15 digits)
                         if (remainingDigits.length >= 10 && remainingDigits.length <= 15) {
                             countryCode = '+' + possibleCC;
@@ -179,10 +179,10 @@ export const AuthProvider = ({ children }) => {
                 // No + sign, assume it's just the phone number without country code
                 phoneNumber = userData.phone;
             }
-            
+
             // Ensure phone number is just digits
             phoneNumber = phoneNumber.replace(/\D/g, '');
-            
+
             const otpData = {
                 full_name: userData.fullName,
                 email: userData.email,
@@ -191,137 +191,137 @@ export const AuthProvider = ({ children }) => {
                 password: userData.password,
                 confirm_password: userData.password,
             };
-            
+
             const response = await api.post('/auth/sign-up/send-otp', otpData);
-            
+            console.log("response 1-1-1-1-", response);
             if (response.data) {
                 // Store temporary registration data for use after OTP verification
                 await AsyncStorage.setItem('tempRegistrationData', JSON.stringify({
                     ...userData,
                     tempUserId: response.data.tempUserId || response.data.user_id
                 }));
-                
-                return { 
-                    success: true, 
+
+                return {
+                    success: true,
                     message: response.data.message || 'OTP sent successfully',
                     tempUserId: response.data.tempUserId || response.data.user_id
                 };
             } else {
-                return { 
-                    success: false, 
-                    error: response.data?.message || 'Failed to send OTP' 
+                return {
+                    success: false,
+                    error: response.data?.message || 'Failed to send OTP'
                 };
             }
         } catch (error) {
-            return { 
-                success: false, 
-                error: error.response?.data?.message || 'Failed to send OTP. Please try again.' 
+            return {
+                success: false,
+                error: error.response?.data?.message || 'Failed to send OTP. Please try again.'
             };
         }
     };
-    
+
     const verifyOTPAndRegister = async (otp) => {
         try {
             // Get stored registration data
             const tempDataStr = await AsyncStorage.getItem('tempRegistrationData');
-            
+
             if (!tempDataStr) {
                 return { success: false, error: 'Registration data not found. Please start again.' };
             }
-            
+
             const tempData = JSON.parse(tempDataStr);
-            
+
             // Prepare registration data with OTP
             // Backend expects only username (email) and otp for the final registration
             const registrationData = {
                 username: tempData.email,
                 otp: otp,
             };
-            
+
             const response = await api.post('/auth/sign-up', registrationData);
 
             // Check if registration was successful and tokens are provided
             if (response.data && response.data.success && response.data.tokens) {
                 const { accessToken, refreshToken } = response.data.tokens;
                 const user = response.data.user;
-                
+
                 // Clear temporary data
                 await AsyncStorage.removeItem('tempRegistrationData');
-                
+
                 // Store token and user data
                 await AsyncStorage.setItem('authToken', accessToken);
                 await AsyncStorage.setItem('refreshToken', refreshToken);
                 await AsyncStorage.setItem('userData', JSON.stringify(user));
                 await AsyncStorage.setItem('userId', String(user?.user_id || user?.id));
-                
+
                 // Set token in API headers
                 api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
-                
+
                 // Update state
                 setUser(user);
                 setIsAuthenticated(true);
-                
+
                 return { success: true, user };
             } else if (response.data && response.data.success) {
                 // Registration successful but no tokens (shouldn't happen with our fix)
                 // Clear temporary data
                 await AsyncStorage.removeItem('tempRegistrationData');
-                
-                return { 
-                    success: false, 
-                    error: 'Registration successful but login failed. Please login manually.' 
+
+                return {
+                    success: false,
+                    error: 'Registration successful but login failed. Please login manually.'
                 };
             } else {
-                return { 
-                    success: false, 
-                    error: response.data?.message || 'Registration failed' 
+                return {
+                    success: false,
+                    error: response.data?.message || 'Registration failed'
                 };
             }
         } catch (error) {
-            return { 
-                success: false, 
-                error: error.response?.data?.message || 'Registration failed. Please try again.' 
+            return {
+                success: false,
+                error: error.response?.data?.message || 'Registration failed. Please try again.'
             };
         }
     };
-    
+
     const resendOTP = async () => {
         try {
-            
+
             // Get stored registration data to resend OTP
             const tempDataStr = await AsyncStorage.getItem('tempRegistrationData');
             if (!tempDataStr) {
                 return { success: false, error: 'Registration data not found. Please start again.' };
             }
-            
+
             const tempData = JSON.parse(tempDataStr);
-            
+
             // Backend expects username field for resend OTP
             const resendData = {
                 username: tempData.email
             };
-            
+
             const response = await api.post('/auth/sign-up/resend-otp', resendData);
-            
+
             if (response.data) {
-                return { 
-                    success: true, 
-                    message: response.data.message || 'OTP resent successfully' 
+                return {
+                    success: true,
+                    message: response.data.message || 'OTP resent successfully'
                 };
             } else {
-                return { 
-                    success: false, 
-                    error: response.data?.message || 'Failed to resend OTP' 
+                return {
+                    success: false,
+                    error: response.data?.message || 'Failed to resend OTP'
                 };
             }
         } catch (error) {
-            return { 
-                success: false, 
-                error: error.response?.data?.message || 'Failed to resend OTP' 
+            return {
+                success: false,
+                error: error.response?.data?.message || 'Failed to resend OTP'
             };
         }
     };
-    
+
     // Keep the old register function for backward compatibility but redirect to sendOTP
     const register = async (userData) => {
         return sendOTP(userData);
@@ -332,20 +332,20 @@ export const AuthProvider = ({ children }) => {
             const response = await api.post('/auth/forgot-password', { email });
 
             if (response.data.success) {
-                return { 
-                    success: true, 
-                    message: response.data.message || 'Password reset link sent to your email' 
+                return {
+                    success: true,
+                    message: response.data.message || 'Password reset link sent to your email'
                 };
             } else {
-                return { 
-                    success: false, 
-                    error: response.data.message || 'Failed to send reset link' 
+                return {
+                    success: false,
+                    error: response.data.message || 'Failed to send reset link'
                 };
             }
         } catch (error) {
-            return { 
-                success: false, 
-                error: error.response?.data?.message || 'Network error. Please try again.' 
+            return {
+                success: false,
+                error: error.response?.data?.message || 'Network error. Please try again.'
             };
         }
     };
@@ -358,20 +358,20 @@ export const AuthProvider = ({ children }) => {
             });
 
             if (response.data.success) {
-                return { 
-                    success: true, 
-                    message: response.data.message || 'Password reset successfully' 
+                return {
+                    success: true,
+                    message: response.data.message || 'Password reset successfully'
                 };
             } else {
-                return { 
-                    success: false, 
-                    error: response.data.message || 'Failed to reset password' 
+                return {
+                    success: false,
+                    error: response.data.message || 'Failed to reset password'
                 };
             }
         } catch (error) {
-            return { 
-                success: false, 
-                error: error.response?.data?.message || 'Network error. Please try again.' 
+            return {
+                success: false,
+                error: error.response?.data?.message || 'Network error. Please try again.'
             };
         }
     };
@@ -382,24 +382,24 @@ export const AuthProvider = ({ children }) => {
 
             if (response.data.success) {
                 const updatedUser = response.data.data;
-                
+
                 // Update stored user data
                 await AsyncStorage.setItem('userData', JSON.stringify(updatedUser));
-                
+
                 // Update state
                 setUser(updatedUser);
-                
+
                 return { success: true, user: updatedUser };
             } else {
-                return { 
-                    success: false, 
-                    error: response.data.message || 'Failed to update profile' 
+                return {
+                    success: false,
+                    error: response.data.message || 'Failed to update profile'
                 };
             }
         } catch (error) {
-            return { 
-                success: false, 
-                error: error.response?.data?.message || 'Network error. Please try again.' 
+            return {
+                success: false,
+                error: error.response?.data?.message || 'Network error. Please try again.'
             };
         }
     };
@@ -418,10 +418,10 @@ export const AuthProvider = ({ children }) => {
 
     const logout = async (navigateToLogin = false) => {
         try {
-            
+
             // Reset refresh state to prevent any ongoing refresh attempts
             resetRefreshState();
-            
+
             // Try to notify backend of logout (skip if we're already getting 401s)
             if (!navigateToLogin) {
                 try {
@@ -430,18 +430,18 @@ export const AuthProvider = ({ children }) => {
                     // Continue with local logout even if server call fails
                 }
             }
-            
+
             // Clear ALL auth-related data
             await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'userData', 'tempRegistrationData', 'userId', 'accessToken', 'user']);
-            
+
             // Clear API header
             delete api.defaults.headers.common['Authorization'];
-            
+
             // Clear state
             setUser(null);
             setIsAuthenticated(false);
-            
-            
+
+
             // Navigate to login if requested (for automatic logouts)
             if (navigateToLogin) {
                 const { navigationRef } = require('../services/navigationService');
@@ -454,17 +454,17 @@ export const AuthProvider = ({ children }) => {
                     }
                 }, 200);
             }
-            
+
             return { success: true };
         } catch (error) {
-            
+
             // Even if logout fails, clear local state and navigate
             resetRefreshState();
             await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'userData', 'tempRegistrationData', 'userId', 'accessToken', 'user']);
             delete api.defaults.headers.common['Authorization'];
             setUser(null);
             setIsAuthenticated(false);
-            
+
             if (navigateToLogin) {
                 const { navigationRef } = require('../services/navigationService');
                 setTimeout(() => {
@@ -476,7 +476,7 @@ export const AuthProvider = ({ children }) => {
                     }
                 }, 200);
             }
-            
+
             return { success: false, error: 'Failed to logout completely, but cleared local session' };
         }
     };
