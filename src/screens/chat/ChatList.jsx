@@ -23,6 +23,7 @@ export default function ChatList({ navigation }) {
     const [refreshing, setRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [userId, setUserId] = useState(null);
+    const [error, setError] = useState(null);
     const theme = useTheme();
 
     useEffect(() => {
@@ -71,32 +72,43 @@ export default function ChatList({ navigation }) {
         try {
             const storedUserId = await AsyncStorage.getItem('userId');
             setUserId(storedUserId);
-            
-            // Connect to socket if not connected
+
+            // Try to connect to socket but don't block on it
             if (!socketService.isSocketConnected()) {
-                await socketService.connect();
+                socketService.connect().catch(err => {
+                    console.error('Socket connection failed, but continuing with chat list:', err);
+                });
             }
-            
+
             // Pass userId to loadChats to ensure it's available
             await loadChats(storedUserId);
         } catch (error) {
             console.error('Error loading chats:', error);
+            // Ensure loading state is reset even if there's an error
+            setLoading(false);
+            setRefreshing(false);
         }
     };
 
     const loadChats = async (currentUserId = null) => {
         try {
+            console.log('📥 Loading chats...');
             setLoading(true);
+            setError(null);
             const result = await chatService.getChats();
-            
+            console.log('📥 Chat service result:', { success: result.success, hasData: !!result.data, hasResults: !!result.data?.results });
+
             // Use passed userId or state userId
             const userIdToUse = currentUserId || userId;
-            
+
             if (!userIdToUse) {
-                console.error('User ID not available for loading chats');
+                console.error('❌ User ID not available for loading chats');
+                setError('User not authenticated. Please log in again.');
+                setLoading(false);
+                setRefreshing(false);
                 return;
             }
-            
+
             if (result.success && result.data.results) {
                 // Format chats for display
                 const formattedChats = await Promise.all(result.data.results.map(async (chat) => {
@@ -154,12 +166,21 @@ export default function ChatList({ navigation }) {
                     const timeB = b.time ? new Date(b.time).getTime() : 0;
                     return timeB - timeA;
                 });
-                
+
+                console.log('✅ Formatted', formattedChats.length, 'chats');
                 setChats(formattedChats);
+            } else {
+                // API call failed or returned no results
+                console.error('❌ Failed to load chats:', result.message || 'No results returned');
+                setError(result.message || 'Failed to load conversations');
+                setChats([]);
             }
         } catch (error) {
-            console.error('Error loading chats:', error);
+            console.error('❌ Error loading chats:', error);
+            setError('Unable to load conversations. Please try again.');
+            setChats([]);
         } finally {
+            console.log('✅ Loading complete, setting loading to false');
             setLoading(false);
             setRefreshing(false);
         }
@@ -225,7 +246,7 @@ export default function ChatList({ navigation }) {
                 <Image source={{ uri: item.avatar }} style={styles.avatar} />
                 {item.isOnline && <View style={styles.onlineIndicator} />}
             </View>
-            
+
             <View style={styles.chatContent}>
                 <View style={styles.chatHeader}>
                     <Text style={[styles.chatName, { color: theme.colors.text }]} numberOfLines={1}>
@@ -235,7 +256,7 @@ export default function ChatList({ navigation }) {
                         {item.time}
                     </Text>
                 </View>
-                
+
                 <View style={styles.messageRow}>
                     <Text style={[styles.lastMessage, { color: theme.colors.secondary }]} numberOfLines={1}>
                         {item.lastMessage}
@@ -251,6 +272,8 @@ export default function ChatList({ navigation }) {
             </View>
         </TouchableOpacity>
     );
+
+    console.log('🎨 Render - loading:', loading, 'chats count:', chats.length);
 
     if (loading) {
         return (
@@ -314,17 +337,33 @@ export default function ChatList({ navigation }) {
                 }
                 ListEmptyComponent={
                     <View style={styles.emptyContainer}>
-                        <Icon name="chatbubbles-outline" size={64} color="#C4C4C4" />
-                        <Text style={styles.emptyText}>No conversations yet</Text>
-                        <Text style={styles.emptySubtext}>
-                            Start chatting with vendors to see your messages here
-                        </Text>
-                        <TouchableOpacity 
-                            style={[styles.startChatButton, { backgroundColor: theme.colors.primary }]}
-                            onPress={createNewChat}
-                        >
-                            <Text style={styles.startChatText}>Start a Chat</Text>
-                        </TouchableOpacity>
+                        {error ? (
+                            <>
+                                <Icon name="alert-circle-outline" size={64} color="#FF6B6B" />
+                                <Text style={styles.emptyText}>Unable to Load Chats</Text>
+                                <Text style={styles.emptySubtext}>{error}</Text>
+                                <TouchableOpacity
+                                    style={[styles.startChatButton, { backgroundColor: theme.colors.primary }]}
+                                    onPress={() => loadChats(userId)}
+                                >
+                                    <Text style={styles.startChatText}>Retry</Text>
+                                </TouchableOpacity>
+                            </>
+                        ) : (
+                            <>
+                                <Icon name="chatbubbles-outline" size={64} color="#C4C4C4" />
+                                <Text style={styles.emptyText}>No conversations yet</Text>
+                                <Text style={styles.emptySubtext}>
+                                    Start chatting with vendors to see your messages here
+                                </Text>
+                                <TouchableOpacity
+                                    style={[styles.startChatButton, { backgroundColor: theme.colors.primary }]}
+                                    onPress={createNewChat}
+                                >
+                                    <Text style={styles.startChatText}>Start a Chat</Text>
+                                </TouchableOpacity>
+                            </>
+                        )}
                     </View>
                 }
             />
