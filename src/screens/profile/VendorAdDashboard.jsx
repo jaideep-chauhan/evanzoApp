@@ -223,6 +223,7 @@ export default function VendorAdDashboard({ navigation }) {
                                     extraCount={vendor.extraCount}
                                     location={vendor.location}
                                     offers={vendor.offers}
+                                    approval_status={vendor.approval_status}
                                     onChatPress={() => navigation && navigation.navigate ? navigation.navigate('Chat') : null}
                                     isFirst={idx === 0}
                                     isChat={false}
@@ -237,33 +238,54 @@ export default function VendorAdDashboard({ navigation }) {
                     )
                 ) : (
                     eventAds.length > 0 ? (
-                        eventAds.map((event) => (
-                            <EventAdCard
-                                key={event.id}
-                                title={event.title}
-                                location={event.location}
-                                duration={event.duration}
-                                date={event.date ? new Date(event.date).toLocaleDateString('en-US', { 
-                                    month: 'long', 
-                                    day: 'numeric', 
-                                    year: 'numeric' 
-                                }) : 'Date TBD'}
-                                time={event.time}
-                                budget={event.budget}
-                                guests={event.guests_count || event.guests}
-                                service_needed={event.service_needed}
-                                event_type={event.event_type}
-                                status={event.status === 'active' ? 'LIVE' : event.status.toUpperCase()}
-                                statusColor={event.status === 'active' ? '#2ECC71' : '#FFA500'}
-                                description={event.description}
-                                attachments={event.attachments || event.images}
-                                profile={{
-                                    name: user?.full_name || 'User',
-                                    image: img
-                                }}
-                                onComplete={() => {}}
-                            />
-                        ))
+                        eventAds.map((event) => {
+                            // Determine status display based on approval_status
+                            let displayStatus = 'LIVE';
+                            let displayStatusColor = '#2ECC71';
+
+                            if (event.approval_status === 'pending') {
+                                displayStatus = 'PENDING';
+                                displayStatusColor = '#FFA500';
+                            } else if (event.approval_status === 'rejected') {
+                                displayStatus = 'REJECTED';
+                                displayStatusColor = '#FF4444';
+                            } else if (event.approval_status === 'approved' && event.status === 'active') {
+                                displayStatus = 'LIVE';
+                                displayStatusColor = '#2ECC71';
+                            } else if (event.status === 'inactive') {
+                                displayStatus = 'INACTIVE';
+                                displayStatusColor = '#999999';
+                            }
+
+                            return (
+                                <EventAdCard
+                                    key={event.id}
+                                    title={event.title}
+                                    location={event.location}
+                                    duration={event.duration}
+                                    date={event.date ? new Date(event.date).toLocaleDateString('en-US', {
+                                        month: 'long',
+                                        day: 'numeric',
+                                        year: 'numeric'
+                                    }) : 'Date TBD'}
+                                    time={event.time}
+                                    budget={event.budget}
+                                    guests={event.guests_count || event.guests}
+                                    service_needed={event.service_needed}
+                                    event_type={event.event_type}
+                                    status={displayStatus}
+                                    statusColor={displayStatusColor}
+                                    approval_status={event.approval_status}
+                                    description={event.description}
+                                    attachments={event.attachments || event.images}
+                                    profile={{
+                                        name: user?.full_name || 'User',
+                                        image: img
+                                    }}
+                                    onComplete={() => {}}
+                                />
+                            );
+                        })
                     ) : (
                         <View style={styles.emptyContainer}>
                             <Text style={[styles.emptyText, { color: theme.colors.primary }]}>No event ads yet</Text>

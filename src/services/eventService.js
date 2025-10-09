@@ -289,12 +289,14 @@ class EventService {
             duration: event.duration || 'TBD',
             budget: event.budget || null,
             guests: event.guests_count || null,
+            guests_count: event.guests_count || null, // Add guests_count for consistency
             description: event.description || '',
             attachments: extractedImages.length > 0 ? extractedImages : [], // Return empty array if no images
             images: extractedImages.length > 0 ? extractedImages : [], // For new usage
             organizer: organizer, // Add organizer data for EventCard
             category: category, // Add category for filtering
             status: event.status || 'active',
+            approval_status: event.approval_status || 'pending', // Add approval_status
             visibility: event.visibility || 'public',
             is_urgent: event.is_urgent || false,
             views_count: event.views_count || 0,

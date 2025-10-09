@@ -388,6 +388,8 @@ class VendorService {
             extraCount: photos.length > 3 ? photos.length - 3 : 0,
             location: vendor.location || '',
             offers: offers,
+            approval_status: vendor.approval_status || 'pending', // Add approval_status
+            status: vendor.status || 'active', // Add status
             // Keep original data for reference
             _original: vendor
         };
