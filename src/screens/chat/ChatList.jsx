@@ -96,7 +96,13 @@ export default function ChatList({ navigation }) {
             setLoading(true);
             setError(null);
             const result = await chatService.getChats();
-            console.log('📥 Chat service result:', { success: result.success, hasData: !!result.data, hasResults: !!result.data?.results });
+            console.log('📥 Chat service result:', {
+                success: result.success,
+                hasData: !!result.data,
+                hasResults: !!result.data?.results,
+                resultsCount: result.data?.results?.length || 0,
+                fullResult: JSON.stringify(result, null, 2)
+            });
 
             // Use passed userId or state userId
             const userIdToUse = currentUserId || userId;
@@ -112,6 +118,18 @@ export default function ChatList({ navigation }) {
             if (result.success && result.data.results) {
                 // Format chats for display
                 const formattedChats = await Promise.all(result.data.results.map(async (chat) => {
+                    console.log('🔍 Processing chat:', {
+                        chatId: chat.chat_id,
+                        type: chat.type,
+                        participantsCount: chat.participants?.length,
+                        participants: chat.participants?.map(p => ({
+                            user_id: p.user_id,
+                            hasUser: !!p.user,
+                            userFields: p.user ? Object.keys(p.user) : [],
+                            fullData: p
+                        }))
+                    });
+
                     // Get participant info if it's a direct chat
                     let participantInfo = {};
                     if (chat.type === 'direct' && chat.participants && chat.participants.length > 0) {
@@ -120,21 +138,31 @@ export default function ChatList({ navigation }) {
                         const otherParticipant = chat.participants.find(p => {
                             const participantId = String(p.user_id || p.id);
                             const currentId = String(userIdToUse);
+                            console.log('🔍 Comparing participants:', { participantId, currentId, isMatch: participantId !== currentId });
                             return participantId !== currentId;
                         });
-                        
+
+                        console.log('🔍 Other participant found:', {
+                            found: !!otherParticipant,
+                            hasUser: !!otherParticipant?.user,
+                            userData: otherParticipant?.user,
+                            participantData: otherParticipant
+                        });
+
                         if (otherParticipant?.user) {
                             // User data is populated from the backend
                             participantInfo = {
                                 name: otherParticipant.user.full_name || otherParticipant.user.name || 'Unknown User',
                                 avatar: otherParticipant.user.profile_pic || otherParticipant.user.avatar
                             };
+                            console.log('✅ Using user data:', participantInfo);
                         } else if (otherParticipant) {
                             // Fallback if user data is not populated
                             participantInfo = {
                                 name: otherParticipant.full_name || otherParticipant.name || 'Unknown User',
                                 avatar: otherParticipant.profile_pic || otherParticipant.avatar
                             };
+                            console.log('⚠️ Using fallback data:', participantInfo);
                         }
                         
                         // If still no name found and we have participants, ensure we're not showing current user
@@ -227,11 +255,6 @@ export default function ChatList({ navigation }) {
         });
     };
 
-    const createNewChat = () => {
-        // Navigate to a screen to select a user to chat with
-        navigation.navigate('SelectUser');
-    };
-
     const filteredChats = chats.filter(chat =>
         chat.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
@@ -298,9 +321,6 @@ export default function ChatList({ navigation }) {
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>Messages</Text>
                 </View>
-                <TouchableOpacity style={styles.headerAction} onPress={createNewChat}>
-                    <Icon name="create-outline" size={24} color="#fff" />
-                </TouchableOpacity>
             </View>
 
             {/* Search Bar */}
@@ -356,12 +376,6 @@ export default function ChatList({ navigation }) {
                                 <Text style={styles.emptySubtext}>
                                     Start chatting with vendors to see your messages here
                                 </Text>
-                                <TouchableOpacity
-                                    style={[styles.startChatButton, { backgroundColor: theme.colors.primary }]}
-                                    onPress={createNewChat}
-                                >
-                                    <Text style={styles.startChatText}>Start a Chat</Text>
-                                </TouchableOpacity>
                             </>
                         )}
                     </View>

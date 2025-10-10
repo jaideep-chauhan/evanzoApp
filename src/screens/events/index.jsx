@@ -31,7 +31,7 @@ export default function Events() {
     const [showDateRangeModal, setShowDateRangeModal] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [showCategoryModal, setShowCategoryModal] = useState(false);
-    const [activeTab, setActiveTab] = useState(2); // Category tab is default
+    const [activeTab, setActiveTab] = useState(null); // No tab active by default
     const scrollY = useRef(new Animated.Value(0)).current;
     const [isScrolled, setIsScrolled] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
@@ -44,6 +44,10 @@ export default function Events() {
     const [networkError, setNetworkError] = useState(false);
 
     // Fetch events using new filtering service
+    // IMPORTANT: Only approved event ads should be visible in the public events tab
+    // - Backend filters for approval_status='approved'
+    // - Frontend adds an additional safety layer to ensure only approved ads are shown
+    // - User's own ads (in Profile -> My Ads) can show all statuses (pending, approved, rejected)
     const fetchEvents = async (filters = {}, resetResults = false, clearAllFilters = false) => {
         if (isFetchingEvents) {
             console.log('Already fetching events, skipping...');
@@ -80,7 +84,13 @@ export default function Events() {
                 console.log('📋 No filters applied, fetching all events');
                 response = await eventService.getPublicEventAds();
                 if (response.success && response.data) {
-                    const formattedEvents = response.data.map(event => 
+                    // Filter to only show approved event ads
+                    const approvedEvents = response.data.filter(event =>
+                        event.approval_status === 'approved'
+                    );
+                    console.log(`✅ Filtered ${response.data.length} ads to ${approvedEvents.length} approved ads`);
+
+                    const formattedEvents = approvedEvents.map(event =>
                         eventService.formatEventForDisplay(event)
                     );
                     response = {
@@ -102,12 +112,18 @@ export default function Events() {
                         page: searchFilters.page,
                         limit: searchFilters.limit
                     });
-                    
+
                     if (response.success && response.data) {
+                        // Filter to only show approved event ads
+                        const approvedEvents = response.data.filter(event =>
+                            event.approval_status === 'approved'
+                        );
+                        console.log(`✅ Filtered ${response.data.length} search results to ${approvedEvents.length} approved ads`);
+
                         response = {
                             success: true,
-                            data: response.data.map(event => eventService.formatEventForDisplay(event)),
-                            pagination: response.pagination || { page: 1, limit: 10, totalPages: 1, totalResults: response.data.length }
+                            data: approvedEvents.map(event => eventService.formatEventForDisplay(event)),
+                            pagination: response.pagination || { page: 1, limit: 10, totalPages: 1, totalResults: approvedEvents.length }
                         };
                     }
                 } catch (searchError) {
@@ -116,7 +132,11 @@ export default function Events() {
                     
                     const allEventsResponse = await eventService.getPublicEventAds();
                     if (allEventsResponse.success && allEventsResponse.data) {
-                        let filteredEvents = allEventsResponse.data;
+                        // Filter to only show approved event ads first
+                        let filteredEvents = allEventsResponse.data.filter(event =>
+                            event.approval_status === 'approved'
+                        );
+                        console.log(`✅ Client-side: Filtered ${allEventsResponse.data.length} ads to ${filteredEvents.length} approved ads`);
                         
                         // Apply client-side filtering - search across multiple fields
                         if (searchFilters.keyword) {
@@ -197,8 +217,13 @@ export default function Events() {
                 if (resetResults) {
                     setEvents(response.data || []);
                 } else {
-                    // For pagination, append results
-                    setEvents(prev => [...prev, ...(response.data || [])]);
+                    // For pagination, append results and remove duplicates based on event_ad_id
+                    setEvents(prev => {
+                        const newData = response.data || [];
+                        const existingIds = new Set(prev.map(e => e._original?.event_ad_id || e.id));
+                        const uniqueNewData = newData.filter(e => !existingIds.has(e._original?.event_ad_id || e.id));
+                        return [...prev, ...uniqueNewData];
+                    });
                 }
                 setPagination(response.pagination || { page: 1, limit: 10, totalPages: 1, totalResults: 0 });
                 setCurrentFilters(searchFilters);
@@ -222,15 +247,21 @@ export default function Events() {
 
     // Fetch events on component mount
     useEffect(() => {
+        let isMounted = true;
+
         // Initial fetch with a small delay to prevent race conditions
         const initialFetchTimeout = setTimeout(() => {
-            fetchEvents();
+            if (isMounted && !isFetchingEvents) {
+                console.log('🚀 Initial event fetch on mount');
+                fetchEvents({}, true, false); // Reset results on mount
+            }
         }, 100);
-        
+
         return () => {
+            isMounted = false;
             clearTimeout(initialFetchTimeout);
         };
-    }, []);
+    }, []); // Empty dependency array ensures this runs only once on mount
 
     const dummyEvents = [
         {
@@ -363,7 +394,14 @@ export default function Events() {
     const handleLocationSelect = (location) => {
         setSelectedLocation(location);
         setShowLocationModal(false);
-        
+
+        // Set active tab only if a location is selected
+        if (location) {
+            setActiveTab(0); // Location is index 0
+        } else {
+            setActiveTab(null);
+        }
+
         // Apply location filter
         const newFilters = { ...currentFilters };
         if (location) {
@@ -371,19 +409,26 @@ export default function Events() {
         } else {
             delete newFilters.location;
         }
-        
+
         // Check if we're clearing all filters
-        const hasAnyFilter = Object.keys(newFilters).some(key => 
+        const hasAnyFilter = Object.keys(newFilters).some(key =>
             key !== 'page' && key !== 'limit' && newFilters[key]
         );
-        
+
         fetchEvents(newFilters, true, !hasAnyFilter);
     };
 
     const handleDateRangeSelect = (dateRange) => {
         setSelectedDateRange(dateRange);
         setShowDateRangeModal(false);
-        
+
+        // Set active tab only if a date range is selected
+        if (dateRange && dateRange.startDate && dateRange.endDate) {
+            setActiveTab(1); // Date is index 1
+        } else {
+            setActiveTab(null);
+        }
+
         // Apply date range filter
         const newFilters = { ...currentFilters };
         if (dateRange && dateRange.startDate && dateRange.endDate) {
@@ -393,12 +438,12 @@ export default function Events() {
             delete newFilters.dateFrom;
             delete newFilters.dateTo;
         }
-        
+
         // Check if we're clearing all filters
-        const hasAnyFilter = Object.keys(newFilters).some(key => 
+        const hasAnyFilter = Object.keys(newFilters).some(key =>
             key !== 'page' && key !== 'limit' && newFilters[key]
         );
-        
+
         fetchEvents(newFilters, true, !hasAnyFilter);
     };
 
@@ -406,7 +451,14 @@ export default function Events() {
         console.log('📱 Event category selected:', category);
         setSelectedCategory(category);
         setShowCategoryModal(false);
-        
+
+        // Set active tab only if a category is selected
+        if (category && category.length > 0) {
+            setActiveTab(2); // Category is index 2
+        } else {
+            setActiveTab(null);
+        }
+
         // Apply category filter
         const newFilters = { ...currentFilters };
         if (category && category.length > 0) {
@@ -414,14 +466,14 @@ export default function Events() {
         } else {
             delete newFilters.category;
         }
-        
+
         console.log('🎯 Event filters to apply:', newFilters);
-        
+
         // Check if we're clearing all filters
-        const hasAnyFilter = Object.keys(newFilters).some(key => 
+        const hasAnyFilter = Object.keys(newFilters).some(key =>
             key !== 'page' && key !== 'limit' && newFilters[key]
         );
-        
+
         fetchEvents(newFilters, true, !hasAnyFilter);
     };
 
@@ -434,26 +486,38 @@ export default function Events() {
     // Removed duplicate loading effect - fetchEvents already handles loading state
 
     const onRefresh = React.useCallback(async () => {
+        // Don't refresh if already fetching
+        if (isFetchingEvents) {
+            console.log('🔄 Already fetching, skipping refresh');
+            return;
+        }
+
+        console.log('🔄 Event refresh triggered');
         setRefreshing(true);
-        
+
         try {
+            // Clear events array first to prevent duplicates
+            setEvents([]);
+
             // Reset filters and search
             setSelectedLocation(null);
             setSelectedCategory(null);
             setSelectedDateRange(null);
+            setActiveTab(null); // Clear active tab
             setSearchQuery('');
             setCurrentFilters({});
-            
+            setPagination({ page: 1, limit: 10, totalPages: 1, totalResults: 0 });
+
             // Fetch fresh data with no filters - pass true for clearAllFilters
             await fetchEvents({}, true, true);
-            
+
             console.log('Events refreshed successfully');
         } catch (error) {
             console.error('Error refreshing events:', error);
         } finally {
             setRefreshing(false);
         }
-    }, []);
+    }, [isFetchingEvents]);
 
     return (
         <View style={[styles.safe, { backgroundColor: '#fff' }]}>
@@ -516,12 +580,9 @@ export default function Events() {
                     </View>
                 ) : (
                     <>
-                {/* Filter status and event count */}
-                {(events.length > 0 || searchQuery || selectedLocation || selectedCategory || selectedDateRange) && (
+                {/* Filter status */}
+                {(selectedLocation || selectedCategory || selectedDateRange || searchQuery) && (
                     <View style={[styles.filterIndicator, { backgroundColor: '#f0f4ff', borderColor: theme.colors.primary + '33' }]}>
-                        <Text style={[styles.filterIndicatorText, { color: theme.colors.primary }]}>
-                            {events.length} event{events.length !== 1 ? 's' : ''} {(searchQuery || selectedLocation || selectedCategory || selectedDateRange) ? 'found' : 'available'}
-                        </Text>
                         {(selectedLocation || selectedCategory || selectedDateRange || searchQuery) && (
                             <View style={styles.activeFilters}>
                                 {searchQuery && (
@@ -582,6 +643,7 @@ export default function Events() {
                                     setSelectedLocation(null);
                                     setSelectedCategory(null);
                                     setSelectedDateRange(null);
+                                    setActiveTab(null); // Clear active tab
                                     setSearchQuery('');
                                     setCurrentFilters({});
                                     fetchEvents({}, true, true); // Pass true for clearAllFilters
@@ -593,13 +655,11 @@ export default function Events() {
                     </View>
                 ) : (
                     events.map((event, idx) => (
-                        <View key={idx}>
-                            <EventCard
-                                key={event.id}
-                                event={event}
-                                onGiveQuote={() => handleGiveQuote(event)}
-                            />
-                        </View>
+                        <EventCard
+                            key={`event-${event._original?.event_ad_id || event.id}-${idx}`}
+                            event={event}
+                            onGiveQuote={() => handleGiveQuote(event)}
+                        />
                     ))
                 )}
                     </>

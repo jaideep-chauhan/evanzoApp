@@ -26,7 +26,7 @@ class ChatService {
       if (userData) {
         const user = JSON.parse(userData);
         const currentUserId = String(user?.user_id || user?.id);
-        
+
         if (String(recipientId) === currentUserId) {
           return {
             success: false,
@@ -34,15 +34,32 @@ class ChatService {
           };
         }
       }
-      
-      const response = await api.post('/chat/direct', {
-        recipient_id: recipientId
+
+      // Convert recipientId to number as backend expects a number
+      const numericRecipientId = Number(recipientId);
+
+      console.log('📤 createDirectChat - Sending request:', {
+        recipient_id: numericRecipientId,
+        originalRecipientId: recipientId,
+        type: typeof numericRecipientId
       });
+
+      const response = await api.post('/chat/direct', {
+        recipient_id: numericRecipientId
+      });
+
+      console.log('✅ createDirectChat - Response:', response.data);
+
       return {
         success: true,
         data: response.data.data
       };
     } catch (error) {
+      console.error('❌ createDirectChat - Error:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to create direct chat'

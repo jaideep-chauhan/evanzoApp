@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
     View,
     Text,
@@ -110,8 +110,16 @@ const SavedVendors = () => {
             images: vendor.images || (vendor.image ? [vendor.image] : []),
             offers: vendor.offers || []
         };
-        
-        navigation.navigate('VendorChat', { vendor: vendorData });
+
+        console.log('📍 Navigating to vendor details:', vendorData.name);
+        navigation.navigate('VendorAddDetail', { vendor: vendorData });
+    };
+
+    // Navigate to Vendors tab
+    const navigateToVendors = () => {
+        console.log('📍 Navigating to Vendors tab');
+        // Navigate to the main tab navigator and switch to Vendors tab
+        navigation.navigate('Main', { screen: 'Vendors' });
     };
 
     // Render vendor item
@@ -164,9 +172,9 @@ const SavedVendors = () => {
             <Text style={styles.emptySubtitle}>
                 Start exploring and save vendors you're interested in
             </Text>
-            <TouchableOpacity 
+            <TouchableOpacity
                 style={styles.exploreButton}
-                onPress={() => navigation.navigate('Vendors')}
+                onPress={navigateToVendors}
             >
                 <Text style={styles.exploreButtonText}>Explore Vendors</Text>
             </TouchableOpacity>
@@ -181,12 +189,49 @@ const SavedVendors = () => {
         );
     }
 
+    // Handle back button
+    const handleBackPress = () => {
+        console.log('🔙 Back button pressed in SavedVendors');
+        console.log('🔙 Navigation state:', navigation.getState());
+
+        try {
+            // Try multiple navigation methods
+            if (navigation.canGoBack()) {
+                console.log('✅ Can go back, using goBack()');
+                navigation.goBack();
+            } else {
+                console.log('⚠️ Cannot go back, trying to navigate to Profile');
+                // Try to navigate back to Main/Profile
+                navigation.reset({
+                    index: 0,
+                    routes: [
+                        {
+                            name: 'Main',
+                            state: {
+                                routes: [{ name: 'Profile' }],
+                                index: 0,
+                            },
+                        },
+                    ],
+                });
+            }
+        } catch (error) {
+            console.error('❌ Navigation error:', error);
+            // Fallback: just navigate to Main
+            navigation.navigate('Main');
+        }
+    };
+
     return (
         <View style={styles.container}>
             <View style={styles.header}>
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={styles.backButton}
-                    onPress={() => navigation.goBack()}
+                    onPress={handleBackPress}
+                    activeOpacity={0.6}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    onPressIn={() => console.log('🔘 Back button PRESS IN')}
+                    onPressOut={() => console.log('🔘 Back button PRESS OUT')}
                 >
                     <Icon name="arrow-back" size={24} color="#2C3D5B" />
                 </TouchableOpacity>
@@ -243,9 +288,14 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         borderBottomWidth: 1,
         borderBottomColor: '#e0e0e0',
+        zIndex: 1000,
+        elevation: 5,
     },
     backButton: {
         padding: 8,
+        zIndex: 1001,
+        elevation: 6,
+        backgroundColor: 'transparent',
     },
     headerTitle: {
         fontSize: 20,

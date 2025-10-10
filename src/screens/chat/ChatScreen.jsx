@@ -139,14 +139,19 @@ export default function ChatScreen({ route, navigation }) {
 
             // If no chatId but have recipientId, create direct chat
             if (!chatId && recipientId) {
+                console.log('📞 Creating direct chat with recipientId:', recipientId);
                 const result = await chatService.createDirectChat(recipientId);
+                console.log('📞 Direct chat creation result:', result);
+
                 if (result.success) {
                     actualChatId = result.data.chat_id;
                     setChatId(actualChatId);
+                    console.log('✅ Direct chat created successfully with chatId:', actualChatId);
                     // Update route params with new chatId
                     navigation.setParams({ chatId: actualChatId });
                 } else {
-                    Alert.alert('Error', 'Failed to create chat');
+                    console.error('❌ Failed to create direct chat:', result.message);
+                    Alert.alert('Error', result.message || 'Failed to create chat');
                     navigation.goBack();
                     return;
                 }

@@ -3,17 +3,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { logout } from './navigationService';
 
-// Local development URL
-const BASE_URL = Platform.select({
-    ios: 'http://localhost:3000/api',
-    android: 'http://10.0.2.2:3000/api', // Android emulator uses 10.0.2.2 for host machine
-});
-
-// Production URL (commented out for local development)
+// Local development URL - ACTIVE FOR TESTING
 // const BASE_URL = Platform.select({
-//     ios: 'https://api.evnzo.com/api',
-//     android: 'https://api.evnzo.com/api',
+//     ios: 'http://localhost:3000/api',
+//     android: 'http://10.0.2.2:3000/api', // Android emulator uses 10.0.2.2 for host machine
 // });
+
+// Production URL (commented out for development)
+const BASE_URL = Platform.select({
+    ios: 'https://api.evnzo.com/api',
+    android: 'https://api.evnzo.com/api',
+});
 
 export const API_BASE_URL = BASE_URL; // Export for socket service
 

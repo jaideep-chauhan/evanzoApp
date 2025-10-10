@@ -30,15 +30,63 @@ export default function EditProfileModal({ visible, onClose, onUpdate }) {
     });
 
     useEffect(() => {
-        if (visible && user) {
-            setFormData({
-                full_name: user.full_name || '',
-                email: user.email || '',
-                phone: user.phone || '',
-                location: user.location || '',
-                bio: user.bio || '',
-            });
-        }
+        const loadUserData = async () => {
+            if (visible && user) {
+                console.log('📝 EditProfileModal - User data from context:', {
+                    full_name: user.full_name,
+                    email: user.email,
+                    phone: user.phone,
+                    location: user.location,
+                    bio: user.bio,
+                    allKeys: Object.keys(user)
+                });
+
+                // Try to get additional data from AsyncStorage
+                try {
+                    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+                    const userData = await AsyncStorage.getItem('userData');
+                    if (userData) {
+                        const parsedData = JSON.parse(userData);
+                        console.log('📝 EditProfileModal - User data from storage:', {
+                            phone_number: parsedData.phone_number,
+                            phone: parsedData.phone,
+                            location: parsedData.location,
+                            allKeys: Object.keys(parsedData)
+                        });
+
+                        // Merge data from storage with context
+                        setFormData({
+                            full_name: user.full_name || parsedData.full_name || parsedData.name || '',
+                            email: user.email || parsedData.email || '',
+                            phone: user.phone || parsedData.phone || parsedData.phone_number || '',
+                            location: user.location || parsedData.location || '',
+                            bio: user.bio || parsedData.bio || '',
+                        });
+                    } else {
+                        // Just use context data
+                        setFormData({
+                            full_name: user.full_name || '',
+                            email: user.email || '',
+                            phone: user.phone || '',
+                            location: user.location || '',
+                            bio: user.bio || '',
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error loading user data from storage:', error);
+                    // Fallback to context data
+                    setFormData({
+                        full_name: user.full_name || '',
+                        email: user.email || '',
+                        phone: user.phone || '',
+                        location: user.location || '',
+                        bio: user.bio || '',
+                    });
+                }
+            }
+        };
+
+        loadUserData();
     }, [visible, user]);
 
     const handleUpdate = async () => {
