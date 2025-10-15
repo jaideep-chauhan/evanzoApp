@@ -248,7 +248,10 @@ class VendorService {
     formatVendorForDisplay(vendor) {
         // Parse photos if it's a JSON string or use attachments
         let photos = [];
-        const baseUrl = API_BASE_URL.replace('/api', ''); // Remove /api to get base server URL
+        // Since API_BASE_URL is 'https://api.evnzo.com/api', we need to extract the proper base URL
+        const baseUrl = API_BASE_URL.replace('/api', '').replace('api.', ''); // This will give us https://evnzo.com
+        // But we need the API subdomain, so let's use the correct URL
+        const imageBaseUrl = 'https://api.evnzo.com'; // Use the actual API server URL for images
         
         console.log('📸 Formatting vendor for display:', {
             vendorId: vendor.vendor_ad_id || vendor.id,
@@ -256,7 +259,9 @@ class VendorService {
             photosType: typeof vendor.photos,
             photosLength: vendor.photos ? vendor.photos.length : 0,
             hasAttachments: !!vendor.attachments,
-            baseUrl
+            baseUrl,
+            imageBaseUrl,
+            API_BASE_URL
         });
         
         if (vendor.photos) {
@@ -267,11 +272,11 @@ class VendorService {
                         // If photo has url property, use it directly
                         if (photo.url) {
                             // If it's already a full URL, use it; otherwise append base URL
-                            return photo.url.startsWith('http') ? photo.url : `${baseUrl}${photo.url}`;
+                            return photo.url.startsWith('http') ? photo.url : `${imageBaseUrl}${photo.url}`;
                         }
                         // If photo has path property, use it with base URL
                         if (photo.path) {
-                            return `${baseUrl}${photo.path}`;
+                            return `${imageBaseUrl}${photo.path}`;
                         }
                         // If it's already a URL string
                         if (typeof photo === 'string' && photo.startsWith('http')) {
@@ -279,7 +284,7 @@ class VendorService {
                         }
                         // If it's a path string
                         if (typeof photo === 'string') {
-                            return `${baseUrl}${photo}`;
+                            return `${imageBaseUrl}${photo}`;
                         }
                         return photo;
                     });
@@ -290,13 +295,13 @@ class VendorService {
             } else if (Array.isArray(vendor.photos) && vendor.photos.length > 0) {
                 photos = vendor.photos.map(photo => {
                     if (typeof photo === 'object' && photo.url) {
-                        return photo.url.startsWith('http') ? photo.url : `${baseUrl}${photo.url}`;
+                        return photo.url.startsWith('http') ? photo.url : `${imageBaseUrl}${photo.url}`;
                     }
                     if (typeof photo === 'string' && photo.startsWith('http')) {
                         return photo;
                     }
                     if (typeof photo === 'string') {
-                        return `${baseUrl}${photo}`;
+                        return `${imageBaseUrl}${photo}`;
                     }
                     return photo;
                 });
@@ -310,10 +315,10 @@ class VendorService {
                 try {
                     const parsed = JSON.parse(vendor.attachments);
                     photos = parsed.map(att => {
-                        if (att.url) return att.url.startsWith('http') ? att.url : `${baseUrl}${att.url}`;
-                        if (att.path) return `${baseUrl}${att.path}`;
+                        if (att.url) return att.url.startsWith('http') ? att.url : `${imageBaseUrl}${att.url}`;
+                        if (att.path) return `${imageBaseUrl}${att.path}`;
                         if (typeof att === 'string' && att.startsWith('http')) return att;
-                        if (typeof att === 'string') return `${baseUrl}${att}`;
+                        if (typeof att === 'string') return `${imageBaseUrl}${att}`;
                         return att;
                     });
                 } catch (e) {
@@ -322,15 +327,22 @@ class VendorService {
                 }
             } else if (Array.isArray(vendor.attachments)) {
                 photos = vendor.attachments.map(att => {
-                    if (typeof att === 'object' && att.url) return att.url.startsWith('http') ? att.url : `${baseUrl}${att.url}`;
+                    if (typeof att === 'object' && att.url) return att.url.startsWith('http') ? att.url : `${imageBaseUrl}${att.url}`;
                     if (typeof att === 'string' && att.startsWith('http')) return att;
-                    if (typeof att === 'string') return `${baseUrl}${att}`;
+                    if (typeof att === 'string') return `${imageBaseUrl}${att}`;
                     return att;
                 });
             }
         }
         
-        console.log('📸 Final formatted photos:', photos);
+        console.log('📸 Final formatted photos:', {
+            count: photos.length,
+            photos: photos.map((photo, index) => ({
+                index,
+                url: photo,
+                isValidUrl: typeof photo === 'string' && photo.startsWith('http')
+            }))
+        });
 
         // Calculate initials from company name or title
         const displayName = vendor.company_name || vendor.title || 'Vendor';

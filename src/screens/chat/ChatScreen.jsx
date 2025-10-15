@@ -821,7 +821,11 @@ export default function ChatScreen({ route, navigation }) {
     }
 
     return (
-        <View style={styles.container}>
+        <KeyboardAvoidingView 
+            style={styles.container}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
             <StatusBar barStyle="light-content" backgroundColor={theme.colors.primary} />
             {/* Header */}
             <View style={[styles.header, { backgroundColor: theme.colors.primary }]}>
@@ -877,55 +881,50 @@ export default function ChatScreen({ route, navigation }) {
             </ImageBackground>
 
             {/* Sticky Input Bar */}
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-            >
-                <View style={styles.inputSectionContainer}>
-                    <View style={styles.inputSection}>
-                        <View style={styles.inputBar}>
-                            <TouchableOpacity 
-                                style={styles.attachButton}
-                                onPress={() => setShowAttachmentModal(true)}
-                                disabled={uploadingFile}
-                            >
-                                <Icon name="add" size={24} color={uploadingFile ? "#ccc" : "#8B95A5"} />
-                            </TouchableOpacity>
-                            <TextInput
-                                style={styles.textInput}
-                                placeholder="Type a message..."
-                                placeholderTextColor="#8B95A5"
-                                value={newMessage}
-                                onChangeText={(text) => {
-                                    setNewMessage(text);
-                                    handleTyping();
-                                }}
-                                multiline
-                                maxLength={1000}
-                                editable={!isSending}
-                            />
-                        </View>
-                        <TouchableOpacity
-                            style={[
-                                styles.sendButton,
-                                newMessage.trim().length > 0 && [styles.sendButtonActive, { backgroundColor: theme.colors.primary }],
-                            ]}
-                            onPress={sendMessage}
-                            disabled={newMessage.trim().length === 0 || isSending}
+            <View style={styles.inputSectionContainer}>
+                <View style={styles.inputSection}>
+                    <View style={styles.inputBar}>
+                        <TouchableOpacity 
+                            style={styles.attachButton}
+                            onPress={() => setShowAttachmentModal(true)}
+                            disabled={uploadingFile}
                         >
-                            {isSending ? (
-                                <ActivityIndicator size="small" color="#fff" />
-                            ) : (
-                                <Icon
-                                    name={newMessage.trim().length > 0 ? "send" : "mic"}
-                                    size={22}
-                                    color={newMessage.trim().length > 0 ? "#fff" : "#8B95A5"}
-                                />
-                            )}
+                            <Icon name="add" size={24} color={uploadingFile ? "#ccc" : "#8B95A5"} />
                         </TouchableOpacity>
+                        <TextInput
+                            style={styles.textInput}
+                            placeholder="Type a message..."
+                            placeholderTextColor="#8B95A5"
+                            value={newMessage}
+                            onChangeText={(text) => {
+                                setNewMessage(text);
+                                handleTyping();
+                            }}
+                            multiline
+                            maxLength={1000}
+                            editable={!isSending}
+                        />
                     </View>
+                    <TouchableOpacity
+                        style={[
+                            styles.sendButton,
+                            newMessage.trim().length > 0 && [styles.sendButtonActive, { backgroundColor: theme.colors.primary }],
+                        ]}
+                        onPress={sendMessage}
+                        disabled={newMessage.trim().length === 0 || isSending}
+                    >
+                        {isSending ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                            <Icon
+                                name={newMessage.trim().length > 0 ? "send" : "mic"}
+                                size={22}
+                                color={newMessage.trim().length > 0 ? "#fff" : "#8B95A5"}
+                            />
+                        )}
+                    </TouchableOpacity>
                 </View>
-            </KeyboardAvoidingView>
+            </View>
 
             {/* Attachment Modal */}
             <Modal
@@ -975,7 +974,7 @@ export default function ChatScreen({ route, navigation }) {
                     </View>
                 </TouchableOpacity>
             </Modal>
-        </View>
+        </KeyboardAvoidingView>
     );
 }
 
@@ -1079,7 +1078,7 @@ const styles = StyleSheet.create({
     messagesContainer: {
         paddingVertical: 20,
         paddingHorizontal: 15,
-        paddingBottom: 100,
+        paddingBottom: 20,
     },
     messageContainer: {
         marginVertical: 2,
@@ -1158,12 +1157,10 @@ const styles = StyleSheet.create({
         marginHorizontal: 2,
     },
     inputSectionContainer: {
-        position: 'absolute',
-        bottom: 15,
-        left: 0,
-        right: 0,
         paddingHorizontal: 15,
         paddingVertical: 10,
+        paddingBottom: Platform.OS === 'ios' ? 10 : 15,
+        backgroundColor: '#fff',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: -2 },
         shadowOpacity: 0.1,

@@ -43,7 +43,14 @@ export default function VendorCard({
         imagesLength: images ? images.length : 0, 
         imagesType: typeof images,
         vendorId: vendorId || 'unknown',
-        name 
+        name,
+        firstImage: images && images.length > 0 ? images[0] : null,
+        imageDetails: images ? images.map((img, idx) => ({
+            index: idx,
+            type: typeof img,
+            value: img,
+            isValidUrl: typeof img === 'string' && img.startsWith('http')
+        })) : []
     });
     
     const safeImages = images && images.length > 0 ? images : [img, img, img];

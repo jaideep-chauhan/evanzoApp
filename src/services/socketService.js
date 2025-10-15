@@ -99,8 +99,18 @@ class SocketService {
       console.log('🔑 Token preview:', token.substring(0, 50) + '...');
 
       // Get the base URL for socket connection
-      const socketUrl = API_BASE_URL.replace('/api', '');
+      // For production: https://api.evnzo.com/api -> https://api.evnzo.com
+      // For local: http://localhost:3000/api -> http://localhost:3000
+      let socketUrl = API_BASE_URL;
+      if (socketUrl.endsWith('/api')) {
+        socketUrl = socketUrl.slice(0, -4); // Remove trailing /api
+      }
+      
+      // Check if this is production environment
+      const isProduction = socketUrl.includes('evnzo.com');
+      
       console.log('🌐 Connecting to socket server:', socketUrl);
+      console.log('🔧 Environment:', isProduction ? 'Production' : 'Development');
 
       // Calculate reconnection delay with exponential backoff
       const reconnectDelay = Math.min(
@@ -109,19 +119,44 @@ class SocketService {
       );
 
       // Initialize socket connection with better reconnection settings
+      // For production, use both polling and websocket transports for better compatibility
       this.socket = io(socketUrl, {
         auth: {
           token: token
         },
-        transports: ['websocket'],
+        transports: isProduction ? ['polling', 'websocket'] : ['websocket'], // Use polling first in production
         reconnection: true,
         reconnectionAttempts: this.maxReconnectAttempts,
         reconnectionDelay: reconnectDelay,
         reconnectionDelayMax: this.maxReconnectDelay,
         randomizationFactor: 0.5, // Add jitter to prevent thundering herd
         timeout: 20000, // 20 second connection timeout
+        secure: isProduction, // Use secure connection in production
+        rejectUnauthorized: false, // Allow self-signed certificates (if needed)
+        forceNew: true, // Force a new connection
+        upgrade: isProduction, // Allow transport upgrade in production
+        path: '/socket.io/', // Explicit socket.io path
       });
 
+      // Add additional debugging events for production
+      if (isProduction) {
+        this.socket.on('connect_attempt', (attempt) => {
+          console.log('🔄 Socket connection attempt:', attempt);
+        });
+        
+        this.socket.on('reconnect_attempt', (attempt) => {
+          console.log('🔄 Socket reconnection attempt:', attempt);
+        });
+        
+        this.socket.on('ping', () => {
+          console.log('🏓 Socket ping sent');
+        });
+        
+        this.socket.on('pong', (latency) => {
+          console.log('🏓 Socket pong received, latency:', latency, 'ms');
+        });
+      }
+      
       this.setupEventHandlers();
       
       return new Promise((resolve, reject) => {
@@ -132,6 +167,13 @@ class SocketService {
 
         this.connectionTimeout = setTimeout(() => {
           console.error('⏱️ Socket connection timeout after 20 seconds');
+          console.error('⏱️ Final connection state:', {
+            url: socketUrl,
+            isProduction,
+            socketId: this.socket?.id,
+            connected: this.socket?.connected,
+            disconnected: this.socket?.disconnected
+          });
           this.connectionState = 'error';
           this.socket?.disconnect();
           reject(new Error('Connection timeout'));
@@ -156,10 +198,18 @@ class SocketService {
             this.connectionTimeout = null;
           }
           
-          // Limit error logging to prevent spam
+          // Enhanced error logging for production debugging
           if (this.reconnectAttempts === 0 || this.reconnectAttempts % 3 === 0) {
             console.error('❌ Socket connection error:', error.message);
             console.error('❌ Error type:', error.type);
+            console.error('❌ Error details:', {
+              code: error.code,
+              data: error.data,
+              context: error.context,
+              stack: error.stack?.substring(0, 200)
+            });
+            console.error('❌ Connection URL:', socketUrl);
+            console.error('❌ Is Production:', isProduction);
             console.error('❌ Reconnect attempt:', this.reconnectAttempts + 1, '/', this.maxReconnectAttempts);
           }
           
@@ -196,18 +246,32 @@ class SocketService {
               
               // Try connecting again with new token after delay
               setTimeout(() => {
-                this.socket = io(socketUrl, {
+                // Recalculate socket URL for retry
+                let retrySocketUrl = API_BASE_URL;
+                if (retrySocketUrl.endsWith('/api')) {
+                  retrySocketUrl = retrySocketUrl.slice(0, -4);
+                }
+                
+                // Check if this is production environment
+                const isProduction = retrySocketUrl.includes('evnzo.com');
+
+                this.socket = io(retrySocketUrl, {
                   auth: {
                     token: newToken
                   },
-                  transports: ['websocket'],
+                  transports: isProduction ? ['polling', 'websocket'] : ['websocket'],
                   reconnection: true,
                   reconnectionAttempts: this.maxReconnectAttempts - this.reconnectAttempts,
                   reconnectionDelay: retryDelay,
                   reconnectionDelayMax: this.maxReconnectDelay,
                   timeout: 20000,
+                  secure: isProduction,
+                  rejectUnauthorized: false,
+                  forceNew: true,
+                  upgrade: isProduction,
+                  path: '/socket.io/',
                 });
-                
+
                 // Set up handlers for retry
                 this.socket.once('connect', () => {
                   this.isConnected = true;
@@ -217,14 +281,14 @@ class SocketService {
                   console.log('🆔 Socket ID:', this.socket.id);
                   resolve(true);
                 });
-                
+
                 this.socket.once('connect_error', (retryError) => {
                   console.error('❌ Failed to connect even after token refresh:', retryError.message);
                   this.connectionState = 'error';
                   this.isConnected = false;
                   reject(retryError);
                 });
-                
+
                 // Re-setup event handlers for the new socket
                 this.setupEventHandlers();
               }, retryDelay);
