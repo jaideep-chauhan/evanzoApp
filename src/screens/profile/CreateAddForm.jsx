@@ -12,6 +12,7 @@ import {
     FlatList,
     Platform,
     PermissionsAndroid,
+    KeyboardAvoidingView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { launchImageLibrary } from 'react-native-image-picker';
@@ -398,7 +399,11 @@ const CreateAddForm = ({ type, onClose }) => {
     };
 
     return (
-        <View style={styles.modalBorderWrapPro}>
+        <KeyboardAvoidingView 
+            style={styles.modalBorderWrapPro}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
             {/* Header */}
             <View style={styles.headerPro}>
                 <Text style={styles.headerTitlePro}>
@@ -410,6 +415,7 @@ const CreateAddForm = ({ type, onClose }) => {
                 contentContainerStyle={styles.containerPro}
                 showsVerticalScrollIndicator={false}
                 nestedScrollEnabled={true}
+                keyboardShouldPersistTaps="handled"
             >
                 {type === 'event' ? (
                     <>
@@ -987,7 +993,7 @@ const CreateAddForm = ({ type, onClose }) => {
                 type={toastState.type}
                 onHide={() => setToastState({ ...toastState, visible: false })}
             />
-        </View>
+        </KeyboardAvoidingView>
     );
 };
 

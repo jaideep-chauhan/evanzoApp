@@ -1,6 +1,8 @@
 import io from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from './api';
+import notificationService from './notificationService';
+import { AppState } from 'react-native';
 
 class SocketService {
   constructor() {
@@ -375,8 +377,35 @@ class SocketService {
     });
 
     // Message events
-    this.socket.on('new-message', (data) => {
+    this.socket.on('new-message', async (data) => {
       console.log('New message received:', data.message.message_id);
+      
+      // Check if app is in background/inactive to show notification
+      const currentAppState = AppState.currentState;
+      const currentUser = await AsyncStorage.getItem('userData');
+      const userData = currentUser ? JSON.parse(currentUser) : null;
+      const currentUserId = userData?.user_id || userData?.id;
+      
+      // Don't show notification if message is from current user
+      if (data.message.sender_id !== currentUserId) {
+        // Show notification if app is in background or inactive
+        if (currentAppState === 'background' || currentAppState === 'inactive') {
+          await notificationService.displayNotification({
+            data: {
+              type: 'chat_message',
+              chat_id: data.chatId,
+              sender_name: data.message.sender?.full_name || 'User',
+              sender_id: data.message.sender_id,
+              message: data.message.content,
+            },
+            notification: {
+              title: data.message.sender?.full_name || 'New Message',
+              body: data.message.content,
+            }
+          });
+        }
+      }
+      
       this.emit('new-message', data);
     });
 

@@ -28,6 +28,7 @@ import vendorService from '../../services/vendorService';
 import eventService from '../../services/eventService';
 import profileService from '../../services/profileService';
 import { useAuth } from '../../context/AuthContext';
+import useAdminNotifications from '../../hooks/useAdminNotifications';
 
 const { height: screenHeight } = Dimensions.get('window');
 
@@ -35,6 +36,9 @@ export default function VendorAdDashboard({ navigation }) {
     const theme = useTheme();
     const { user } = useAuth();
     const [activeTab, setActiveTab] = useState('vendor');
+    
+    // Initialize admin notifications listener
+    useAdminNotifications();
     const [showPreSaved, setShowPreSaved] = useState(false);
     const [showChangeProfile, setShowChangeProfile] = useState(false);
     const [showCreateAd, setShowCreateAd] = useState(false);
@@ -100,11 +104,11 @@ export default function VendorAdDashboard({ navigation }) {
                         >
                         </ImageBackground>
                         <View style={styles.header}>
-                            <TouchableOpacity>
+                            <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
                                 <Icon name="settings-outline" size={30} color="#fff" />
                             </TouchableOpacity>
                             <View style={{ width: 32 }} />
-                            <TouchableOpacity>
+                            <TouchableOpacity onPress={() => navigation.navigate('ChatList')}>
                                 <Icon name="chatbubble-ellipses-outline" size={30} color="#fff" />
                             </TouchableOpacity>
                         </View>

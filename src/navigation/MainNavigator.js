@@ -30,7 +30,7 @@ import TermsOfUse from '../screens/settings/TermsOfUse';
 import PrivacyPolicy from '../screens/settings/PrivacyPolicy';
 
 // Event Detail Screen
-import EventDetailView from '../screens/events/EventDetailView';
+import EventDetailViewOptimized from '../screens/events/EventDetailViewOptimized';
 import AllReviewsScreen from '../screens/vendors/vendorViewDetails';
 import Review from '../screens/vendors/Review';
 
@@ -195,7 +195,7 @@ const MainNavigator = () => {
                         <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicy} />
 
                         {/* Event Detail Screen */}
-                        <Stack.Screen name="EventDetailView" component={EventDetailView} />
+                        <Stack.Screen name="EventDetailView" component={EventDetailViewOptimized} />
                     </>
                 )}
             </Stack.Navigator>

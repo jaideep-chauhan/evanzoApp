@@ -143,7 +143,7 @@ export default function EventDetailView() {
                 } else if (att.url) {
                     return { uri: att.url };
                 } else if (att.path) {
-                    return { uri: `${API_BASE_URL.replace('/api', '')}${att.path}` };
+                    return { uri: `https://api.evnzo.com${att.path}` };
                 }
                 return img;
             })

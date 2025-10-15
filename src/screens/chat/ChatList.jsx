@@ -29,11 +29,20 @@ export default function ChatList({ navigation }) {
     useEffect(() => {
         loadUserAndChats();
         
+        // Refresh chats when screen comes into focus
+        const unsubscribe = navigation.addListener('focus', () => {
+            console.log('📱 ChatList screen focused, refreshing...');
+            if (userId) {
+                loadChats(userId);
+            }
+        });
+        
         return () => {
+            unsubscribe();
             socketService.off('chat-updated');
             socketService.off('new-message');
         };
-    }, []);
+    }, [navigation]);
     
     // Set up socket listeners when userId is available
     useEffect(() => {
@@ -55,17 +64,30 @@ export default function ChatList({ navigation }) {
     };
 
     const updateChatLastMessage = (chatId, message) => {
-        setChats(prevChats => prevChats.map(chat => {
-            if (chat.id === chatId) {
-                return {
-                    ...chat,
-                    lastMessage: message.content,
-                    time: formatTime(message.created_at),
-                    unreadCount: chat.unreadCount + (message.sender_id !== userId ? 1 : 0)
-                };
+        setChats(prevChats => {
+            // Check if chat exists in the list
+            const chatExists = prevChats.some(chat => chat.id === chatId);
+            
+            if (chatExists) {
+                // Update existing chat
+                return prevChats.map(chat => {
+                    if (chat.id === chatId) {
+                        return {
+                            ...chat,
+                            lastMessage: message.content,
+                            time: formatTime(message.created_at),
+                            unreadCount: chat.unreadCount + (message.sender_id !== userId ? 1 : 0)
+                        };
+                    }
+                    return chat;
+                });
+            } else {
+                // Chat doesn't exist, reload the chat list to get the new chat
+                console.log('🔄 New chat detected, reloading chat list...');
+                loadChats(userId);
+                return prevChats;
             }
-            return chat;
-        }));
+        });
     };
 
     const loadUserAndChats = async () => {
@@ -188,15 +210,26 @@ export default function ChatList({ navigation }) {
                     };
                 }));
                 
+                // Remove any duplicate chats (same chat_id)
+                const uniqueChats = formattedChats.reduce((acc, chat) => {
+                    const exists = acc.find(c => c.id === chat.id);
+                    if (!exists) {
+                        acc.push(chat);
+                    } else {
+                        console.log('⚠️ Duplicate chat found and removed:', chat.id);
+                    }
+                    return acc;
+                }, []);
+                
                 // Sort by last message time
-                formattedChats.sort((a, b) => {
+                uniqueChats.sort((a, b) => {
                     const timeA = a.time ? new Date(a.time).getTime() : 0;
                     const timeB = b.time ? new Date(b.time).getTime() : 0;
                     return timeB - timeA;
                 });
 
-                console.log('✅ Formatted', formattedChats.length, 'chats');
-                setChats(formattedChats);
+                console.log('✅ Formatted', uniqueChats.length, 'chats (removed', formattedChats.length - uniqueChats.length, 'duplicates)');
+                setChats(uniqueChats);
             } else {
                 // API call failed or returned no results
                 console.error('❌ Failed to load chats:', result.message || 'No results returned');

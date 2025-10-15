@@ -12,12 +12,15 @@
     "fix-ios": "node scripts/fix-third-party-components.js"
   },
   "dependencies": {
+    "@notifee/react-native": "^9.1.8",
     "@react-native-async-storage/async-storage": "^2.1.2",
     "@react-native-community/blur": "^4.4.1",
     "@react-native-community/checkbox": "^0.5.20",
     "@react-native-community/datetimepicker": "^8.3.0",
     "@react-native-community/progress-bar-android": "^1.0.5",
     "@react-native-community/slider": "^4.5.7",
+    "@react-native-firebase/app": "^23.4.1",
+    "@react-native-firebase/messaging": "^23.4.1",
     "@react-native-google-signin/google-signin": "^13.2.0",
     "@react-native-picker/picker": "^2.11.0",
     "@react-navigation/bottom-tabs": "^7.3.3",
@@ -33,6 +36,7 @@
     "react-native-date-picker": "^5.0.12",
     "react-native-document-picker": "^9.3.1",
     "react-native-element-dropdown": "^2.12.4",
+    "react-native-fast-image": "^8.6.3",
     "react-native-file-viewer": "^2.1.5",
     "react-native-fs": "^2.20.0",
     "react-native-heroicons": "^4.0.0",

@@ -43,17 +43,17 @@ export default function VendorChat({ navigation }) {
 
     const scrollToOffer = route.params?.scrollToOffer;
     const vendor = route.params?.vendor;
-    
-    
+
+
     // Format images to ensure they're in the correct format
     const formattedImages = (() => {
         console.log('Formatting images for vendor:', vendor?.name);
         console.log('Raw vendor images:', vendor?.images);
-        
+
         if (vendor?.images && Array.isArray(vendor.images) && vendor.images.length > 0) {
             const formatted = vendor.images.map((image, index) => {
                 console.log(`Processing image ${index}:`, image);
-                
+
                 // If it's already an object with uri, use the uri
                 if (typeof image === 'object' && image.uri) {
                     console.log(`Image ${index} is object with uri:`, image.uri);
@@ -101,10 +101,10 @@ export default function VendorChat({ navigation }) {
         }
 
         // Get vendor's user_id - try different possible fields
-        const vendorUserId = vendor?.user_id || 
-                           vendor?._original?.user_id || 
-                           vendor?.owner_id ||
-                           vendor?.vendor_user_id;
+        const vendorUserId = vendor?.user_id ||
+            vendor?._original?.user_id ||
+            vendor?.owner_id ||
+            vendor?.vendor_user_id;
 
         if (!vendorUserId) {
             Alert.alert('Error', 'Unable to identify vendor. Please try again.');
@@ -116,7 +116,7 @@ export default function VendorChat({ navigation }) {
         try {
             // Step 1: Create or get direct chat with vendor
             const chatResult = await chatService.createDirectChat(vendorUserId);
-            
+
             if (!chatResult.success) {
                 Alert.alert('Error', chatResult.message || 'Failed to create chat with vendor');
                 return;
@@ -206,7 +206,7 @@ export default function VendorChat({ navigation }) {
                     <View style={styles.quoteSection}>
                         <TextInput
                             style={styles.quoteInput}
-                            placeholder="Send a quote request to this vendor..."
+                            placeholder="Send a quote request"
                             placeholderTextColor="#ccc"
                             value={quoteText}
                             onChangeText={setQuoteText}
@@ -215,8 +215,8 @@ export default function VendorChat({ navigation }) {
                             textAlignVertical="top"
                             editable={!isSubmittingQuote}
                         />
-                        <TouchableOpacity 
-                            style={[styles.sendBtn, isSubmittingQuote && styles.sendBtnDisabled]} 
+                        <TouchableOpacity
+                            style={[styles.sendBtn, isSubmittingQuote && styles.sendBtnDisabled]}
                             onPress={handleSendQuote}
                             disabled={isSubmittingQuote}
                         >

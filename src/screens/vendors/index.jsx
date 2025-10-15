@@ -24,6 +24,7 @@ import CatererCard from './CatererCard';
 import Icon from 'react-native-vector-icons/Ionicons';
 import vendorService from '../../services/vendorService';
 import filterService from '../../services/filterService';
+import chatService from '../../services/chatService';
 
 export default function Vendor() {
     const navigation = useNavigation();
@@ -47,6 +48,8 @@ export default function Vendor() {
     const [searchQuery, setSearchQuery] = useState('');
     const [currentFilters, setCurrentFilters] = useState({});
     const [pagination, setPagination] = useState({ page: 1, limit: 10, totalPages: 1, totalResults: 0 });
+    const [checkingChat, setCheckingChat] = useState(null); // Track which vendor's chat is being checked
+    const chatCacheRef = useRef(new Map()); // Cache existing chat lookups
 
     // Fetch vendors using new filtering service
     // IMPORTANT: Only approved vendor ads should be visible in the public vendors tab
@@ -489,12 +492,14 @@ export default function Vendor() {
                                     location={vendor.location}
                                     offers={vendor.offers || []} // Add offers prop
                                     isFocused={idx === focusedCardIndex}
+                                    isCheckingChat={checkingChat === `vendor_${vendor._original?.user_id}`}
                                     onChatPress={async () => {
                                         // Get current user ID
                                         const currentUserData = await AsyncStorage.getItem('userData');
                                         const currentUser = currentUserData ? JSON.parse(currentUserData) : null;
                                         const currentUserId = currentUser?.user_id || currentUser?.id;
                                         const vendorUserId = vendor._original?.user_id;
+                                        const vendorKey = `vendor_${vendorUserId}`;
 
                                         console.log('Chat button pressed:', {
                                             currentUserId,
@@ -512,12 +517,62 @@ export default function Vendor() {
                                             return;
                                         }
 
-                                        navigation.navigate('ChatScreen', {
-                                            recipientId: vendorUserId,
-                                            chatName: vendor.name,
-                                            avatar: 'https://randomuser.me/api/portraits/men/1.jpg',
-                                            isOnline: false,
-                                        });
+                                        // Show loading state
+                                        setCheckingChat(vendorKey);
+
+                                        try {
+                                            let existingChatResult;
+                                            
+                                            // Check cache first
+                                            if (chatCacheRef.current.has(vendorUserId)) {
+                                                console.log('📦 Using cached chat info for vendor:', vendorUserId);
+                                                existingChatResult = chatCacheRef.current.get(vendorUserId);
+                                            } else {
+                                                // Not in cache, fetch from server
+                                                console.log('🔍 Checking for existing chat with vendor:', vendorUserId);
+                                                existingChatResult = await chatService.findDirectChat(vendorUserId);
+                                                
+                                                // Cache the result for future use
+                                                chatCacheRef.current.set(vendorUserId, existingChatResult);
+                                            }
+                                            
+                                            // Hide loading state
+                                            setCheckingChat(null);
+                                            
+                                            if (existingChatResult.exists) {
+                                                // Navigate to existing chat
+                                                console.log('📱 Navigating to existing chat:', existingChatResult.chatId);
+                                                navigation.navigate('ChatScreen', {
+                                                    chatId: existingChatResult.chatId,
+                                                    chatName: vendor.name,
+                                                    avatar: 'https://randomuser.me/api/portraits/men/1.jpg',
+                                                    isOnline: false,
+                                                });
+                                            } else {
+                                                // No existing chat, navigate with recipientId to create new
+                                                console.log('📱 No existing chat, will create new one');
+                                                navigation.navigate('ChatScreen', {
+                                                    recipientId: vendorUserId,
+                                                    chatName: vendor.name,
+                                                    avatar: 'https://randomuser.me/api/portraits/men/1.jpg',
+                                                    isOnline: false,
+                                                });
+                                                
+                                                // Clear cache for this vendor as a new chat will be created
+                                                chatCacheRef.current.delete(vendorUserId);
+                                            }
+                                        } catch (error) {
+                                            console.error('Error checking for existing chat:', error);
+                                            setCheckingChat(null);
+                                            
+                                            // Fallback: navigate directly with recipientId
+                                            navigation.navigate('ChatScreen', {
+                                                recipientId: vendorUserId,
+                                                chatName: vendor.name,
+                                                avatar: 'https://randomuser.me/api/portraits/men/1.jpg',
+                                                isOnline: false,
+                                            });
+                                        }
                                     }}
                                 />
                             ))

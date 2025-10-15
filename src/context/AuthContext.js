@@ -36,6 +36,13 @@ export const AuthProvider = ({ children }) => {
 
                 // Parse and verify user data
                 const user = JSON.parse(userData);
+                
+                // Map phone_number to phone field if it exists
+                if (user && user.phone_number && !user.phone) {
+                    user.phone = user.phone_number;
+                    // Update stored data with the mapped field
+                    await AsyncStorage.setItem('userData', JSON.stringify(user));
+                }
 
                 setUser(user);
                 setIsAuthenticated(true);
@@ -76,6 +83,21 @@ export const AuthProvider = ({ children }) => {
                 const { accessToken, refreshToken } = response.data.tokens;
                 const user = response.data.user;
 
+                // Map phone_number to phone field if it exists
+                // This ensures consistency between registration data and profile display
+                if (user && user.phone_number && !user.phone) {
+                    user.phone = user.phone_number;
+                }
+                
+                // Log user data for debugging
+                console.log('✅ User logged in successfully:', {
+                    id: user?.user_id || user?.id,
+                    email: user?.email,
+                    phone: user?.phone,
+                    phone_number: user?.phone_number,
+                    full_name: user?.full_name,
+                    location: user?.location
+                });
 
                 // Clear any old data first
                 await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'userData']);
@@ -244,6 +266,22 @@ export const AuthProvider = ({ children }) => {
             if (response.data && response.data.success && response.data.tokens) {
                 const { accessToken, refreshToken } = response.data.tokens;
                 const user = response.data.user;
+
+                // Map phone_number to phone field if it exists
+                // This ensures consistency between registration data and profile display
+                if (user && (user.phone_number || tempData.phone)) {
+                    user.phone = user.phone || user.phone_number || tempData.phone;
+                }
+                
+                // Log user data for debugging
+                console.log('✅ User registered successfully:', {
+                    id: user?.user_id || user?.id,
+                    email: user?.email,
+                    phone: user?.phone,
+                    phone_number: user?.phone_number,
+                    full_name: user?.full_name,
+                    location: user?.location
+                });
 
                 // Clear temporary data
                 await AsyncStorage.removeItem('tempRegistrationData');

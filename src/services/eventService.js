@@ -203,7 +203,7 @@ class EventService {
     extractImages(attachments) {
         if (!attachments) return [];
         
-        const baseUrl = API_BASE_URL.replace('/api', ''); // Remove /api to get base server URL
+        const imageBaseUrl = 'https://api.evnzo.com'; // Use the actual API server URL for images
         
         try {
             // If attachments is a JSON string, parse it
@@ -229,10 +229,10 @@ class EventService {
                         // Return properly formatted URL string for image rendering
                         if (typeof item === 'string') {
                             // If it's already a full URL, use it; otherwise append base URL
-                            return item.startsWith('http') ? item : `${baseUrl}${item}`;
+                            return item.startsWith('http') ? item : `${imageBaseUrl}${item}`;
                         } else if (typeof item === 'object' && item.url) {
                             // Handle file objects with url property
-                            return item.url.startsWith('http') ? item.url : `${baseUrl}${item.url}`;
+                            return item.url.startsWith('http') ? item.url : `${imageBaseUrl}${item.url}`;
                         }
                         return null;
                     })

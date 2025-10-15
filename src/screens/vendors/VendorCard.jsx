@@ -7,6 +7,7 @@ import {
     TouchableOpacity,
     Animated,
     Dimensions,
+    ActivityIndicator,
 } from 'react-native';
 import { StarIcon, CurrencyDollarIcon, TagIcon } from 'react-native-heroicons/solid';
 import { useNavigation } from '@react-navigation/native';
@@ -32,6 +33,7 @@ export default function VendorCard({
     vendorId,
     fullVendorData, // Full vendor object with all data
     approval_status, // Approval status for the ad
+    isCheckingChat = false, // Loading state for chat button
 }) {
     const navigation = useNavigation();
     const theme = useTheme();
@@ -289,8 +291,16 @@ export default function VendorCard({
                 <View style={styles.rowContent}>
                     <Text style={styles.description} numberOfLines={2}>{description}</Text>
                     {isChat && (
-                        <TouchableOpacity style={[styles.chatBtn, { backgroundColor: theme.colors.primary, shadowColor: theme.colors.primary }]} onPress={onChatPress}>
-                            <Text style={styles.chatText}>Chat</Text>
+                        <TouchableOpacity 
+                            style={[styles.chatBtn, { backgroundColor: theme.colors.primary, shadowColor: theme.colors.primary }]} 
+                            onPress={isCheckingChat ? null : onChatPress}
+                            disabled={isCheckingChat}
+                        >
+                            {isCheckingChat ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                                <Text style={styles.chatText}>Chat</Text>
+                            )}
                         </TouchableOpacity>
                     )}
                 </View>

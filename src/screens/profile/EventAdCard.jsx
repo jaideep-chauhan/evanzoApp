@@ -36,6 +36,14 @@ export default function EventAdCard({
     const theme = useTheme();
     const navigation = useNavigation();
     const safeAttachments = Array.isArray(attachments) ? attachments : [];
+    
+    // Debug logging for attachments
+    console.log('🎴 EventAdCard - attachments received:', {
+        title,
+        attachmentsCount: safeAttachments.length,
+        attachments: safeAttachments,
+        firstImage: safeAttachments[0]
+    });
 
     const handleCardPress = () => {
         // Create event object from props
@@ -127,15 +135,34 @@ export default function EventAdCard({
                         <Text style={[styles.attachmentTitle, { color: theme.colors.primary }]}>Attachments</Text>
                     </View>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                        {safeAttachments.map((imageItem, index) => (
-                            <Image 
-                                key={index} 
-                                source={typeof imageItem === 'string' ? { uri: imageItem } : imageItem}
-                                style={styles.attachmentImage}
-                                defaultSource={img} // Fallback image
-                                onError={() => {}}
-                            />
-                        ))}
+                        {safeAttachments.map((imageItem, index) => {
+                            // Ensure we have a valid image source
+                            let imageSource;
+                            if (typeof imageItem === 'string') {
+                                // If it's a string URL, ensure it's properly formatted
+                                const imageUrl = imageItem.startsWith('http') ? imageItem : `https://api.evnzo.com${imageItem}`;
+                                imageSource = { uri: imageUrl };
+                                console.log(`🖼️ EventAdCard - Image ${index} URL:`, imageUrl);
+                            } else if (typeof imageItem === 'object' && imageItem.uri) {
+                                // If it's already an object with uri
+                                imageSource = imageItem;
+                            } else {
+                                // Fallback to dummy image
+                                imageSource = img;
+                            }
+                            
+                            return (
+                                <Image 
+                                    key={index} 
+                                    source={imageSource}
+                                    style={styles.attachmentImage}
+                                    defaultSource={img} // Fallback image
+                                    onError={(error) => {
+                                        console.log(`❌ EventAdCard - Image ${index} load error:`, error.nativeEvent);
+                                    }}
+                                />
+                            );
+                        })}
                     </ScrollView>
                 </View>
             )}

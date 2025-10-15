@@ -18,6 +18,53 @@ class ChatService {
     }
   }
 
+  // Find existing direct chat with a user
+  async findDirectChat(recipientId) {
+    try {
+      console.log('🔍 Finding direct chat with recipient:', recipientId);
+      
+      // Get all chats and find direct chat with this recipient
+      const response = await this.getChats({ type: 'direct' });
+      
+      if (response.success && response.data?.results) {
+        // Find chat where one of the participants is the recipient
+        const existingChat = response.data.results.find(chat => {
+          if (chat.type !== 'direct') return false;
+          
+          // Check if any participant matches the recipientId
+          return chat.participants?.some(p => 
+            String(p.user_id) === String(recipientId)
+          );
+        });
+        
+        if (existingChat) {
+          console.log('✅ Found existing chat:', existingChat.chat_id);
+          return {
+            success: true,
+            exists: true,
+            chatId: existingChat.chat_id,
+            chat: existingChat
+          };
+        }
+      }
+      
+      console.log('ℹ️ No existing chat found with recipient:', recipientId);
+      return {
+        success: true,
+        exists: false,
+        chatId: null,
+        chat: null
+      };
+    } catch (error) {
+      console.error('Error finding direct chat:', error);
+      return {
+        success: false,
+        exists: false,
+        message: error.message
+      };
+    }
+  }
+
   // Create direct chat with a user
   async createDirectChat(recipientId) {
     try {

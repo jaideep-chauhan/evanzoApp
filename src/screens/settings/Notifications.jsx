@@ -9,6 +9,7 @@ import {
     Switch,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import NotificationStatus from '../../components/NotificationStatus';
 
 export default function Notifications() {
     const navigation = useNavigation();
@@ -76,6 +77,7 @@ export default function Notifications() {
                 <Text style={styles.headerTitle}>Notifications</Text>
             </View>
             <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+                <NotificationStatus />
                 {notificationItems.map(renderItem)}
             </ScrollView>
         </SafeAreaView>

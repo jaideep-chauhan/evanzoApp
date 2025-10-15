@@ -49,7 +49,7 @@ export default function EventCard({ event, onGiveQuote }) {
             </View>
 
             {/* Profile + Description */}
-            <View style={[styles.profileRow, { marginTop: 6, marginBottom: 12 }]}> {/* Adjusted spacing */}
+            <View style={[styles.profileRow, { marginTop: 6, marginBottom: 12 }]}>
                 <View style={{ alignItems: 'center', marginRight: 12 }}>
                     <Image source={{ uri: event.organizer.avatar }} style={styles.avatar} />
                     <Text style={[styles.profileName, { color: theme.colors.primary, marginTop: 6 }]} numberOfLines={1} ellipsizeMode="tail">{event.organizer.name}</Text>
@@ -61,7 +61,9 @@ export default function EventCard({ event, onGiveQuote }) {
                         <View style={styles.budgetContainer}>
                             <Text style={styles.budgetLabel}>Budget: </Text>
                             <View style={styles.budgetItem}>
-                                <Text style={[styles.budgetText, { color: theme.colors.primary }]}>${event.budget}</Text>
+                                <Text style={[styles.budgetText, { color: theme.colors.primary }]}>
+                                    ${typeof event.budget === 'number' ? event.budget.toString() : event.budget}
+                                </Text>
                             </View>
                         </View>
                     )}
@@ -70,7 +72,7 @@ export default function EventCard({ event, onGiveQuote }) {
 
             {/* Attachments */}
             {safeAttachments.length > 0 && (
-                <View style={[styles.attachmentSection, { borderTopWidth: 2, paddingTop: 12, marginTop: 4 }]}> {/* Enhanced divider */}
+                <View style={[styles.attachmentSection, { borderTopWidth: 2, paddingTop: 12, marginTop: 4 }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', width: '100%' }}>
                         <Icon name="attach" size={18} color={theme.colors.primary} style={{ marginBottom: 8 }} />
                         <Text style={[styles.attachmentTitle, { color: theme.colors.primary }]}>Attachments</Text>
