@@ -10,7 +10,6 @@ import {
     Image,
     KeyboardAvoidingView,
     Platform,
-    Dimensions,
     ImageBackground,
     ActivityIndicator,
 } from 'react-native';
@@ -24,6 +23,7 @@ import appple from '../../assets/images/apple.png';
 import google from '../../assets/images/google.png';
 import facebook from '../../assets/images/fb.png';
 import Icon from 'react-native-vector-icons/Ionicons';
+import Toast from 'react-native-toast-message';
 
 // Validation schema
 const loginSchema = Yup.object().shape({
@@ -51,7 +51,6 @@ export default function LoginScreen() {
     const [imageLoaded, setImageLoaded] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
-    const [errorMessage, setErrorMessage] = useState('');
 
     // Add timeout for image loading to prevent infinite loader
     React.useEffect(() => {
@@ -97,31 +96,62 @@ export default function LoginScreen() {
                             <Formik
                                 initialValues={{ emailOrPhone: '', password: '' }}
                                 validationSchema={loginSchema}
-                                onSubmit={async (values, { setSubmitting, setFieldError }) => {
+                                onSubmit={async (values, { setSubmitting }) => {
                                     console.log('🔵 Form values:', values);
+
                                     setIsLoading(true);
-                                    setErrorMessage(''); // Clear previous errors
+                                    setSubmitting(true);
+
                                     try {
                                         // Pass emailOrPhone directly to login function
                                         console.log('🔵 Calling login with:', values.emailOrPhone, 'and password');
-                                        
+
                                         const result = await login(values.emailOrPhone, values.password);
-                                        
+
                                         if (result.success) {
+                                            Toast.show({
+                                                type: 'success',
+                                                text1: 'Login Successful',
+                                                text2: 'Welcome back!',
+                                            });
                                             // Navigate to main screen on successful login
                                             navigation.reset({
                                                 index: 0,
                                                 routes: [{ name: 'Main' }],
                                             });
                                         } else {
-                                            // Show error message
-                                            setErrorMessage(result.error || 'Invalid credentials. Please try again.');
+                                            // Show error message via toast
+                                            const errorMsg = result.error || 'Invalid credentials. Please try again.';
+                                            console.log('❌ Login failed:', errorMsg);
+
+                                            // Show toast immediately
+                                            Toast.show({
+                                                type: 'error',
+                                                text1: 'Login Failed',
+                                                text2: errorMsg,
+                                            });
+
+                                            // Reset loading state after a brief moment
+                                            requestAnimationFrame(() => {
+                                                setIsLoading(false);
+                                                setSubmitting(false);
+                                            });
                                         }
                                     } catch (error) {
-                                        setErrorMessage('Something went wrong. Please try again later.');
-                                    } finally {
-                                        setIsLoading(false);
-                                        setSubmitting(false);
+                                        console.error('❌ Login error:', error);
+
+                                        // Show toast immediately
+                                        Toast.show({
+                                            type: 'error',
+                                            text1: 'Error',
+                                            text2: 'Something went wrong. Please try again later.',
+                                        });
+
+                                        // Reset loading state after a brief moment
+                                        requestAnimationFrame(() => {
+                                            setIsLoading(false);
+                                            setSubmitting(false);
+                                        });
                                     }
                                 }}
                             >
@@ -133,14 +163,7 @@ export default function LoginScreen() {
                                     >
                                         <Text style={[styles.loginTitle, { color: theme.colors.primary }]}>Login</Text>
                                         <Text style={[styles.subtitle, { color: theme.colors.primary }]}>Welcome back, you've been missed!</Text>
-                                        
-                                        {errorMessage ? (
-                                            <View style={styles.errorContainer}>
-                                                <Icon name="alert-circle-outline" size={20} color="#FF6B6B" />
-                                                <Text style={styles.errorMessage}>{errorMessage}</Text>
-                                            </View>
-                                        ) : null}
-                                        
+
                                         <View style={styles.inputGroup}>
                                             <Text style={[styles.label, { color: theme.colors.primary }]}>Phone Number or Email</Text>
                                             <View style={styles.inputWrapper}>
@@ -354,24 +377,6 @@ const styles = StyleSheet.create({
         fontSize: 12,
         marginTop: 4,
         marginLeft: 4,
-    },
-    errorContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFF5F5',
-        padding: 12,
-        borderRadius: 10,
-        marginTop: 12,
-        marginBottom: 8,
-        borderWidth: 1,
-        borderColor: '#FFE0E0',
-    },
-    errorMessage: {
-        color: '#D32F2F',
-        fontSize: 14,
-        marginLeft: 8,
-        flex: 1,
-        lineHeight: 18,
     },
     loginTitle: {
         fontSize: 28,

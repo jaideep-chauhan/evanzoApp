@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Platform, Modal, Pressable, ActivityIndicator, Alert, FlatList, ScrollView } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Platform, Modal, Pressable, ActivityIndicator, Alert, FlatList, ScrollView, KeyboardAvoidingView } from 'react-native';
 import { useTheme } from '../../ThemeContext';
 import DatePicker from 'react-native-date-picker';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -245,7 +245,16 @@ const PreSavedMessage = ({ onClose, visible }) => {
     }
 
     return (
-        <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        <KeyboardAvoidingView
+            style={styles.container}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+        >
+            <ScrollView
+                style={styles.scrollView}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+            >
             <View style={styles.fieldGroup}>
                 <Text style={[styles.label, { color: theme.colors.primary }]}>Event Name</Text>
                 <TextInput
@@ -268,29 +277,28 @@ const PreSavedMessage = ({ onClose, visible }) => {
                 />
             </View>
 
-            <View style={styles.row}>
-                <View style={[styles.fieldGroup, styles.half]}>
-                    <Text style={[styles.label, { color: theme.colors.primary }]}>Category</Text>
-                    <TouchableOpacity
-                        style={[styles.input, styles.dropdownButton]}
-                        onPress={() => setShowCategoryDropdown(true)}
-                    >
-                        <Text style={styles.dropdownText}>{category || 'Select Category'}</Text>
-                        <Icon name="chevron-down" size={20} color="#999" />
-                    </TouchableOpacity>
-                </View>
-                <View style={[styles.fieldGroup, styles.half]}>
-                    <Text style={[styles.label, { color: theme.colors.primary }]}>Date</Text>
-                    <TouchableOpacity 
-                        style={[styles.input, styles.dateButton]}
-                        onPress={() => setShowDatePicker(true)}
-                    >
-                        <Icon name="calendar-outline" size={20} color={theme.colors.primary} />
-                        <Text style={styles.dateText}>
-                            {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-                        </Text>
-                    </TouchableOpacity>
-                </View>
+            <View style={styles.fieldGroup}>
+                <Text style={[styles.label, { color: theme.colors.primary }]}>Category</Text>
+                <TouchableOpacity
+                    style={[styles.input, styles.dropdownButton]}
+                    onPress={() => setShowCategoryDropdown(true)}
+                >
+                    <Text style={styles.dropdownText}>{category || 'Select Category'}</Text>
+                    <Icon name="chevron-down" size={20} color="#999" />
+                </TouchableOpacity>
+            </View>
+
+            <View style={styles.fieldGroup}>
+                <Text style={[styles.label, { color: theme.colors.primary }]}>Date</Text>
+                <TouchableOpacity
+                    style={[styles.input, styles.dateButton]}
+                    onPress={() => setShowDatePicker(true)}
+                >
+                    <Icon name="calendar-outline" size={20} color={theme.colors.primary} />
+                    <Text style={styles.dateText}>
+                        {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                    </Text>
+                </TouchableOpacity>
             </View>
             <View style={styles.row}>
                 <View style={[styles.fieldGroup, styles.half]}>
@@ -515,7 +523,8 @@ const PreSavedMessage = ({ onClose, visible }) => {
                 onConfirm={handleSuccessModalConfirm}
                 confirmText="OK"
             />
-        </ScrollView>
+            </ScrollView>
+        </KeyboardAvoidingView>
     );
 };
 
@@ -525,21 +534,26 @@ const styles = StyleSheet.create({
     container: {
         backgroundColor: '#fff',
         borderRadius: 12,
-        padding: 20,
         width: '100%',
         maxWidth: 600,
+        maxHeight: '100%',
         alignSelf: 'center',
         elevation: 4,
         shadowColor: '#000',
         shadowOpacity: 0.1,
         shadowRadius: 6,
         shadowOffset: { width: 0, height: 2 },
+        flex: 1,
+    },
+    scrollView: {
+        flex: 1,
+        padding: 20,
     },
     fieldGroup: {
         marginBottom: 16,
     },
     label: {
-        fontWeight: '600',
+        fontWeight: '500',
         fontSize: 16,
         marginBottom: 6,
     },

@@ -67,14 +67,26 @@ export default function ChatList({ navigation }) {
         setChats(prevChats => {
             // Check if chat exists in the list
             const chatExists = prevChats.some(chat => chat.id === chatId);
-            
+
             if (chatExists) {
                 // Update existing chat
                 return prevChats.map(chat => {
                     if (chat.id === chatId) {
+                        // Format last message based on message type
+                        let lastMessage = message.content;
+                        if (message.message_type === 'image') {
+                            lastMessage = '📷 Photo';
+                        } else if (message.message_type === 'document') {
+                            lastMessage = '📄 Document';
+                        } else if (message.message_type === 'video') {
+                            lastMessage = '🎥 Video';
+                        } else if (!lastMessage || lastMessage.trim() === '') {
+                            lastMessage = '📎 Attachment';
+                        }
+
                         return {
                             ...chat,
-                            lastMessage: message.content,
+                            lastMessage: lastMessage,
                             time: formatTime(message.created_at),
                             unreadCount: chat.unreadCount + (message.sender_id !== userId ? 1 : 0)
                         };
@@ -196,10 +208,27 @@ export default function ChatList({ navigation }) {
                         }
                     }
 
+                    // Format last message based on message type
+                    let lastMessage = chat.last_message || 'No messages yet';
+                    if (chat.last_message_type === 'image') {
+                        lastMessage = '📷 Photo';
+                    } else if (chat.last_message_type === 'document') {
+                        lastMessage = '📄 Document';
+                    } else if (chat.last_message_type === 'video') {
+                        lastMessage = '🎥 Video';
+                    } else if (!chat.last_message || chat.last_message.trim() === '') {
+                        // If there's a message but no content, it's likely an attachment
+                        if (chat.last_message_time) {
+                            lastMessage = '📎 Attachment';
+                        } else {
+                            lastMessage = 'No messages yet';
+                        }
+                    }
+
                     return {
                         id: chat.chat_id,
                         name: participantInfo.name || chat.name || 'Unknown User',
-                        lastMessage: chat.last_message || 'No messages yet',
+                        lastMessage: lastMessage,
                         time: formatTime(chat.last_message_time),
                         avatar: participantInfo.avatar || chat.avatar || generateAvatar(participantInfo.name || chat.name),
                         unreadCount: chat.unread_count || 0,

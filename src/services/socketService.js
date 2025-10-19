@@ -202,13 +202,12 @@ class SocketService {
           
           // Enhanced error logging for production debugging
           if (this.reconnectAttempts === 0 || this.reconnectAttempts % 3 === 0) {
-            console.error('❌ Socket connection error:', error.message);
-            console.error('❌ Error type:', error.type);
+            console.error('❌ Socket connection error:', error?.message || 'Unknown error');
+            console.error('❌ Error type:', error?.type || 'Unknown');
             console.error('❌ Error details:', {
-              code: error.code,
-              data: error.data,
-              context: error.context,
-              stack: error.stack?.substring(0, 200)
+              code: error?.code || 'UNKNOWN',
+              data: error?.data || null,
+              context: error?.context || null
             });
             console.error('❌ Connection URL:', socketUrl);
             console.error('❌ Is Production:', isProduction);

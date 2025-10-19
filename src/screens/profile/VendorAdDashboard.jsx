@@ -630,6 +630,7 @@ const styles = StyleSheet.create({
         borderRadius: 18,
         width: '90%',
         maxWidth: 400,
+        maxHeight: '65%',
         position: 'relative',
         elevation: 10,
         shadowColor: '#000',

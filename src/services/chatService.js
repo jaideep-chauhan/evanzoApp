@@ -1,4 +1,4 @@
-import api from './api';
+import api, { API_BASE_URL } from './api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 class ChatService {
@@ -232,15 +232,23 @@ class ChatService {
   async sendMediaMessage(chatId, formData) {
     try {
       console.log('📤 ChatService.sendMediaMessage - Sending to:', `/chat/${chatId}/messages/media`);
-      
+
       // Don't set Content-Type header - api.js interceptor handles it
       const response = await api.post(`/chat/${chatId}/messages/media`, formData);
-      
-      console.log('✅ ChatService.sendMediaMessage - Success:', response.data);
-      
+
+      console.log('✅ ChatService.sendMediaMessage - Full Response:', JSON.stringify(response.data, null, 2));
+
+      // Process attachments to fix URLs
+      const responseData = response.data.data;
+      console.log('📎 Raw attachments from backend:', JSON.stringify(responseData?.attachments, null, 2));
+      if (responseData && responseData.attachments) {
+        responseData.attachments = this.processAttachments(responseData.attachments);
+        console.log('📎 After processing attachments:', responseData.attachments);
+      }
+
       return {
         success: true,
-        data: response.data.data
+        data: responseData
       };
     } catch (error) {
       console.error('❌ ChatService.sendMediaMessage - Error:', {
@@ -248,7 +256,7 @@ class ChatService {
         data: error.response?.data,
         message: error.message
       });
-      
+
       return {
         success: false,
         message: error.response?.data?.message || error.message || 'Failed to send media'
@@ -498,6 +506,55 @@ class ChatService {
     }
   }
 
+  // Helper function to process attachment URLs
+  processAttachments(attachments) {
+    if (!attachments) {
+      return attachments;
+    }
+
+    // Handle single attachment object (not array)
+    const processAttachment = (attachment) => {
+      let processedUrl = attachment.url;
+
+      // If attachment has a URL
+      if (processedUrl) {
+        // Replace localhost with actual API base URL
+        if (processedUrl.includes('localhost') || processedUrl.includes('127.0.0.1')) {
+          // Extract the path part from localhost URL (e.g., /uploads/images/file.jpg)
+          try {
+            const urlObj = new URL(processedUrl);
+            const path = urlObj.pathname;
+
+            // Remove '/api' from API_BASE_URL to get the main domain
+            const baseUrl = API_BASE_URL.replace('/api', '');
+            processedUrl = `${baseUrl}${path}`;
+            console.log('🔄 Replaced localhost URL:', { original: attachment.url, fixed: processedUrl });
+          } catch (e) {
+            console.error('Error parsing URL:', e);
+          }
+        }
+        // If URL doesn't start with http, prepend base URL
+        else if (!processedUrl.startsWith('http')) {
+          const baseUrl = API_BASE_URL.replace('/api', '');
+          processedUrl = `${baseUrl}${processedUrl.startsWith('/') ? '' : '/'}${processedUrl}`;
+        }
+      }
+
+      return {
+        ...attachment,
+        url: processedUrl
+      };
+    };
+
+    // Handle both array and single object
+    if (Array.isArray(attachments)) {
+      return attachments.map(processAttachment);
+    } else {
+      // Single attachment object
+      return [processAttachment(attachments)];
+    }
+  }
+
   // Format message for display
   formatMessage(message) {
     return {
@@ -507,7 +564,7 @@ class ChatService {
       isMe: message.is_sender || false,
       messageType: message.message_type || 'text',
       status: message.status || 'sent',
-      attachments: message.attachments,
+      attachments: this.processAttachments(message.attachments),
       sender: message.sender,
       senderId: message.sender_id
     };
@@ -515,7 +572,18 @@ class ChatService {
 
   // Format time for display
   formatTime(timestamp) {
+    if (!timestamp) {
+      return '';
+    }
+
     const date = new Date(timestamp);
+
+    // Check if date is invalid
+    if (isNaN(date.getTime())) {
+      console.warn('Invalid timestamp received:', timestamp);
+      return '';
+    }
+
     const now = new Date();
     const diffMs = now - date;
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));

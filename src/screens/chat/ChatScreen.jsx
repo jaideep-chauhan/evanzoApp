@@ -462,8 +462,8 @@ export default function ChatScreen({ route, navigation }) {
         } catch (error) {
             console.error('❌ ===== MESSAGE SEND ERROR =====');
             console.error('❌ Error details:', error);
-            console.error('❌ Error message:', error.message);
-            console.error('❌ Error stack:', error.stack);
+            console.error('❌ Error message:', error?.message || 'Unknown error');
+            console.error('❌ Error name:', error?.name || 'Error');
             setMessages(prev => prev.filter(msg => msg.id !== tempId));
             Alert.alert('Error', 'Failed to send message');
         } finally {
@@ -490,6 +490,8 @@ export default function ChatScreen({ route, navigation }) {
     };
 
     const formatTime = (timestamp) => {
+        // If timestamp is already formatted string (like "10:30 AM"), return it
+        if (!timestamp) return '';
         return timestamp;
     };
 
@@ -602,42 +604,54 @@ export default function ChatScreen({ route, navigation }) {
 
     const handleDocumentPicker = async () => {
         setShowAttachmentModal(false);
-        
-        // Document picker doesn't require specific permissions on most platforms
-        // but we handle potential permission issues in the error catch
+
+        // Small delay to ensure modal is closed before opening picker
+        await new Promise(resolve => setTimeout(resolve, 300));
+
         try {
             console.log('Opening document picker...');
-            const result = await DocumentPicker.pick({
-                type: [DocumentPicker.types.allFiles],  // Use allFiles to avoid type issues
+            const results = await DocumentPicker.pick({
+                type: [DocumentPicker.types.pdf, DocumentPicker.types.doc, DocumentPicker.types.docx, DocumentPicker.types.xls, DocumentPicker.types.xlsx, DocumentPicker.types.images],
                 copyTo: 'cachesDirectory',
+                allowMultiSelection: false,
             });
 
-            console.log('Document picked:', result);
-            
-            if (result && result[0]) {
-                const document = result[0];
+            console.log('Document picker results:', results);
+
+            if (results && results.length > 0) {
+                const document = results[0];
                 console.log('Sending document:', {
                     uri: document.uri,
+                    fileCopyUri: document.fileCopyUri,
                     name: document.name,
                     size: document.size,
                     type: document.type
                 });
-                await sendMediaMessage(document, 'document');
+
+                // Use fileCopyUri if available (from copyTo), otherwise use uri
+                const finalDocument = {
+                    ...document,
+                    uri: document.fileCopyUri || document.uri
+                };
+
+                await sendMediaMessage(finalDocument, 'document');
             }
         } catch (err) {
-            if (!DocumentPicker.isCancel(err)) {
-                console.error('Document picker error:', err);
-                console.error('Error details:', {
-                    message: err.message,
-                    code: err.code,
-                    stack: err.stack
-                });
-                Alert.alert(
-                    'Error', 
-                    `Failed to pick document: ${err.message || 'Unknown error'}`
-                );
+            if (DocumentPicker.isCancel(err)) {
+                console.log('Document picker cancelled by user');
             } else {
-                console.log('Document picker cancelled');
+                console.error('Document picker error:', err);
+                // Safely extract error details without accessing .stack directly
+                const errorDetails = {
+                    message: err?.message || 'Unknown error',
+                    code: err?.code || 'UNKNOWN',
+                    name: err?.name || 'Error'
+                };
+                console.error('Error details:', errorDetails);
+                Alert.alert(
+                    'Error',
+                    'Failed to pick document. Please try again.'
+                );
             }
         }
     };
@@ -701,9 +715,10 @@ export default function ChatScreen({ route, navigation }) {
             
             if (result.success) {
                 console.log('✅ ChatScreen - Media sent successfully, updating message');
+                console.log('📎 Attachment data from backend:', result.data.attachments);
                 // Update optimistic message with real data
-                setMessages(prev => prev.map(msg => 
-                    msg.id === tempId 
+                setMessages(prev => prev.map(msg =>
+                    msg.id === tempId
                         ? {
                             ...msg,
                             id: result.data.message_id,
@@ -729,19 +744,25 @@ export default function ChatScreen({ route, navigation }) {
 
     const renderMessage = ({ item, index }) => {
         const isMe = item.isMe;
-        const showTimestamp = index === 0 ||
-            messages[index - 1]?.timestamp !== item.timestamp ||
-            messages[index - 1]?.isMe !== item.isMe;
+        // Always show timestamp if it exists
+        const showTimestamp = item.timestamp && item.timestamp.length > 0;
 
         return (
             <View style={[styles.messageContainer, isMe ? styles.myMessage : styles.theirMessage]}>
                 <View style={[styles.messageBubble, isMe ? [styles.myBubble] : styles.theirBubble]}>
                     {item.messageType === 'image' && item.attachments?.[0] ? (
                         <TouchableOpacity onPress={() => {/* Handle image view */}}>
-                            <Image 
-                                source={{ uri: item.attachments[0].uri || item.attachments[0].url }} 
+                            <Image
+                                source={{ uri: item.attachments[0].uri || item.attachments[0].url }}
                                 style={styles.messageImage}
                                 resizeMode="cover"
+                                onError={(error) => {
+                                    console.error('Image load error:', error.nativeEvent.error);
+                                    console.log('Failed to load image from:', item.attachments[0]);
+                                }}
+                                onLoad={() => {
+                                    console.log('Image loaded successfully from:', item.attachments[0].uri || item.attachments[0].url);
+                                }}
                             />
                         </TouchableOpacity>
                     ) : item.messageType === 'document' && item.attachments?.[0] ? (
