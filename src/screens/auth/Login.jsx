@@ -47,10 +47,12 @@ const loginSchema = Yup.object().shape({
 export default function LoginScreen() {
     const navigation = useNavigation();
     const theme = useTheme();
-    const { login } = useAuth();
+    const { login, googleLogin, appleLogin } = useAuth();
     const [imageLoaded, setImageLoaded] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [googleLoading, setGoogleLoading] = useState(false);
+    const [appleLoading, setAppleLoading] = useState(false);
 
     // Add timeout for image loading to prevent infinite loader
     React.useEffect(() => {
@@ -63,6 +65,76 @@ export default function LoginScreen() {
 
         return () => clearTimeout(timeout);
     }, [imageLoaded]);
+
+    const handleGoogleLogin = async () => {
+        setGoogleLoading(true);
+        try {
+            const result = await googleLogin();
+
+            if (result.success) {
+                Toast.show({
+                    type: 'success',
+                    text1: 'Google Login Successful',
+                    text2: 'Welcome to Evanzo!',
+                });
+
+                navigation.reset({
+                    index: 0,
+                    routes: [{ name: 'Main' }],
+                });
+            } else {
+                Toast.show({
+                    type: 'error',
+                    text1: 'Google Login Failed',
+                    text2: result.error || 'Unable to login with Google',
+                });
+            }
+        } catch (error) {
+            Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: 'Something went wrong with Google login',
+            });
+        } finally {
+            setGoogleLoading(false);
+        }
+    };
+
+    const handleAppleLogin = async () => {
+        setAppleLoading(true);
+        try {
+            const result = await appleLogin();
+
+            if (result.success) {
+                Toast.show({
+                    type: 'success',
+                    text1: 'Apple Login Successful',
+                    text2: 'Welcome to Evanzo!',
+                });
+
+                navigation.reset({
+                    index: 0,
+                    routes: [{ name: 'Main' }],
+                });
+            } else {
+                // Show specific error message
+                Toast.show({
+                    type: 'info',
+                    text1: 'Apple Sign-In Setup Required',
+                    text2: result.error || 'Unable to login with Apple',
+                    visibilityTime: 5000,
+                });
+            }
+        } catch (error) {
+            Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: 'Something went wrong with Apple login',
+            });
+        } finally {
+            setAppleLoading(false);
+        }
+    };
 
     return (
         <View style={styles.wrapper}>
@@ -258,14 +330,33 @@ export default function LoginScreen() {
                                         </View>
                                         
                                         <View style={styles.socialRow}>
-                                            <TouchableOpacity style={styles.socialIconButton}>
-                                                <Image source={google} style={styles.socialIconImage} resizeMode="contain" />
+                                            <TouchableOpacity
+                                                style={styles.socialIconButton}
+                                                onPress={handleGoogleLogin}
+                                                disabled={googleLoading || appleLoading || isLoading}
+                                            >
+                                                {googleLoading ? (
+                                                    <ActivityIndicator size="small" color={theme.colors.primary} />
+                                                ) : (
+                                                    <Image source={google} style={styles.socialIconImage} resizeMode="contain" />
+                                                )}
                                             </TouchableOpacity>
-                                            <TouchableOpacity style={styles.socialIconButton}>
+                                            <TouchableOpacity
+                                                style={[styles.socialIconButton, { opacity: 0.5 }]}
+                                                disabled={true}
+                                            >
                                                 <Image source={facebook} style={styles.socialIconImage} resizeMode="contain" />
                                             </TouchableOpacity>
-                                            <TouchableOpacity style={styles.socialIconButton}>
-                                                <Image source={appple} style={styles.socialIconImage} resizeMode="contain" />
+                                            <TouchableOpacity
+                                                style={styles.socialIconButton}
+                                                onPress={handleAppleLogin}
+                                                disabled={googleLoading || appleLoading || isLoading}
+                                            >
+                                                {appleLoading ? (
+                                                    <ActivityIndicator size="small" color={theme.colors.primary} />
+                                                ) : (
+                                                    <Image source={appple} style={styles.socialIconImage} resizeMode="contain" />
+                                                )}
                                             </TouchableOpacity>
                                         </View>
                                     </ScrollView>

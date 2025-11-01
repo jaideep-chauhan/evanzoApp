@@ -604,6 +604,8 @@ export const AuthProvider = ({ children }) => {
         isLoading,
         isAuthenticated,
         login,
+        googleLogin,
+        appleLogin,
         register,
         sendOTP,
         verifyOTPAndRegister,

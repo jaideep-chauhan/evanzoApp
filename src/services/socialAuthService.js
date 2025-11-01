@@ -12,7 +12,8 @@ class SocialAuthService {
     initializeGoogleSignIn() {
         try {
             GoogleSignin.configure({
-                webClientId: process.env.GOOGLE_WEB_CLIENT_ID || '10686507695-tjjlud30ivp51qmm9qnp5ld0u4hbm8hq.apps.googleusercontent.com', // Add your Web Client ID from Google Console
+                webClientId: '1075894285533-6tnc0osfup96pogem7p940ht6vn5u8tv.apps.googleusercontent.com',
+                iosClientId: '1075894285533-cu18n2ip03k8glui687tvkspb7qsi35g.apps.googleusercontent.com',
                 offlineAccess: true,
                 hostedDomain: '',
                 forceCodeForRefreshToken: true,
@@ -111,11 +112,11 @@ class SocialAuthService {
             }
 
             // Check if device supports Apple Authentication
-            const isSupported = await appleAuth.isSupported();
+            const isSupported = appleAuth.isSupported;
             if (!isSupported) {
                 return {
                     success: false,
-                    error: 'Apple Sign-In is not supported on this device',
+                    error: 'Apple Sign-In is not supported on this device. Please sign in to iCloud in Settings first.',
                 };
             }
 
@@ -176,7 +177,13 @@ class SocialAuthService {
         } catch (error) {
             console.error('Apple Sign-In Error:', error);
 
-            if (error.code === appleAuth.Error.CANCELED) {
+            // Error 1000 is user cancellation or configuration issue
+            if (error.code === '1000' || error.message?.includes('1000')) {
+                return {
+                    success: false,
+                    error: 'Please sign in to iCloud in Settings > Sign in to your iPhone, then try again',
+                };
+            } else if (error.code === appleAuth.Error.CANCELED) {
                 return {
                     success: false,
                     error: 'Sign in cancelled by user',

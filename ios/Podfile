@@ -77,5 +77,13 @@ target 'EVNZO' do
       require_relative ruby_script_path
       fix_third_party_components_provider()
     end
+
+    # Fix ReactCommon module redefinition - create empty React-RuntimeApple.modulemap
+    react_runtime_modulemap = File.join(__dir__, 'Pods/Headers/Public/ReactCommon/React-RuntimeApple.modulemap')
+    if File.exist?(react_runtime_modulemap)
+      # Replace with empty module to avoid conflict
+      File.write(react_runtime_modulemap, "// Intentionally empty to avoid ReactCommon module redefinition\n")
+      Pod::UI.puts "Fixed React-RuntimeApple.modulemap to be empty".green
+    end
   end
 end
