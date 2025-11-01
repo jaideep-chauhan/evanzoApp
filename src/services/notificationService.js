@@ -14,6 +14,13 @@ class NotificationService {
     // Initialize notification service
     async initialize() {
         try {
+            // Check if Firebase is properly configured
+            // If not configured, skip initialization gracefully
+            if (!this.isFirebaseConfigured()) {
+                console.log('⚠️ Firebase not configured, skipping notification service initialization');
+                return;
+            }
+
             // Request notification permissions
             await this.requestPermission();
 
@@ -34,6 +41,18 @@ class NotificationService {
             console.log('✅ Notification service initialized successfully');
         } catch (error) {
             console.error('❌ Error initializing notification service:', error);
+            console.log('ℹ️ App will continue without push notifications');
+        }
+    }
+
+    // Check if Firebase is properly configured
+    isFirebaseConfigured() {
+        try {
+            // Try to access Firebase messaging without throwing
+            const app = messaging.app;
+            return app !== null && app !== undefined;
+        } catch (error) {
+            return false;
         }
     }
 

@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api, { resetRefreshState } from '../services/api';
 import { setAuthLogout } from '../services/navigationService';
+import socialAuthService from '../services/socialAuthService';
 
 const AuthContext = createContext({});
 
@@ -365,19 +366,19 @@ export const AuthProvider = ({ children }) => {
         return sendOTP(userData);
     };
 
-    const forgotPassword = async (email) => {
+    const forgotPassword = async (emailOrPhone) => {
         try {
-            const response = await api.post('/auth/forgot-password', { email });
+            const response = await api.post('/auth/forgot-password/request', { username: emailOrPhone });
 
             if (response.data.success) {
                 return {
                     success: true,
-                    message: response.data.message || 'Password reset link sent to your email'
+                    message: response.data.message || 'OTP sent successfully'
                 };
             } else {
                 return {
                     success: false,
-                    error: response.data.message || 'Failed to send reset link'
+                    error: response.data.message || 'Failed to send OTP'
                 };
             }
         } catch (error) {
@@ -454,11 +455,89 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    const googleLogin = async () => {
+        try {
+            const result = await socialAuthService.signInWithGoogle();
+
+            if (result.success) {
+                const { user, tokens } = result;
+
+                // Store tokens and user data
+                await AsyncStorage.setItem('authToken', tokens.accessToken);
+                await AsyncStorage.setItem('refreshToken', tokens.refreshToken);
+                await AsyncStorage.setItem('userData', JSON.stringify(user));
+                await AsyncStorage.setItem('userId', String(user?.user_id || user?.id));
+
+                // Set token in API headers
+                api.defaults.headers.common['Authorization'] = `Bearer ${tokens.accessToken}`;
+
+                // Update state
+                setUser(user);
+                setIsAuthenticated(true);
+
+                return { success: true, user };
+            } else {
+                return {
+                    success: false,
+                    error: result.error || 'Google login failed',
+                };
+            }
+        } catch (error) {
+            return {
+                success: false,
+                error: error.message || 'Google login failed. Please try again.',
+            };
+        }
+    };
+
+    const appleLogin = async () => {
+        try {
+            const result = await socialAuthService.signInWithApple();
+
+            if (result.success) {
+                const { user, tokens } = result;
+
+                // Store tokens and user data
+                await AsyncStorage.setItem('authToken', tokens.accessToken);
+                await AsyncStorage.setItem('refreshToken', tokens.refreshToken);
+                await AsyncStorage.setItem('userData', JSON.stringify(user));
+                await AsyncStorage.setItem('userId', String(user?.user_id || user?.id));
+
+                // Set token in API headers
+                api.defaults.headers.common['Authorization'] = `Bearer ${tokens.accessToken}`;
+
+                // Update state
+                setUser(user);
+                setIsAuthenticated(true);
+
+                return { success: true, user };
+            } else {
+                return {
+                    success: false,
+                    error: result.error || 'Apple login failed',
+                };
+            }
+        } catch (error) {
+            return {
+                success: false,
+                error: error.message || 'Apple login failed. Please try again.',
+            };
+        }
+    };
+
     const logout = async (navigateToLogin = false) => {
         try {
 
             // Reset refresh state to prevent any ongoing refresh attempts
             resetRefreshState();
+
+            // Sign out from social providers
+            try {
+                await socialAuthService.signOutFromGoogle();
+            } catch (socialLogoutError) {
+                // Continue with logout even if social sign out fails
+                console.log('Social sign out error:', socialLogoutError);
+            }
 
             // Try to notify backend of logout (skip if we're already getting 401s)
             if (!navigateToLogin) {

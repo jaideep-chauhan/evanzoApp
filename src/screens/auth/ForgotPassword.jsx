@@ -54,11 +54,10 @@ export default function ForgotPasswordScreen() {
                 Alert.alert(
                     'OTP Sent',
                     result.message || 'Please check your email/SMS for the OTP',
-                    [{ 
+                    [{
                         text: 'OK',
-                        onPress: () => navigation.navigate('OTPVerify', { 
-                            emailOrPhone: values.emailOrPhone,
-                            fromScreen: 'ForgotPassword'
+                        onPress: () => navigation.navigate('ResetPassword', {
+                            username: values.emailOrPhone
                         })
                     }]
                 );

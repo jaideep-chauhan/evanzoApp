@@ -61,6 +61,10 @@ api.interceptors.request.use(
             // For FormData, let axios set the Content-Type with boundary
             // Remove any preset Content-Type to allow multipart/form-data with boundary
             delete config.headers['Content-Type'];
+
+            // Increase timeout for file uploads (images, documents, etc.)
+            // Large files need more time to upload, especially on slower connections
+            config.timeout = 60000; // 60 seconds for file uploads
         } else {
             // For regular JSON data, set Content-Type to application/json
             config.headers['Content-Type'] = 'application/json';

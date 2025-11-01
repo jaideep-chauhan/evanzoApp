@@ -735,8 +735,21 @@ export default function ChatScreen({ route, navigation }) {
             }
         } catch (error) {
             console.error('❌ ChatScreen - Exception in sendMediaMessage:', error);
+
+            // Provide more specific error messages
+            let errorMessage = 'Failed to send file';
+            if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+                errorMessage = 'Upload timed out. Please check your internet connection and try again.';
+            } else if (error.message === 'Network Error') {
+                errorMessage = 'Network error. Please check your connection and try again.';
+            } else if (error.response?.status === 413) {
+                errorMessage = 'File is too large. Please try a smaller file.';
+            } else if (error.response?.data?.message) {
+                errorMessage = error.response.data.message;
+            }
+
             setMessages(prev => prev.filter(msg => msg.id !== tempId));
-            Alert.alert('Error', 'Failed to send file');
+            Alert.alert('Upload Failed', errorMessage);
         } finally {
             setUploadingFile(false);
         }

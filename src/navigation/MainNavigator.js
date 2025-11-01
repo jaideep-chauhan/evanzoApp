@@ -10,6 +10,7 @@ import LoginScreen from '../screens/auth/Login';
 import Register from '../screens/auth/Register';
 import OTPVerify from '../screens/auth/OTPVerify';
 import ForgotPassword from '../screens/auth/ForgotPassword';
+import ResetPassword from '../screens/auth/ResetPassword';
 import TabNavigator from './TabNavigator';
 import TaskDetail from '../screens/tasks/TaskDetail';
 import VendorChat from '../screens/vendors/vendorAddDetails';
@@ -146,8 +147,8 @@ const MainNavigator = () => {
                 {!isAuthenticated ? (
                     // Auth Stack - Only shown when not authenticated
                     <>
-                        <Stack.Screen 
-                            name="Login" 
+                        <Stack.Screen
+                            name="Login"
                             component={LoginScreen}
                             options={{
                                 animation: 'fade',
@@ -156,6 +157,7 @@ const MainNavigator = () => {
                         />
                         <Stack.Screen name="Register" component={Register} />
                         <Stack.Screen name="ForgotPassword" component={ForgotPassword} />
+                        <Stack.Screen name="ResetPassword" component={ResetPassword} />
                         <Stack.Screen name="OTPVerify" component={OTPVerify} />
                     </>
                 ) : (
