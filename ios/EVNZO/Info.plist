@@ -41,6 +41,8 @@
 	<string></string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Allow gallery access to pick photos</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Allow microphone access to record voice messages</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>AntDesign.ttf</string>

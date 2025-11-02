@@ -648,13 +648,21 @@ export default function Vendor() {
             >
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
-                        <PreSavedMessage />
-                        <TouchableOpacity
-                            style={styles.closeBtn}
-                            onPress={() => setShowPreSaveModal(false)}
-                        >
-                            <Icon name="close" size={24} color={theme.colors.primary} />
-                        </TouchableOpacity>
+                        <View style={styles.modalHeader}>
+                            <Text style={[styles.modalTitle, { color: theme.colors.primary }]}>Quick Message Template</Text>
+                            <TouchableOpacity
+                                style={styles.closeBtn}
+                                onPress={() => setShowPreSaveModal(false)}
+                            >
+                                <Icon name="close" size={24} color={theme.colors.primary} />
+                            </TouchableOpacity>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <PreSavedMessage
+                                visible={showPreSaveModal}
+                                onClose={() => setShowPreSaveModal(false)}
+                            />
+                        </View>
                     </View>
                 </View>
             </Modal>
@@ -780,7 +788,7 @@ const styles = StyleSheet.create({
     },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'transparent',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
         justifyContent: 'center',
         alignItems: 'center',
         padding: 20,
@@ -788,22 +796,33 @@ const styles = StyleSheet.create({
     modalContent: {
         backgroundColor: '#fff',
         borderRadius: 12,
-        padding: 20,
-        width: '100%',
+        width: '90%',
         maxWidth: 600,
+        height: '80%',
         position: 'relative',
         shadowColor: '#000',
         shadowOpacity: 0.1,
         shadowRadius: 6,
         shadowOffset: { width: 0, height: 2 },
         elevation: 5,
+        overflow: 'hidden',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 20,
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#e0e0e0',
+        backgroundColor: '#fff',
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: '600',
     },
     closeBtn: {
-        position: 'absolute',
-        top: 0,
-        right: 0,
-        zIndex: 1,
-        padding: 5,
+        padding: 8,
     },
     stickyHeader: {
         position: 'absolute',

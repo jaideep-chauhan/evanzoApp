@@ -26,7 +26,7 @@ const PreSavedMessage = ({ onClose, visible }) => {
     const [showDurationDropdown, setShowDurationDropdown] = useState(false);
     const [successModalVisible, setSuccessModalVisible] = useState(false);
     const [modalMessage, setModalMessage] = useState({ title: '', message: '', type: 'success' });
-    
+
     // Categories list
     const categories = [
         'Wedding',
@@ -42,7 +42,7 @@ const PreSavedMessage = ({ onClose, visible }) => {
         'Meeting',
         'Other'
     ];
-    
+
     // Duration options
     const durationOptions = [
         '30 minutes',
@@ -71,7 +71,7 @@ const PreSavedMessage = ({ onClose, visible }) => {
             resetFormState();
         }
     }, [visible]);
-    
+
     // Also load on component mount for backward compatibility
     useEffect(() => {
         loadPreSavedMessage();
@@ -170,7 +170,7 @@ const PreSavedMessage = ({ onClose, visible }) => {
             };
 
             const response = await preSavedMessageService.savePreSavedMessage(messageData);
-            
+
             if (response.success) {
                 setExistingMessage(response.data);
                 setModalMessage({
@@ -222,7 +222,7 @@ const PreSavedMessage = ({ onClose, visible }) => {
             ]
         );
     };
-    
+
     const handleSuccessModalConfirm = () => {
         setSuccessModalVisible(false);
         // Reset any dropdown states that might be open
@@ -255,274 +255,274 @@ const PreSavedMessage = ({ onClose, visible }) => {
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
             >
-            <View style={styles.fieldGroup}>
-                <Text style={[styles.label, { color: theme.colors.primary }]}>Event Name</Text>
-                <TextInput
-                    style={styles.input}
-                    placeholder="Enter event name"
-                    placeholderTextColor="#999"
-                    value={eventName}
-                    onChangeText={setEventName}
-                />
-            </View>
-
-            <View style={styles.fieldGroup}>
-                <Text style={[styles.label, { color: theme.colors.primary }]}>Location</Text>
-                <TextInput
-                    style={styles.input}
-                    placeholder="Enter event location"
-                    placeholderTextColor="#999"
-                    value={location}
-                    onChangeText={setLocation}
-                />
-            </View>
-
-            <View style={styles.fieldGroup}>
-                <Text style={[styles.label, { color: theme.colors.primary }]}>Category</Text>
-                <TouchableOpacity
-                    style={[styles.input, styles.dropdownButton]}
-                    onPress={() => setShowCategoryDropdown(true)}
-                >
-                    <Text style={styles.dropdownText}>{category || 'Select Category'}</Text>
-                    <Icon name="chevron-down" size={20} color="#999" />
-                </TouchableOpacity>
-            </View>
-
-            <View style={styles.fieldGroup}>
-                <Text style={[styles.label, { color: theme.colors.primary }]}>Date</Text>
-                <TouchableOpacity
-                    style={[styles.input, styles.dateButton]}
-                    onPress={() => setShowDatePicker(true)}
-                >
-                    <Icon name="calendar-outline" size={20} color={theme.colors.primary} />
-                    <Text style={styles.dateText}>
-                        {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-                    </Text>
-                </TouchableOpacity>
-            </View>
-            <View style={styles.row}>
-                <View style={[styles.fieldGroup, styles.half]}>
-                    <Text style={[styles.label, { color: theme.colors.primary }]}>Time</Text>
-                    <TouchableOpacity 
-                        style={[styles.input, styles.timeButton]}
-                        onPress={() => setShowTimePicker(true)}
-                    >
-                        <Icon name="time-outline" size={20} color={theme.colors.primary} />
-                        <Text style={styles.timeText}>
-                            {time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                        </Text>
-                    </TouchableOpacity>
+                <View style={styles.fieldGroup}>
+                    <Text style={[styles.label, { color: theme.colors.primary }]}>Event Name</Text>
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Enter event name"
+                        placeholderTextColor="#999"
+                        value={eventName}
+                        onChangeText={setEventName}
+                    />
                 </View>
-                <View style={[styles.fieldGroup, styles.half]}>
-                    <Text style={[styles.label, { color: theme.colors.primary }]}>Duration</Text>
+
+                <View style={styles.fieldGroup}>
+                    <Text style={[styles.label, { color: theme.colors.primary }]}>Location</Text>
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Enter event location"
+                        placeholderTextColor="#999"
+                        value={location}
+                        onChangeText={setLocation}
+                    />
+                </View>
+
+                <View style={styles.fieldGroup}>
+                    <Text style={[styles.label, { color: theme.colors.primary }]}>Category</Text>
                     <TouchableOpacity
                         style={[styles.input, styles.dropdownButton]}
-                        onPress={() => setShowDurationDropdown(true)}
+                        onPress={() => setShowCategoryDropdown(true)}
                     >
-                        <Text style={styles.dropdownText}>{duration || 'Select Duration'}</Text>
+                        <Text style={styles.dropdownText}>{category || 'Select Category'}</Text>
                         <Icon name="chevron-down" size={20} color="#999" />
                     </TouchableOpacity>
                 </View>
-            </View>
 
-            <View style={styles.fieldGroup}>
-                <Text style={[styles.label, { color: theme.colors.primary }]}>Description</Text>
-                <TextInput
-                    style={[styles.input, styles.textArea]}
-                    multiline
-                    numberOfLines={4}
-                    placeholder="Enter event description"
-                    placeholderTextColor="#999"
-                    value={description}
-                    onChangeText={setDescription}
-                />
-            </View>
-
-            <View style={styles.buttonRow}>
-                <TouchableOpacity 
-                    style={[styles.button, styles.clearButton, { borderColor: theme.colors.primary + '50' }]}
-                    onPress={handleClear}
-                    disabled={isSaving}
-                >
-                    <Text style={[styles.clearText, { color: theme.colors.primary }]}>Clear</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                    style={[styles.button, styles.saveButton, { backgroundColor: theme.colors.primary }]}
-                    onPress={handleSave}
-                    disabled={isSaving}
-                >
-                    {isSaving ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                        <Text style={styles.saveText}>
-                            {existingMessage ? 'Update' : 'Save'}
+                <View style={styles.fieldGroup}>
+                    <Text style={[styles.label, { color: theme.colors.primary }]}>Date</Text>
+                    <TouchableOpacity
+                        style={[styles.input, styles.dateButton]}
+                        onPress={() => setShowDatePicker(true)}
+                    >
+                        <Icon name="calendar-outline" size={20} color={theme.colors.primary} />
+                        <Text style={styles.dateText}>
+                            {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
                         </Text>
-                    )}
-                </TouchableOpacity>
-            </View>
-            
-            {/* Date Picker Modal */}
-            <Modal
-                visible={showDatePicker}
-                transparent={true}
-                animationType="slide"
-                onRequestClose={() => setShowDatePicker(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.datePickerModal}>
-                        <View style={styles.modalHeader}>
-                            <Text style={[styles.modalTitle, { color: theme.colors.primary }]}>Select Date</Text>
-                            <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                                <Icon name="close" size={24} color={theme.colors.primary} />
-                            </TouchableOpacity>
-                        </View>
-                        <DatePicker
-                            date={date}
-                            onDateChange={setDate}
-                            mode="date"
-                            minimumDate={new Date()}
-                            theme={theme.dark ? 'dark' : 'light'}
-                            textColor={theme.colors.primary}
-                            style={styles.datePicker}
-                        />
+                    </TouchableOpacity>
+                </View>
+                <View style={styles.row}>
+                    <View style={[styles.fieldGroup, styles.half]}>
+                        <Text style={[styles.label, { color: theme.colors.primary }]}>Time</Text>
                         <TouchableOpacity
-                            style={[styles.modalButton, { backgroundColor: theme.colors.primary }]}
-                            onPress={() => setShowDatePicker(false)}
+                            style={[styles.input, styles.timeButton]}
+                            onPress={() => setShowTimePicker(true)}
                         >
-                            <Text style={styles.modalButtonText}>Confirm</Text>
+                            <Icon name="time-outline" size={20} color={theme.colors.primary} />
+                            <Text style={styles.timeText}>
+                                {time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                    <View style={[styles.fieldGroup, styles.half]}>
+                        <Text style={[styles.label, { color: theme.colors.primary }]}>Duration</Text>
+                        <TouchableOpacity
+                            style={[styles.input, styles.dropdownButton]}
+                            onPress={() => setShowDurationDropdown(true)}
+                        >
+                            <Text style={styles.dropdownText}>{duration || 'Select Duration'}</Text>
+                            <Icon name="chevron-down" size={20} color="#999" />
                         </TouchableOpacity>
                     </View>
                 </View>
-            </Modal>
-            
-            {/* Time Picker */}
-            {showTimePicker && (
-                <DateTimePicker
-                    value={time}
-                    mode="time"
-                    is24Hour={false}
-                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                    onChange={(_, selectedTime) => {
-                        setShowTimePicker(false);
-                        if (selectedTime) {
-                            setTime(selectedTime);
-                        }
-                    }}
-                    textColor={theme.colors.primary}
+
+                <View style={styles.fieldGroup}>
+                    <Text style={[styles.label, { color: theme.colors.primary }]}>Description</Text>
+                    <TextInput
+                        style={[styles.input, styles.textArea]}
+                        multiline
+                        numberOfLines={4}
+                        placeholder="Enter event description"
+                        placeholderTextColor="#999"
+                        value={description}
+                        onChangeText={setDescription}
+                    />
+                </View>
+
+                <View style={styles.buttonRow}>
+                    <TouchableOpacity
+                        style={[styles.button, styles.clearButton, { borderColor: theme.colors.primary + '50' }]}
+                        onPress={handleClear}
+                        disabled={isSaving}
+                    >
+                        <Text style={[styles.clearText, { color: theme.colors.primary }]}>Clear</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.button, styles.saveButton, { backgroundColor: theme.colors.primary }]}
+                        onPress={handleSave}
+                        disabled={isSaving}
+                    >
+                        {isSaving ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                            <Text style={styles.saveText}>
+                                {existingMessage ? 'Update' : 'Save'}
+                            </Text>
+                        )}
+                    </TouchableOpacity>
+                </View>
+
+                {/* Date Picker Modal */}
+                <Modal
+                    visible={showDatePicker}
+                    transparent={true}
+                    animationType="slide"
+                    onRequestClose={() => setShowDatePicker(false)}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.datePickerModal}>
+                            <View style={styles.modalHeader}>
+                                <Text style={[styles.modalTitle, { color: theme.colors.primary }]}>Select Date</Text>
+                                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                                    <Icon name="close" size={24} color={theme.colors.primary} />
+                                </TouchableOpacity>
+                            </View>
+                            <DatePicker
+                                date={date}
+                                onDateChange={setDate}
+                                mode="date"
+                                minimumDate={new Date()}
+                                theme={theme.dark ? 'dark' : 'light'}
+                                textColor={theme.colors.primary}
+                                style={styles.datePicker}
+                            />
+                            <TouchableOpacity
+                                style={[styles.modalButton, { backgroundColor: theme.colors.primary }]}
+                                onPress={() => setShowDatePicker(false)}
+                            >
+                                <Text style={styles.modalButtonText}>Confirm</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Modal>
+
+                {/* Time Picker */}
+                {showTimePicker && (
+                    <DateTimePicker
+                        value={time}
+                        mode="time"
+                        is24Hour={false}
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        onChange={(_, selectedTime) => {
+                            setShowTimePicker(false);
+                            if (selectedTime) {
+                                setTime(selectedTime);
+                            }
+                        }}
+                        textColor={theme.colors.primary}
+                    />
+                )}
+
+                {/* Category Dropdown Modal */}
+                <Modal
+                    visible={showCategoryDropdown}
+                    transparent={true}
+                    animationType="slide"
+                    onRequestClose={() => setShowCategoryDropdown(false)}
+                >
+                    <View style={styles.modalContainer}>
+                        <TouchableOpacity
+                            style={styles.modalBackdrop}
+                            activeOpacity={1}
+                            onPress={() => setShowCategoryDropdown(false)}
+                        />
+                        <View style={styles.dropdownModal}>
+                            <View style={styles.dropdownHeader}>
+                                <Text style={styles.dropdownTitle}>Select Category</Text>
+                                <TouchableOpacity
+                                    onPress={() => setShowCategoryDropdown(false)}
+                                    style={styles.dropdownCloseBtn}
+                                >
+                                    <Icon name="close" size={24} color={theme.colors.primary} />
+                                </TouchableOpacity>
+                            </View>
+                            <FlatList
+                                data={categories}
+                                keyExtractor={(item) => item}
+                                style={styles.dropdownList}
+                                renderItem={({ item }) => (
+                                    <TouchableOpacity
+                                        style={styles.dropdownItem}
+                                        onPress={() => {
+                                            setCategory(item);
+                                            setShowCategoryDropdown(false);
+                                        }}
+                                    >
+                                        <View style={styles.dropdownItemContent}>
+                                            <Icon name="pricetag-outline" size={18} color={category === item ? theme.colors.primary : '#666'} />
+                                            <Text style={[styles.dropdownItemText, category === item && { color: theme.colors.primary, fontWeight: '600' }]}>
+                                                {item}
+                                            </Text>
+                                        </View>
+                                        {category === item && (
+                                            <Icon name="checkmark" size={20} color={theme.colors.primary} />
+                                        )}
+                                    </TouchableOpacity>
+                                )}
+                            />
+                        </View>
+                    </View>
+                </Modal>
+
+                {/* Duration Dropdown Modal */}
+                <Modal
+                    visible={showDurationDropdown}
+                    transparent={true}
+                    animationType="slide"
+                    onRequestClose={() => setShowDurationDropdown(false)}
+                >
+                    <View style={styles.modalContainer}>
+                        <TouchableOpacity
+                            style={styles.modalBackdrop}
+                            activeOpacity={1}
+                            onPress={() => setShowDurationDropdown(false)}
+                        />
+                        <View style={styles.dropdownModal}>
+                            <View style={styles.dropdownHeader}>
+                                <Text style={styles.dropdownTitle}>Select Duration</Text>
+                                <TouchableOpacity
+                                    onPress={() => setShowDurationDropdown(false)}
+                                    style={styles.dropdownCloseBtn}
+                                >
+                                    <Icon name="close" size={24} color={theme.colors.primary} />
+                                </TouchableOpacity>
+                            </View>
+                            <FlatList
+                                data={durationOptions}
+                                keyExtractor={(item) => item}
+                                style={styles.dropdownList}
+                                renderItem={({ item }) => (
+                                    <TouchableOpacity
+                                        style={styles.dropdownItem}
+                                        onPress={() => {
+                                            setDuration(item);
+                                            setShowDurationDropdown(false);
+                                        }}
+                                    >
+                                        <View style={styles.dropdownItemContent}>
+                                            <Icon name="time-outline" size={18} color={duration === item ? theme.colors.primary : '#666'} />
+                                            <Text style={[styles.dropdownItemText, duration === item && { color: theme.colors.primary, fontWeight: '600' }]}>
+                                                {item}
+                                            </Text>
+                                        </View>
+                                        {duration === item && (
+                                            <Icon name="checkmark" size={20} color={theme.colors.primary} />
+                                        )}
+                                    </TouchableOpacity>
+                                )}
+                            />
+                        </View>
+                    </View>
+                </Modal>
+
+                {/* Success/Error Modal */}
+                <CustomSuccessModal
+                    visible={successModalVisible}
+                    title={modalMessage.title}
+                    message={modalMessage.message}
+                    type={modalMessage.type}
+                    onConfirm={handleSuccessModalConfirm}
+                    confirmText="OK"
                 />
-            )}
-            
-            {/* Category Dropdown Modal */}
-            <Modal
-                visible={showCategoryDropdown}
-                transparent={true}
-                animationType="slide"
-                onRequestClose={() => setShowCategoryDropdown(false)}
-            >
-                <View style={styles.modalContainer}>
-                    <TouchableOpacity
-                        style={styles.modalBackdrop}
-                        activeOpacity={1}
-                        onPress={() => setShowCategoryDropdown(false)}
-                    />
-                    <View style={styles.dropdownModal}>
-                        <View style={styles.dropdownHeader}>
-                            <Text style={styles.dropdownTitle}>Select Category</Text>
-                            <TouchableOpacity
-                                onPress={() => setShowCategoryDropdown(false)}
-                                style={styles.dropdownCloseBtn}
-                            >
-                                <Icon name="close" size={24} color={theme.colors.primary} />
-                            </TouchableOpacity>
-                        </View>
-                        <FlatList
-                            data={categories}
-                            keyExtractor={(item) => item}
-                            style={styles.dropdownList}
-                            renderItem={({ item }) => (
-                                <TouchableOpacity
-                                    style={styles.dropdownItem}
-                                    onPress={() => {
-                                        setCategory(item);
-                                        setShowCategoryDropdown(false);
-                                    }}
-                                >
-                                    <View style={styles.dropdownItemContent}>
-                                        <Icon name="pricetag-outline" size={18} color={category === item ? theme.colors.primary : '#666'} />
-                                        <Text style={[styles.dropdownItemText, category === item && { color: theme.colors.primary, fontWeight: '600' }]}>
-                                            {item}
-                                        </Text>
-                                    </View>
-                                    {category === item && (
-                                        <Icon name="checkmark" size={20} color={theme.colors.primary} />
-                                    )}
-                                </TouchableOpacity>
-                            )}
-                        />
-                    </View>
-                </View>
-            </Modal>
-            
-            {/* Duration Dropdown Modal */}
-            <Modal
-                visible={showDurationDropdown}
-                transparent={true}
-                animationType="slide"
-                onRequestClose={() => setShowDurationDropdown(false)}
-            >
-                <View style={styles.modalContainer}>
-                    <TouchableOpacity
-                        style={styles.modalBackdrop}
-                        activeOpacity={1}
-                        onPress={() => setShowDurationDropdown(false)}
-                    />
-                    <View style={styles.dropdownModal}>
-                        <View style={styles.dropdownHeader}>
-                            <Text style={styles.dropdownTitle}>Select Duration</Text>
-                            <TouchableOpacity
-                                onPress={() => setShowDurationDropdown(false)}
-                                style={styles.dropdownCloseBtn}
-                            >
-                                <Icon name="close" size={24} color={theme.colors.primary} />
-                            </TouchableOpacity>
-                        </View>
-                        <FlatList
-                            data={durationOptions}
-                            keyExtractor={(item) => item}
-                            style={styles.dropdownList}
-                            renderItem={({ item }) => (
-                                <TouchableOpacity
-                                    style={styles.dropdownItem}
-                                    onPress={() => {
-                                        setDuration(item);
-                                        setShowDurationDropdown(false);
-                                    }}
-                                >
-                                    <View style={styles.dropdownItemContent}>
-                                        <Icon name="time-outline" size={18} color={duration === item ? theme.colors.primary : '#666'} />
-                                        <Text style={[styles.dropdownItemText, duration === item && { color: theme.colors.primary, fontWeight: '600' }]}>
-                                            {item}
-                                        </Text>
-                                    </View>
-                                    {duration === item && (
-                                        <Icon name="checkmark" size={20} color={theme.colors.primary} />
-                                    )}
-                                </TouchableOpacity>
-                            )}
-                        />
-                    </View>
-                </View>
-            </Modal>
-            
-            {/* Success/Error Modal */}
-            <CustomSuccessModal
-                visible={successModalVisible}
-                title={modalMessage.title}
-                message={modalMessage.message}
-                type={modalMessage.type}
-                onConfirm={handleSuccessModalConfirm}
-                confirmText="OK"
-            />
             </ScrollView>
         </KeyboardAvoidingView>
     );
@@ -532,18 +532,9 @@ export default PreSavedMessage;
 
 const styles = StyleSheet.create({
     container: {
-        backgroundColor: '#fff',
-        borderRadius: 12,
-        width: '100%',
-        maxWidth: 600,
-        maxHeight: '100%',
-        alignSelf: 'center',
-        elevation: 4,
-        shadowColor: '#000',
-        shadowOpacity: 0.1,
-        shadowRadius: 6,
-        shadowOffset: { width: 0, height: 2 },
         flex: 1,
+        width: '100%',
+        paddingTop: 10,
     },
     scrollView: {
         flex: 1,

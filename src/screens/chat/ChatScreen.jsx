@@ -21,9 +21,13 @@ import MessageStatus from './MessageStatus';
 import { useTheme } from '../../ThemeContext';
 import socketService from '../../services/socketService';
 import chatService from '../../services/chatService';
+import api from '../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DocumentPicker from 'react-native-document-picker';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
+import VoiceRecorder from '../../components/VoiceRecorder';
+import VoiceMessagePlayer from '../../components/VoiceMessagePlayer';
+import voiceMessageService from '../../services/voiceMessageService';
 
 export default function ChatScreen({ route, navigation }) {
     const { chatId: initialChatId, chatName, avatar, isOnline: initialOnline, recipientId } = route.params;
@@ -44,6 +48,7 @@ export default function ChatScreen({ route, navigation }) {
     const [typingUsers, setTypingUsers] = useState(new Set());
     const [showAttachmentModal, setShowAttachmentModal] = useState(false);
     const [uploadingFile, setUploadingFile] = useState(false);
+    const [isRecordingVoice, setIsRecordingVoice] = useState(false);
     const flatListRef = useRef(null);
     const typingTimeoutRef = useRef(null);
     const currentUserIdRef = useRef(null); // Add ref to maintain userId consistency
@@ -204,7 +209,15 @@ export default function ChatScreen({ route, navigation }) {
                 const formattedMessages = result.data.results.map(msg => {
                     const isMyMessage = String(msg.sender_id) === String(effectiveUserId);
                     console.log(`Message ${msg.message_id}: sender_id=${msg.sender_id}, effectiveUserId=${effectiveUserId}, isMe=${isMyMessage}`);
-                    
+
+                    // Extract duration from metadata for audio messages
+                    let duration = 0;
+                    if (msg.message_type === 'audio' && msg.metadata?.duration) {
+                        duration = msg.metadata.duration;
+                    } else if (msg.message_type === 'audio' && msg.attachments?.[0]?.metadata?.duration) {
+                        duration = msg.attachments[0].metadata.duration;
+                    }
+
                     return {
                         id: msg.message_id,
                         text: msg.content,
@@ -215,7 +228,8 @@ export default function ChatScreen({ route, navigation }) {
                         attachments: msg.attachments,
                         sender: msg.sender,
                         senderId: msg.sender_id,
-                        createdAt: msg.created_at // Keep original timestamp for sorting
+                        createdAt: msg.created_at, // Keep original timestamp for sorting
+                        duration: duration // Add duration for audio messages
                     };
                 });
                 
@@ -230,6 +244,13 @@ export default function ChatScreen({ route, navigation }) {
                 );
                 
                 setMessages(sortedMessages);
+
+                // Auto-scroll to latest message after a short delay
+                setTimeout(() => {
+                    if (flatListRef.current && sortedMessages.length > 0) {
+                        flatListRef.current.scrollToEnd({ animated: true });
+                    }
+                }, 100);
             }
         } catch (error) {
             console.error('Failed to load messages:', error);
@@ -270,6 +291,13 @@ export default function ChatScreen({ route, navigation }) {
             }
             
             console.log('📥 Message from another user, adding to chat');
+
+            // Extract duration for audio messages
+            let duration = 0;
+            if (data.message.message_type === 'audio') {
+                duration = data.message.metadata?.duration || data.message.attachments?.[0]?.metadata?.duration || 0;
+            }
+
             // This is a message from another user
             const newMsg = {
                 id: data.message.message_id,
@@ -281,7 +309,8 @@ export default function ChatScreen({ route, navigation }) {
                 attachments: data.message.attachments,
                 sender: data.message.sender,
                 senderId: data.message.sender_id,
-                createdAt: data.message.created_at
+                createdAt: data.message.created_at,
+                duration: duration // Add duration for audio messages
             };
             
             // Prevent duplicate messages by checking if message already exists
@@ -291,6 +320,14 @@ export default function ChatScreen({ route, navigation }) {
                     console.log('⚠️ Message already exists, not adding duplicate');
                     return prev; // Don't add duplicate
                 }
+
+                // Auto-scroll to new message
+                setTimeout(() => {
+                    if (flatListRef.current) {
+                        flatListRef.current.scrollToEnd({ animated: true });
+                    }
+                }, 100);
+
                 return [...prev, newMsg];
             });
             
@@ -401,6 +438,14 @@ export default function ChatScreen({ route, navigation }) {
                 return prev;
             }
             console.log('✅ Adding optimistic message to UI');
+
+            // Auto-scroll to the new message
+            setTimeout(() => {
+                if (flatListRef.current) {
+                    flatListRef.current.scrollToEnd({ animated: true });
+                }
+            }, 100);
+
             return [...prev, optimisticMessage];
         });
         setNewMessage('');
@@ -487,6 +532,128 @@ export default function ChatScreen({ route, navigation }) {
         typingTimeoutRef.current = setTimeout(() => {
             socketService.stopTyping(chatId);
         }, 2000);
+    };
+
+    // Handle voice recording start
+    const handleVoiceRecordStart = () => {
+        if (newMessage.trim().length > 0) {
+            // If there's text, send message instead
+            sendMessage();
+        } else {
+            // Start voice recording
+            setIsRecordingVoice(true);
+        }
+    };
+
+    // Handle voice message send
+    const handleVoiceSend = async (voiceData) => {
+        try {
+            setIsSending(true);
+            setIsRecordingVoice(false);
+
+            // Create optimistic message
+            const tempId = `temp-${Date.now()}`;
+            const messageContent = `Voice message (${voiceData.duration}s)`;
+            const optimisticMessage = {
+                id: tempId,
+                text: messageContent, // Use 'text' field for consistency with socket listener
+                content: messageContent, // Also keep 'content' for backend
+                senderId: currentUserId,
+                messageType: 'audio',
+                status: 'sending',
+                isMe: true, // Mark as our message
+                createdAt: new Date().toISOString(),
+                attachments: [{
+                    url: voiceData.uri,
+                    type: 'audio/wav',
+                }],
+                duration: voiceData.duration,
+            };
+
+            // Add optimistic message to UI
+            setMessages(prev => {
+                // Check for duplicates
+                const messageExists = prev.some(msg => msg.id === tempId);
+                if (messageExists) {
+                    console.log('⚠️ Optimistic voice message already exists');
+                    return prev;
+                }
+                console.log('✅ Adding optimistic voice message to UI');
+                return [...prev, optimisticMessage];
+            });
+
+            // Upload voice file using media endpoint
+            const formData = new FormData();
+            formData.append('content', `Voice message (${voiceData.duration}s)`);
+            formData.append('message_type', 'audio');
+
+            // Send duration as metadata
+            formData.append('metadata', JSON.stringify({ duration: voiceData.duration }));
+
+            // Append file with 'file' field name (backend expects this)
+            formData.append('file', {
+                uri: voiceData.uri,
+                type: 'audio/wav',
+                name: `voice-${Date.now()}.wav`,
+            });
+
+            // Send to media endpoint which handles file uploads
+            const response = await api.post(`/chat/${chatId}/messages/media`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            });
+
+            if (response.data.success && response.data.data) {
+                console.log('✅ Voice message sent successfully');
+                console.log('📤 Backend response data:', JSON.stringify(response.data.data, null, 2));
+                console.log('📤 Attachments from backend:', response.data.data.attachments);
+
+                // Update optimistic message with real data from server
+                setMessages(prev => prev.map(msg => {
+                    if (msg.id === tempId) {
+                        const updatedMsg = {
+                            ...msg,
+                            id: response.data.data.message_id,
+                            status: 'sent',
+                            createdAt: response.data.data.created_at,
+                            senderId: response.data.data.sender_id,
+                            // Use server attachments URL (important for playback)
+                            attachments: response.data.data.attachments && response.data.data.attachments.length > 0
+                                ? response.data.data.attachments
+                                : msg.attachments,
+                            // Keep all other fields
+                            text: response.data.data.content || msg.text,
+                            content: response.data.data.content || msg.content,
+                        };
+                        console.log('🔄 Updated voice message with server data:', {
+                            id: updatedMsg.id,
+                            hasAttachments: !!updatedMsg.attachments,
+                            attachmentsCount: updatedMsg.attachments?.length,
+                            firstAttachmentUrl: updatedMsg.attachments?.[0]?.url
+                        });
+                        return updatedMsg;
+                    }
+                    return msg;
+                }));
+            } else {
+                // Remove optimistic message on failure
+                setMessages(prev => prev.filter(msg => msg.id !== tempId));
+                Alert.alert('Error', 'Failed to send voice message');
+            }
+        } catch (error) {
+            console.error('Failed to send voice message:', error);
+            Alert.alert('Error', error.response?.data?.message || 'Failed to send voice message');
+            // Remove optimistic message on error
+            setMessages(prev => prev.filter(msg => msg.id.toString().startsWith('temp-')));
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+    // Handle voice recording cancel
+    const handleVoiceCancel = () => {
+        setIsRecordingVoice(false);
     };
 
     const formatTime = (timestamp) => {
@@ -779,7 +946,7 @@ export default function ChatScreen({ route, navigation }) {
                             />
                         </TouchableOpacity>
                     ) : item.messageType === 'document' && item.attachments?.[0] ? (
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={styles.documentContainer}
                             onPress={() => {/* Handle document open */}}
                         >
@@ -795,6 +962,26 @@ export default function ChatScreen({ route, navigation }) {
                                 )}
                             </View>
                         </TouchableOpacity>
+                    ) : item.messageType === 'audio' || item.messageType === 'voice' ? (
+                        (() => {
+                            const audioUrl = item.audioUrl || item.attachments?.[0]?.url;
+                            console.log('🎵 Rendering voice message:', {
+                                messageId: item.id,
+                                hasAudioUrl: !!item.audioUrl,
+                                hasAttachments: !!item.attachments,
+                                attachmentsLength: item.attachments?.length,
+                                finalAudioUrl: audioUrl,
+                                duration: item.duration
+                            });
+                            return (
+                                <VoiceMessagePlayer
+                                    audioUrl={audioUrl}
+                                    duration={item.duration || 0}
+                                    isMe={isMe}
+                                    theme={theme}
+                                />
+                            );
+                        })()
                     ) : (
                         <Text style={[styles.messageText, isMe ? styles.myText : [styles.theirText, { color: theme.colors.primary }]]}>
                             {item.text}
@@ -944,8 +1131,8 @@ export default function ChatScreen({ route, navigation }) {
                             styles.sendButton,
                             newMessage.trim().length > 0 && [styles.sendButtonActive, { backgroundColor: theme.colors.primary }],
                         ]}
-                        onPress={sendMessage}
-                        disabled={newMessage.trim().length === 0 || isSending}
+                        onPress={handleVoiceRecordStart}
+                        disabled={isSending}
                     >
                         {isSending ? (
                             <ActivityIndicator size="small" color="#fff" />
@@ -959,6 +1146,15 @@ export default function ChatScreen({ route, navigation }) {
                     </TouchableOpacity>
                 </View>
             </View>
+
+            {/* Voice Recorder Modal */}
+            {isRecordingVoice && (
+                <VoiceRecorder
+                    onSend={handleVoiceSend}
+                    onCancel={handleVoiceCancel}
+                    theme={theme}
+                />
+            )}
 
             {/* Attachment Modal */}
             <Modal
