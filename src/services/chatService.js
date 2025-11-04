@@ -522,8 +522,10 @@ class ChatService {
         if (processedUrl.includes('localhost') || processedUrl.includes('127.0.0.1')) {
           // Extract the path part from localhost URL (e.g., /uploads/images/file.jpg)
           try {
-            const urlObj = new URL(processedUrl);
-            const path = urlObj.pathname;
+            // Use string manipulation instead of URL API (React Native compatibility)
+            // Find the path after the domain/port
+            const pathMatch = processedUrl.match(/https?:\/\/[^\/]+(\/.*)/);
+            const path = pathMatch ? pathMatch[1] : processedUrl;
 
             // Remove '/api' from API_BASE_URL to get the main domain
             const baseUrl = API_BASE_URL.replace('/api', '');
@@ -531,6 +533,13 @@ class ChatService {
             console.log('🔄 Replaced localhost URL:', { original: attachment.url, fixed: processedUrl });
           } catch (e) {
             console.error('Error parsing URL:', e);
+            // Fallback: try to extract path after last /
+            const lastSlashIndex = processedUrl.lastIndexOf('/uploads');
+            if (lastSlashIndex !== -1) {
+              const path = processedUrl.substring(lastSlashIndex);
+              const baseUrl = API_BASE_URL.replace('/api', '');
+              processedUrl = `${baseUrl}${path}`;
+            }
           }
         }
         // If URL doesn't start with http, prepend base URL

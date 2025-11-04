@@ -218,6 +218,9 @@ export default function ChatScreen({ route, navigation }) {
                         duration = msg.attachments[0].metadata.duration;
                     }
 
+                    // Process attachments to fix URLs (localhost → API URL)
+                    const processedAttachments = chatService.processAttachments(msg.attachments);
+
                     return {
                         id: msg.message_id,
                         text: msg.content,
@@ -225,7 +228,7 @@ export default function ChatScreen({ route, navigation }) {
                         isMe: isMyMessage,
                         messageType: msg.message_type || 'text',
                         status: msg.status || 'sent',
-                        attachments: msg.attachments,
+                        attachments: processedAttachments,
                         sender: msg.sender,
                         senderId: msg.sender_id,
                         createdAt: msg.created_at, // Keep original timestamp for sorting
@@ -245,12 +248,14 @@ export default function ChatScreen({ route, navigation }) {
                 
                 setMessages(sortedMessages);
 
-                // Auto-scroll to latest message after a short delay
+                // Auto-scroll to latest message after messages are rendered
+                // Use longer delay to ensure FlatList has rendered all items
                 setTimeout(() => {
                     if (flatListRef.current && sortedMessages.length > 0) {
-                        flatListRef.current.scrollToEnd({ animated: true });
+                        console.log('📜 Scrolling to end after loading messages');
+                        flatListRef.current.scrollToEnd({ animated: false }); // Use false for instant scroll on load
                     }
-                }, 100);
+                }, 300);
             }
         } catch (error) {
             console.error('Failed to load messages:', error);
@@ -298,6 +303,9 @@ export default function ChatScreen({ route, navigation }) {
                 duration = data.message.metadata?.duration || data.message.attachments?.[0]?.metadata?.duration || 0;
             }
 
+            // Process attachments to fix URLs (localhost → API URL)
+            const processedAttachments = chatService.processAttachments(data.message.attachments);
+
             // This is a message from another user
             const newMsg = {
                 id: data.message.message_id,
@@ -306,7 +314,7 @@ export default function ChatScreen({ route, navigation }) {
                 isMe: false, // Always false since this is from another user
                 messageType: data.message.message_type || 'text',
                 status: data.message.status || 'sent',
-                attachments: data.message.attachments,
+                attachments: processedAttachments,
                 sender: data.message.sender,
                 senderId: data.message.sender_id,
                 createdAt: data.message.created_at,
@@ -587,22 +595,37 @@ export default function ChatScreen({ route, navigation }) {
             formData.append('content', `Voice message (${voiceData.duration}s)`);
             formData.append('message_type', 'audio');
 
-            // Send duration as metadata
-            formData.append('metadata', JSON.stringify({ duration: voiceData.duration }));
+            // Note: Backend doesn't use metadata field in sendMediaMessage controller
+            // Duration is extracted from the audio file automatically by the backend
+
+            // Ensure the URI is properly formatted for React Native
+            let fileUri = voiceData.uri;
+            // On iOS, if URI doesn't have file:// prefix, add it
+            if (Platform.OS === 'ios' && !fileUri.startsWith('file://')) {
+                fileUri = `file://${fileUri}`;
+            }
+            // On Android, ensure file:// prefix exists
+            if (Platform.OS === 'android' && !fileUri.startsWith('file://')) {
+                fileUri = `file://${fileUri}`;
+            }
+
+            console.log('📤 Sending voice file:', {
+                originalUri: voiceData.uri,
+                formattedUri: fileUri,
+                duration: voiceData.duration,
+                platform: Platform.OS
+            });
 
             // Append file with 'file' field name (backend expects this)
             formData.append('file', {
-                uri: voiceData.uri,
+                uri: fileUri,
                 type: 'audio/wav',
                 name: `voice-${Date.now()}.wav`,
             });
 
             // Send to media endpoint which handles file uploads
-            const response = await api.post(`/chat/${chatId}/messages/media`, formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                },
-            });
+            // Don't manually set Content-Type - let the browser/RN handle it with boundary
+            const response = await api.post(`/chat/${chatId}/messages/media`, formData);
 
             if (response.data.success && response.data.data) {
                 console.log('✅ Voice message sent successfully');
@@ -642,8 +665,15 @@ export default function ChatScreen({ route, navigation }) {
                 Alert.alert('Error', 'Failed to send voice message');
             }
         } catch (error) {
-            console.error('Failed to send voice message:', error);
-            Alert.alert('Error', error.response?.data?.message || 'Failed to send voice message');
+            console.error('❌ Failed to send voice message:', error);
+            console.error('❌ Error response:', error.response?.data);
+            console.error('❌ Error status:', error.response?.status);
+
+            const errorMessage = error.response?.data?.message ||
+                               error.response?.data?.error ||
+                               'Failed to send voice message';
+
+            Alert.alert('Error', errorMessage);
             // Remove optimistic message on error
             setMessages(prev => prev.filter(msg => msg.id.toString().startsWith('temp-')));
         } finally {
@@ -778,7 +808,7 @@ export default function ChatScreen({ route, navigation }) {
         try {
             console.log('Opening document picker...');
             const results = await DocumentPicker.pick({
-                type: [DocumentPicker.types.pdf, DocumentPicker.types.doc, DocumentPicker.types.docx, DocumentPicker.types.xls, DocumentPicker.types.xlsx, DocumentPicker.types.images],
+                type: [DocumentPicker.types.allFiles], // Allow ALL file types
                 copyTo: 'cachesDirectory',
                 allowMultiSelection: false,
             });
@@ -801,7 +831,7 @@ export default function ChatScreen({ route, navigation }) {
                     uri: document.fileCopyUri || document.uri
                 };
 
-                await sendMediaMessage(finalDocument, 'document');
+                await sendMediaMessage(finalDocument, 'file');
             }
         } catch (err) {
             if (DocumentPicker.isCancel(err)) {
@@ -835,7 +865,7 @@ export default function ChatScreen({ route, navigation }) {
             text: type === 'image' ? '📷 Photo' : '📄 Document',
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             isMe: true,
-            messageType: type,
+            messageType: type === 'image' ? 'image' : 'file', // Use 'file' for documents
             status: 'sending',
             attachments: [{
                 type: type,
@@ -851,11 +881,12 @@ export default function ChatScreen({ route, navigation }) {
         try {
             // Send via API
             const formData = new FormData();
-            
+
             // Add other fields first (order matters sometimes)
             // Backend expects 'message_type' not 'messageType'
+            // Backend accepts: text, image, video, audio, file, location, contact
             formData.append('content', '');
-            formData.append('message_type', type || 'image');
+            formData.append('message_type', type === 'image' ? 'image' : 'file');
             
             // Prepare file object - ensuring we have all required fields
             const fileObject = {
@@ -945,12 +976,19 @@ export default function ChatScreen({ route, navigation }) {
                                 }}
                             />
                         </TouchableOpacity>
-                    ) : item.messageType === 'document' && item.attachments?.[0] ? (
+                    ) : (item.messageType === 'document' || item.messageType === 'file') && item.attachments?.[0] ? (
                         <TouchableOpacity
                             style={styles.documentContainer}
                             onPress={() => {/* Handle document open */}}
                         >
-                            <Icon name="document-attach" size={24} color={isMe ? '#2C3D5B' : theme.colors.primary} />
+                            {(() => {
+                                const fileIcon = getFileIcon(item.attachments[0].name, item.attachments[0].type);
+                                return (
+                                    <View style={[styles.fileIconWrapper, { backgroundColor: fileIcon.bgColor }]}>
+                                        <Icon name={fileIcon.name} size={24} color={fileIcon.color} />
+                                    </View>
+                                );
+                            })()}
                             <View style={styles.documentInfo}>
                                 <Text style={[styles.documentName, isMe ? styles.myText : styles.theirText]} numberOfLines={1}>
                                     {item.attachments[0].name || 'Document'}
@@ -1007,6 +1045,51 @@ export default function ChatScreen({ route, navigation }) {
         return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
     };
 
+    // Get appropriate icon for different file types
+    const getFileIcon = (fileName, mimeType) => {
+        const extension = fileName?.split('.').pop()?.toLowerCase();
+        const type = mimeType?.toLowerCase();
+
+        // PDF files
+        if (extension === 'pdf' || type?.includes('pdf')) {
+            return { name: 'document-text', color: '#D32F2F', bgColor: '#FFEBEE' };
+        }
+        // Word documents
+        if (['doc', 'docx'].includes(extension) || type?.includes('word') || type?.includes('msword')) {
+            return { name: 'document-text', color: '#1976D2', bgColor: '#E3F2FD' };
+        }
+        // Excel files
+        if (['xls', 'xlsx', 'csv'].includes(extension) || type?.includes('excel') || type?.includes('spreadsheet')) {
+            return { name: 'stats-chart', color: '#388E3C', bgColor: '#E8F5E9' };
+        }
+        // PowerPoint files
+        if (['ppt', 'pptx'].includes(extension) || type?.includes('presentation') || type?.includes('powerpoint')) {
+            return { name: 'easel', color: '#F57C00', bgColor: '#FFF3E0' };
+        }
+        // Archive files
+        if (['zip', 'rar', '7z', 'tar', 'gz'].includes(extension) || type?.includes('zip') || type?.includes('compressed')) {
+            return { name: 'archive', color: '#7B1FA2', bgColor: '#F3E5F5' };
+        }
+        // Text files
+        if (['txt', 'log'].includes(extension) || type?.includes('text/plain')) {
+            return { name: 'document', color: '#455A64', bgColor: '#ECEFF1' };
+        }
+        // Audio files
+        if (['mp3', 'wav', 'ogg', 'm4a', 'aac'].includes(extension) || type?.includes('audio')) {
+            return { name: 'musical-notes', color: '#C2185B', bgColor: '#FCE4EC' };
+        }
+        // Video files
+        if (['mp4', 'avi', 'mov', 'mkv', 'webm'].includes(extension) || type?.includes('video')) {
+            return { name: 'videocam', color: '#00796B', bgColor: '#E0F2F1' };
+        }
+        // Code files
+        if (['js', 'jsx', 'ts', 'tsx', 'py', 'java', 'cpp', 'c', 'html', 'css', 'json', 'xml'].includes(extension)) {
+            return { name: 'code-slash', color: '#5E35B1', bgColor: '#EDE7F6' };
+        }
+        // Default for unknown types
+        return { name: 'document-attach', color: '#FF9800', bgColor: '#FFF3E0' };
+    };
+
     const renderTypingIndicator = () => {
         if (!isTyping) return null;
 
@@ -1023,13 +1106,18 @@ export default function ChatScreen({ route, navigation }) {
         );
     };
 
+    // Separate effect for scrolling on new messages (not on initial load)
+    const previousMessagesLength = useRef(messages.length);
+
     useEffect(() => {
-        // Scroll to bottom when messages change
-        if (messages.length > 0) {
+        // Only auto-scroll if new messages were added (not on initial load)
+        if (messages.length > 0 && messages.length > previousMessagesLength.current) {
+            console.log('📜 New message added, scrolling to end');
             setTimeout(() => {
                 flatListRef.current?.scrollToEnd({ animated: true });
             }, 100);
         }
+        previousMessagesLength.current = messages.length;
     }, [messages]);
 
     if (isLoading) {
@@ -1098,6 +1186,18 @@ export default function ChatScreen({ route, navigation }) {
                             <Text style={styles.emptyText}>No messages yet. Start a conversation!</Text>
                         </View>
                     }
+                    onContentSizeChange={() => {
+                        // Scroll to end when content size changes (messages loaded/added)
+                        if (messages.length > 0 && !isLoading) {
+                            flatListRef.current?.scrollToEnd({ animated: false });
+                        }
+                    }}
+                    onLayout={() => {
+                        // Scroll to end when layout is ready
+                        if (messages.length > 0 && !isLoading) {
+                            flatListRef.current?.scrollToEnd({ animated: false });
+                        }
+                    }}
                 />
             </ImageBackground>
 
@@ -1443,12 +1543,19 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         padding: 10,
-        backgroundColor: 'rgba(255,255,255,0.1)',
+        backgroundColor: 'rgba(255,255,255,0.3)',
         borderRadius: 10,
         minWidth: 200,
     },
+    fileIconWrapper: {
+        width: 40,
+        height: 40,
+        borderRadius: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     documentInfo: {
-        marginLeft: 10,
+        marginLeft: 12,
         flex: 1,
     },
     documentName: {

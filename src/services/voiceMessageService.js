@@ -8,17 +8,8 @@ class VoiceMessageService {
         this.sound = null;
         this.audioPath = null;
         this.recordingStartTime = null;
-
-        // Configure audio recorder
-        const options = {
-            sampleRate: 44100,
-            channels: 1,
-            bitsPerSample: 16,
-            audioSource: 6, // VOICE_RECOGNITION
-            wavFile: `voice-${Date.now()}.wav`
-        };
-
-        AudioRecord.init(options);
+        // Don't initialize AudioRecord here - do it when starting recording
+        // This ensures each recording gets a fresh configuration
     }
 
     // Request microphone permission
@@ -55,13 +46,25 @@ class VoiceMessageService {
                 throw new Error('Microphone permission not granted');
             }
 
+            // Configure audio recorder with a unique filename for each recording
+            const options = {
+                sampleRate: 44100,
+                channels: 1,
+                bitsPerSample: 16,
+                audioSource: 6, // VOICE_RECOGNITION
+                wavFile: `voice-${Date.now()}.wav`
+            };
+
+            console.log('🎙️ Initializing AudioRecord with options:', options);
+            AudioRecord.init(options);
+
             // Start recording
             AudioRecord.start();
             this.recordingStartTime = Date.now();
-            console.log('🎙️ Recording started');
+            console.log('🎙️ Recording started at:', this.recordingStartTime);
             return true;
         } catch (error) {
-            console.error('Failed to start recording:', error);
+            console.error('❌ Failed to start recording:', error);
             throw error;
         }
     }
@@ -76,17 +79,51 @@ class VoiceMessageService {
 
             this.audioPath = audioFile;
 
+            // Check file size
+            try {
+                const fileStats = await RNFS.stat(audioFile);
+                console.log('📊 Audio file stats:', {
+                    size: fileStats.size,
+                    sizeInKB: Math.round(fileStats.size / 1024),
+                    path: audioFile
+                });
+
+                if (fileStats.size < 10000) {
+                    console.warn('⚠️ Audio file is very small, recording might have failed!');
+                }
+            } catch (statsError) {
+                console.error('Failed to get file stats:', statsError);
+            }
+
+            // Ensure proper file URI format for both platforms
+            let fileUri = audioFile;
+
+            // For iOS, AudioRecord returns full path, may need file:// prefix
+            if (Platform.OS === 'ios') {
+                if (!fileUri.startsWith('file://')) {
+                    fileUri = `file://${fileUri}`;
+                }
+            }
+            // For Android, ensure file:// prefix
+            else if (Platform.OS === 'android') {
+                if (!fileUri.startsWith('file://')) {
+                    fileUri = `file://${fileUri}`;
+                }
+            }
+
             console.log('✅ Recording stopped:', {
-                path: audioFile,
-                duration
+                originalPath: audioFile,
+                formattedUri: fileUri,
+                duration,
+                platform: Platform.OS
             });
 
             return {
-                uri: Platform.OS === 'ios' ? audioFile : `file://${audioFile}`,
+                uri: fileUri,
                 duration: duration,
             };
         } catch (error) {
-            console.error('Failed to stop recording:', error);
+            console.error('❌ Failed to stop recording:', error);
             throw error;
         }
     }
@@ -118,10 +155,14 @@ class VoiceMessageService {
     // Play audio file
     async playAudio(uri) {
         try {
-            console.log('🔊 Playing audio:', uri);
+            console.log('🔊 VoiceMessageService.playAudio called');
+            console.log('🔊 Audio URI:', uri);
+            console.log('🔊 URI type:', typeof uri);
+            console.log('🔊 URI length:', uri?.length);
 
             // Stop current sound if playing
             if (this.sound) {
+                console.log('🛑 Stopping existing sound...');
                 this.sound.stop();
                 this.sound.release();
             }
@@ -131,21 +172,24 @@ class VoiceMessageService {
 
             // Determine if it's a remote URL or local file
             const isRemoteUrl = uri.startsWith('http://') || uri.startsWith('https://');
+            console.log('🔊 Is remote URL:', isRemoteUrl);
 
             // Load and play
             return new Promise((resolve, reject) => {
+                console.log('🔊 Creating Sound object with URI:', uri);
                 // For both remote URLs and local files, use empty string as base path
                 // react-native-sound will handle URLs and local paths automatically
                 this.sound = new Sound(uri, '', (error) => {
                     if (error) {
-                        console.log('❌ Failed to load sound:', error);
-                        console.log('Error details:', JSON.stringify(error));
+                        console.error('❌ Failed to load sound:', error);
+                        console.error('❌ Error details:', JSON.stringify(error));
+                        console.error('❌ Attempted URI:', uri);
                         reject(error);
                         return;
                     }
 
                     console.log('✅ Sound loaded successfully');
-                    console.log('Duration:', this.sound.getDuration(), 'seconds');
+                    console.log('✅ Duration:', this.sound.getDuration(), 'seconds');
 
                     // Play the sound
                     this.sound.play((success) => {
@@ -153,7 +197,7 @@ class VoiceMessageService {
                             console.log('✅ Playback finished successfully');
                             this.sound.release();
                         } else {
-                            console.log('⚠️ Playback failed due to audio decoding errors');
+                            console.error('⚠️ Playback failed due to audio decoding errors');
                         }
                     });
 
@@ -161,7 +205,8 @@ class VoiceMessageService {
                 });
             });
         } catch (error) {
-            console.error('Failed to play audio:', error);
+            console.error('❌ Failed to play audio:', error);
+            console.error('❌ Error message:', error?.message);
             throw error;
         }
     }

@@ -25,29 +25,41 @@ export default function VoiceMessagePlayer({ audioUrl, duration, isMe, theme }) 
     const handlePlayPause = async () => {
         try {
             if (!audioUrl) {
-                console.error('No audio URL provided for playback');
+                console.error('❌ No audio URL provided for playback');
+                console.error('❌ Props received:', { audioUrl, duration, isMe });
                 return;
             }
 
+            console.log('🎵 Play/Pause clicked. Current state:', { isPlaying, audioUrl });
+
             if (isPlaying) {
+                console.log('⏸️ Pausing audio...');
                 await voiceMessageService.pauseAudio();
                 setIsPlaying(false);
                 setCurrentTime(0);
             } else {
                 setIsLoading(true);
-                console.log('Playing audio:', audioUrl);
+                console.log('▶️ Playing audio from URL:', audioUrl);
+                console.log('▶️ Audio URL type:', typeof audioUrl);
+                console.log('▶️ Audio URL length:', audioUrl?.length);
 
                 // Play audio - react-native-sound doesn't support progress tracking like expo-av
                 await voiceMessageService.playAudio(audioUrl);
 
                 setIsPlaying(true);
                 setIsLoading(false);
+                console.log('✅ Audio playback started');
 
                 // Note: react-native-sound doesn't support real-time progress updates
                 // The audio will play to completion automatically
             }
         } catch (error) {
-            console.error('Failed to play/pause audio:', error);
+            console.error('❌ Failed to play/pause audio:', error);
+            console.error('❌ Error details:', {
+                message: error?.message,
+                name: error?.name,
+                audioUrl: audioUrl
+            });
             setIsPlaying(false);
             setIsLoading(false);
         }
