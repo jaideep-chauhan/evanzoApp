@@ -92,9 +92,12 @@ const VoiceRecorder = ({ onSendVoiceNote, onCancel }) => {
     const startRecording = async () => {
         try {
             console.log('🎤 Starting recording...');
+            console.log('📱 Platform:', Platform.OS);
+            console.log('🔧 AudioRecorderModule available:', !!AudioRecorderModule);
 
             // Check if module is available
             if (!AudioRecorderModule) {
+                console.error('❌ AudioRecorderModule is not available');
                 Alert.alert(
                     'Module Not Available',
                     'Audio recording is not available. Please rebuild the app.',
@@ -104,19 +107,30 @@ const VoiceRecorder = ({ onSendVoiceNote, onCancel }) => {
                 return;
             }
 
+            console.log('✅ AudioRecorderModule found, calling startRecording()...');
+
             // Request permission on Android
-            const hasPermission = await requestAudioPermission();
-            if (!hasPermission) {
-                Alert.alert(
-                    'Permission Required',
-                    'Microphone permission is required to record voice messages',
-                    [{ text: 'OK' }]
-                );
-                onCancel();
-                return;
+            if (Platform.OS === 'android') {
+                console.log('📱 Android detected, requesting permission...');
+                const hasPermission = await requestAudioPermission();
+                if (!hasPermission) {
+                    console.error('❌ Android permission denied');
+                    Alert.alert(
+                        'Permission Required',
+                        'Microphone permission is required to record voice messages',
+                        [{ text: 'OK' }]
+                    );
+                    onCancel();
+                    return;
+                }
+                console.log('✅ Android permission granted');
+            } else {
+                console.log('📱 iOS detected, permission will be handled by native module');
             }
 
+            console.log('🔄 Calling AudioRecorderModule.startRecording()...');
             const result = await AudioRecorderModule.startRecording();
+            console.log('📦 startRecording result:', JSON.stringify(result));
 
             if (result.success) {
                 setIsRecording(true);
@@ -130,8 +144,32 @@ const VoiceRecorder = ({ onSendVoiceNote, onCancel }) => {
                 }, 1000);
             }
         } catch (error) {
-            console.error('Failed to start recording:', error);
-            Alert.alert('Recording Error', 'Failed to start recording: ' + error.message);
+            console.error('❌ Failed to start recording');
+            console.error('❌ Error object:', error);
+            console.error('❌ Error code:', error.code);
+            console.error('❌ Error message:', error.message);
+            console.error('❌ Error stack:', error.stack);
+
+            let errorMessage = 'Failed to start recording';
+            if (error.code === 'permission_denied') {
+                console.error('❌ Permission was denied');
+                errorMessage = 'Microphone permission was denied. Please enable it in Settings > EVNZO > Microphone';
+            } else if (error.code === 'audio_session_error') {
+                console.error('❌ Audio session error');
+                errorMessage = 'Failed to setup audio session. Please close other apps using the microphone and try again.';
+            } else if (error.code === 'recorder_init_error') {
+                console.error('❌ Recorder initialization error');
+                errorMessage = 'Failed to initialize audio recorder: ' + (error.message || 'Unknown error');
+            } else if (error.code === 'recording_start_error') {
+                console.error('❌ Recording start error');
+                errorMessage = 'Failed to start recording - check microphone availability';
+            } else if (error.message) {
+                console.error('❌ Generic error with message');
+                errorMessage = error.message;
+            }
+
+            console.error('❌ Final error message:', errorMessage);
+            Alert.alert('Recording Error', errorMessage);
             setIsRecording(false);
             onCancel();
         }
