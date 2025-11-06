@@ -26,8 +26,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import DocumentPicker from 'react-native-document-picker';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import VoiceRecorder from '../../components/VoiceRecorder';
-import VoiceMessagePlayer from '../../components/VoiceMessagePlayer';
-import voiceMessageService from '../../services/voiceMessageService';
+import AudioPlayer from '../../components/AudioPlayer';
 
 export default function ChatScreen({ route, navigation }) {
     const { chatId: initialChatId, chatName, avatar, isOnline: initialOnline, recipientId } = route.params;
@@ -542,149 +541,6 @@ export default function ChatScreen({ route, navigation }) {
         }, 2000);
     };
 
-    // Handle voice recording start
-    const handleVoiceRecordStart = () => {
-        if (newMessage.trim().length > 0) {
-            // If there's text, send message instead
-            sendMessage();
-        } else {
-            // Start voice recording
-            setIsRecordingVoice(true);
-        }
-    };
-
-    // Handle voice message send
-    const handleVoiceSend = async (voiceData) => {
-        try {
-            setIsSending(true);
-            setIsRecordingVoice(false);
-
-            // Create optimistic message
-            const tempId = `temp-${Date.now()}`;
-            const messageContent = `Voice message (${voiceData.duration}s)`;
-            const optimisticMessage = {
-                id: tempId,
-                text: messageContent, // Use 'text' field for consistency with socket listener
-                content: messageContent, // Also keep 'content' for backend
-                senderId: currentUserId,
-                messageType: 'audio',
-                status: 'sending',
-                isMe: true, // Mark as our message
-                createdAt: new Date().toISOString(),
-                attachments: [{
-                    url: voiceData.uri,
-                    type: 'audio/wav',
-                }],
-                duration: voiceData.duration,
-            };
-
-            // Add optimistic message to UI
-            setMessages(prev => {
-                // Check for duplicates
-                const messageExists = prev.some(msg => msg.id === tempId);
-                if (messageExists) {
-                    console.log('⚠️ Optimistic voice message already exists');
-                    return prev;
-                }
-                console.log('✅ Adding optimistic voice message to UI');
-                return [...prev, optimisticMessage];
-            });
-
-            // Upload voice file using media endpoint
-            const formData = new FormData();
-            formData.append('content', `Voice message (${voiceData.duration}s)`);
-            formData.append('message_type', 'audio');
-
-            // Note: Backend doesn't use metadata field in sendMediaMessage controller
-            // Duration is extracted from the audio file automatically by the backend
-
-            // Ensure the URI is properly formatted for React Native
-            let fileUri = voiceData.uri;
-            // On iOS, if URI doesn't have file:// prefix, add it
-            if (Platform.OS === 'ios' && !fileUri.startsWith('file://')) {
-                fileUri = `file://${fileUri}`;
-            }
-            // On Android, ensure file:// prefix exists
-            if (Platform.OS === 'android' && !fileUri.startsWith('file://')) {
-                fileUri = `file://${fileUri}`;
-            }
-
-            console.log('📤 Sending voice file:', {
-                originalUri: voiceData.uri,
-                formattedUri: fileUri,
-                duration: voiceData.duration,
-                platform: Platform.OS
-            });
-
-            // Append file with 'file' field name (backend expects this)
-            formData.append('file', {
-                uri: fileUri,
-                type: 'audio/wav',
-                name: `voice-${Date.now()}.wav`,
-            });
-
-            // Send to media endpoint which handles file uploads
-            // Don't manually set Content-Type - let the browser/RN handle it with boundary
-            const response = await api.post(`/chat/${chatId}/messages/media`, formData);
-
-            if (response.data.success && response.data.data) {
-                console.log('✅ Voice message sent successfully');
-                console.log('📤 Backend response data:', JSON.stringify(response.data.data, null, 2));
-                console.log('📤 Attachments from backend:', response.data.data.attachments);
-
-                // Update optimistic message with real data from server
-                setMessages(prev => prev.map(msg => {
-                    if (msg.id === tempId) {
-                        const updatedMsg = {
-                            ...msg,
-                            id: response.data.data.message_id,
-                            status: 'sent',
-                            createdAt: response.data.data.created_at,
-                            senderId: response.data.data.sender_id,
-                            // Use server attachments URL (important for playback)
-                            attachments: response.data.data.attachments && response.data.data.attachments.length > 0
-                                ? response.data.data.attachments
-                                : msg.attachments,
-                            // Keep all other fields
-                            text: response.data.data.content || msg.text,
-                            content: response.data.data.content || msg.content,
-                        };
-                        console.log('🔄 Updated voice message with server data:', {
-                            id: updatedMsg.id,
-                            hasAttachments: !!updatedMsg.attachments,
-                            attachmentsCount: updatedMsg.attachments?.length,
-                            firstAttachmentUrl: updatedMsg.attachments?.[0]?.url
-                        });
-                        return updatedMsg;
-                    }
-                    return msg;
-                }));
-            } else {
-                // Remove optimistic message on failure
-                setMessages(prev => prev.filter(msg => msg.id !== tempId));
-                Alert.alert('Error', 'Failed to send voice message');
-            }
-        } catch (error) {
-            console.error('❌ Failed to send voice message:', error);
-            console.error('❌ Error response:', error.response?.data);
-            console.error('❌ Error status:', error.response?.status);
-
-            const errorMessage = error.response?.data?.message ||
-                               error.response?.data?.error ||
-                               'Failed to send voice message';
-
-            Alert.alert('Error', errorMessage);
-            // Remove optimistic message on error
-            setMessages(prev => prev.filter(msg => msg.id.toString().startsWith('temp-')));
-        } finally {
-            setIsSending(false);
-        }
-    };
-
-    // Handle voice recording cancel
-    const handleVoiceCancel = () => {
-        setIsRecordingVoice(false);
-    };
 
     const formatTime = (timestamp) => {
         // If timestamp is already formatted string (like "10:30 AM"), return it
@@ -953,6 +809,80 @@ export default function ChatScreen({ route, navigation }) {
         }
     };
 
+    const sendVoiceNote = async (audioFile, duration) => {
+        if (!chatId) return;
+
+        setUploadingFile(true);
+        setIsRecordingVoice(false);
+        const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+
+        // Add optimistic message
+        const optimisticMessage = {
+            id: tempId,
+            text: '🎤 Voice message',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            isMe: true,
+            messageType: 'audio',
+            status: 'sending',
+            attachments: [{
+                type: 'audio',
+                uri: audioFile.uri,
+                name: audioFile.name || 'voice_message.m4a',
+                size: audioFile.size,
+            }],
+            duration: duration,
+            createdAt: new Date().toISOString()
+        };
+
+        setMessages(prev => [...prev, optimisticMessage]);
+
+        try {
+            // Send via API
+            const formData = new FormData();
+            formData.append('content', '');
+            formData.append('message_type', 'audio');
+
+            const fileObject = {
+                uri: audioFile.uri,
+                type: audioFile.type || 'audio/m4a',
+                name: audioFile.name || `voice_${Date.now()}.m4a`,
+            };
+
+            formData.append('file', fileObject);
+
+            console.log('Sending voice message:', {
+                fileObject,
+                duration,
+            });
+
+            const result = await chatService.sendMediaMessage(chatId, formData);
+
+            if (result.success) {
+                console.log('✅ Voice message sent successfully');
+                setMessages(prev => prev.map(msg =>
+                    msg.id === tempId
+                        ? {
+                            ...msg,
+                            id: result.data.message_id,
+                            status: 'sent',
+                            attachments: result.data.attachments,
+                        }
+                        : msg
+                ));
+            } else {
+                console.error('❌ Voice message send failed:', result.message);
+                setMessages(prev => prev.filter(msg => msg.id !== tempId));
+                Alert.alert('Error', result.message || 'Failed to send voice message');
+            }
+        } catch (error) {
+            console.error('❌ Exception sending voice message:', error);
+            setMessages(prev => prev.filter(msg => msg.id !== tempId));
+            Alert.alert('Error', 'Failed to send voice message');
+        } finally {
+            setUploadingFile(false);
+        }
+    };
+
     const renderMessage = ({ item, index }) => {
         const isMe = item.isMe;
         // Always show timestamp if it exists
@@ -976,6 +906,12 @@ export default function ChatScreen({ route, navigation }) {
                                 }}
                             />
                         </TouchableOpacity>
+                    ) : item.messageType === 'audio' && (item.attachments?.[0] || item.duration) ? (
+                        <AudioPlayer
+                            audioUrl={item.attachments?.[0]?.uri || item.attachments?.[0]?.url}
+                            duration={item.duration || item.attachments?.[0]?.metadata?.duration || 0}
+                            isMe={isMe}
+                        />
                     ) : (item.messageType === 'document' || item.messageType === 'file') && item.attachments?.[0] ? (
                         <TouchableOpacity
                             style={styles.documentContainer}
@@ -1000,26 +936,6 @@ export default function ChatScreen({ route, navigation }) {
                                 )}
                             </View>
                         </TouchableOpacity>
-                    ) : item.messageType === 'audio' || item.messageType === 'voice' ? (
-                        (() => {
-                            const audioUrl = item.audioUrl || item.attachments?.[0]?.url;
-                            console.log('🎵 Rendering voice message:', {
-                                messageId: item.id,
-                                hasAudioUrl: !!item.audioUrl,
-                                hasAttachments: !!item.attachments,
-                                attachmentsLength: item.attachments?.length,
-                                finalAudioUrl: audioUrl,
-                                duration: item.duration
-                            });
-                            return (
-                                <VoiceMessagePlayer
-                                    audioUrl={audioUrl}
-                                    duration={item.duration || 0}
-                                    isMe={isMe}
-                                    theme={theme}
-                                />
-                            );
-                        })()
                     ) : (
                         <Text style={[styles.messageText, isMe ? styles.myText : [styles.theirText, { color: theme.colors.primary }]]}>
                             {item.text}
@@ -1204,57 +1120,64 @@ export default function ChatScreen({ route, navigation }) {
             {/* Sticky Input Bar */}
             <View style={styles.inputSectionContainer}>
                 <View style={styles.inputSection}>
-                    <View style={styles.inputBar}>
-                        <TouchableOpacity 
-                            style={styles.attachButton}
-                            onPress={() => setShowAttachmentModal(true)}
-                            disabled={uploadingFile}
-                        >
-                            <Icon name="add" size={24} color={uploadingFile ? "#ccc" : "#8B95A5"} />
-                        </TouchableOpacity>
-                        <TextInput
-                            style={styles.textInput}
-                            placeholder="Type a message..."
-                            placeholderTextColor="#8B95A5"
-                            value={newMessage}
-                            onChangeText={(text) => {
-                                setNewMessage(text);
-                                handleTyping();
-                            }}
-                            multiline
-                            maxLength={1000}
-                            editable={!isSending}
+                    {isRecordingVoice ? (
+                        <VoiceRecorder
+                            onSendVoiceNote={sendVoiceNote}
+                            onCancel={() => setIsRecordingVoice(false)}
                         />
-                    </View>
-                    <TouchableOpacity
-                        style={[
-                            styles.sendButton,
-                            newMessage.trim().length > 0 && [styles.sendButtonActive, { backgroundColor: theme.colors.primary }],
-                        ]}
-                        onPress={handleVoiceRecordStart}
-                        disabled={isSending}
-                    >
-                        {isSending ? (
-                            <ActivityIndicator size="small" color="#fff" />
-                        ) : (
-                            <Icon
-                                name={newMessage.trim().length > 0 ? "send" : "mic"}
-                                size={22}
-                                color={newMessage.trim().length > 0 ? "#fff" : "#8B95A5"}
-                            />
-                        )}
-                    </TouchableOpacity>
+                    ) : (
+                        <>
+                            <View style={styles.inputBar}>
+                                <TouchableOpacity
+                                    style={styles.attachButton}
+                                    onPress={() => setShowAttachmentModal(true)}
+                                    disabled={uploadingFile}
+                                >
+                                    <Icon name="add" size={24} color={uploadingFile ? "#ccc" : "#8B95A5"} />
+                                </TouchableOpacity>
+                                <TextInput
+                                    style={styles.textInput}
+                                    placeholder="Type a message..."
+                                    placeholderTextColor="#8B95A5"
+                                    value={newMessage}
+                                    onChangeText={(text) => {
+                                        setNewMessage(text);
+                                        handleTyping();
+                                    }}
+                                    multiline
+                                    maxLength={1000}
+                                    editable={!isSending}
+                                />
+                            </View>
+                            {newMessage.trim().length > 0 ? (
+                                <TouchableOpacity
+                                    style={[
+                                        styles.sendButton,
+                                        styles.sendButtonActive,
+                                        { backgroundColor: theme.colors.primary }
+                                    ]}
+                                    onPress={sendMessage}
+                                    disabled={isSending}
+                                >
+                                    {isSending ? (
+                                        <ActivityIndicator size="small" color="#fff" />
+                                    ) : (
+                                        <Icon name="send" size={22} color="#fff" />
+                                    )}
+                                </TouchableOpacity>
+                            ) : (
+                                <TouchableOpacity
+                                    style={[styles.sendButton, { backgroundColor: theme.colors.primary }]}
+                                    onPress={() => setIsRecordingVoice(true)}
+                                    disabled={uploadingFile}
+                                >
+                                    <Icon name="mic" size={22} color="#fff" />
+                                </TouchableOpacity>
+                            )}
+                        </>
+                    )}
                 </View>
             </View>
-
-            {/* Voice Recorder Modal */}
-            {isRecordingVoice && (
-                <VoiceRecorder
-                    onSend={handleVoiceSend}
-                    onCancel={handleVoiceCancel}
-                    theme={theme}
-                />
-            )}
 
             {/* Attachment Modal */}
             <Modal

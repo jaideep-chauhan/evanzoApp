@@ -31,6 +31,7 @@
     "axios": "^1.11.0",
     "formik": "^2.4.6",
     "i18next": "^25.1.2",
+    "nitro-modules": "^0.1.1",
     "react": "19.0.0",
     "react-i18next": "^15.5.1",
     "react-native": "0.78.1",

@@ -1,189 +1,297 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
     View,
     Text,
     TouchableOpacity,
     StyleSheet,
     Animated,
-    ActivityIndicator,
+    Alert,
+    NativeModules,
+    Platform,
+    PermissionsAndroid,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import voiceMessageService from '../services/voiceMessageService';
+import { useTheme } from '../ThemeContext';
 
-export default function VoiceRecorder({ onSend, onCancel, theme }) {
+const { AudioRecorderModule } = NativeModules;
+
+const VoiceRecorder = ({ onSendVoiceNote, onCancel }) => {
     const [isRecording, setIsRecording] = useState(false);
-    const [duration, setDuration] = useState(0);
-    const [isSending, setIsSending] = useState(false);
-    const scaleAnim = useRef(new Animated.Value(1)).current;
-    const durationInterval = useRef(null);
+    const [recordTime, setRecordTime] = useState(0);
+    const theme = useTheme();
 
+    const pulseAnim = useRef(new Animated.Value(1)).current;
+    const timerRef = useRef(null);
+
+    // Check if AudioRecorderModule is available
+    useEffect(() => {
+        if (!AudioRecorderModule) {
+            console.error('AudioRecorderModule is not available. Please rebuild the app.');
+            Alert.alert(
+                'Module Not Available',
+                'Audio recording module is not properly linked. Please rebuild the app.',
+                [{ text: 'OK' }]
+            );
+        }
+    }, []);
+
+    // Auto-start recording when component mounts (WhatsApp behavior)
     useEffect(() => {
         startRecording();
+
         return () => {
-            cleanup();
+            if (timerRef.current) {
+                clearInterval(timerRef.current);
+            }
         };
     }, []);
 
     useEffect(() => {
         if (isRecording) {
-            // Animate microphone icon
             Animated.loop(
                 Animated.sequence([
-                    Animated.timing(scaleAnim, {
-                        toValue: 1.2,
-                        duration: 800,
+                    Animated.timing(pulseAnim, {
+                        toValue: 1.3,
+                        duration: 1000,
                         useNativeDriver: true,
                     }),
-                    Animated.timing(scaleAnim, {
+                    Animated.timing(pulseAnim, {
                         toValue: 1,
-                        duration: 800,
+                        duration: 1000,
                         useNativeDriver: true,
                     }),
                 ])
             ).start();
-
-            // Update duration every second
-            durationInterval.current = setInterval(async () => {
-                const currentDuration = await voiceMessageService.getRecordingDuration();
-                setDuration(currentDuration);
-            }, 1000);
+        } else {
+            pulseAnim.setValue(1);
         }
-
-        return () => {
-            if (durationInterval.current) {
-                clearInterval(durationInterval.current);
-            }
-        };
     }, [isRecording]);
+
+    const requestAudioPermission = async () => {
+        if (Platform.OS === 'android') {
+            try {
+                const granted = await PermissionsAndroid.request(
+                    PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+                    {
+                        title: 'Audio Recording Permission',
+                        message: 'This app needs access to your microphone to record voice messages',
+                        buttonNeutral: 'Ask Me Later',
+                        buttonNegative: 'Cancel',
+                        buttonPositive: 'OK',
+                    },
+                );
+                return granted === PermissionsAndroid.RESULTS.GRANTED;
+            } catch (err) {
+                console.warn('Permission request error:', err);
+                return false;
+            }
+        }
+        return true; // iOS handles permissions automatically
+    };
 
     const startRecording = async () => {
         try {
-            await voiceMessageService.startRecording();
-            setIsRecording(true);
-        } catch (error) {
-            console.error('Failed to start recording:', error);
-            if (onCancel) onCancel();
-        }
-    };
+            console.log('🎤 Starting recording...');
 
-    const handleSend = async () => {
-        try {
-            setIsSending(true);
-            const result = await voiceMessageService.stopRecording();
-            setIsRecording(false);
+            // Check if module is available
+            if (!AudioRecorderModule) {
+                Alert.alert(
+                    'Module Not Available',
+                    'Audio recording is not available. Please rebuild the app.',
+                    [{ text: 'OK' }]
+                );
+                onCancel();
+                return;
+            }
 
-            if (onSend) {
-                await onSend(result);
+            // Request permission on Android
+            const hasPermission = await requestAudioPermission();
+            if (!hasPermission) {
+                Alert.alert(
+                    'Permission Required',
+                    'Microphone permission is required to record voice messages',
+                    [{ text: 'OK' }]
+                );
+                onCancel();
+                return;
+            }
+
+            const result = await AudioRecorderModule.startRecording();
+
+            if (result.success) {
+                setIsRecording(true);
+                setRecordTime(0);
+
+                console.log('🎙️ Recording started successfully');
+
+                // Start timer
+                timerRef.current = setInterval(() => {
+                    setRecordTime(prev => prev + 1);
+                }, 1000);
             }
         } catch (error) {
-            console.error('Failed to send voice message:', error);
-            if (onCancel) onCancel();
-        } finally {
-            setIsSending(false);
+            console.error('Failed to start recording:', error);
+            Alert.alert('Recording Error', 'Failed to start recording: ' + error.message);
+            setIsRecording(false);
+            onCancel();
         }
     };
 
-    const handleCancel = async () => {
-        await voiceMessageService.cancelRecording();
+    const stopRecording = async () => {
+        try {
+            console.log('🛑 Stopping recording...');
+
+            setIsRecording(false);
+            if (timerRef.current) {
+                clearInterval(timerRef.current);
+            }
+
+            if (!AudioRecorderModule) {
+                onCancel();
+                return;
+            }
+
+            if (recordTime < 1) {
+                Alert.alert('Too Short', 'Recording must be at least 1 second long');
+                await AudioRecorderModule.cancelRecording();
+                onCancel();
+                return;
+            }
+
+            // Stop and get the recording path
+            const result = await AudioRecorderModule.stopRecording();
+
+            console.log('📁 Recording saved at:', result.path);
+
+            // Create file object for upload
+            const audioFile = {
+                uri: result.path,
+                type: 'audio/m4a',
+                name: `voice_${Date.now()}.m4a`,
+            };
+
+            console.log('✅ Sending voice note:', audioFile);
+
+            // Send the voice note
+            onSendVoiceNote(audioFile, recordTime);
+
+        } catch (error) {
+            console.error('Failed to stop recording:', error);
+            Alert.alert('Recording Error', 'Failed to save recording: ' + error.message);
+            setIsRecording(false);
+            try {
+                await AudioRecorderModule.cancelRecording();
+            } catch (e) {
+                console.error('Error canceling:', e);
+            }
+            onCancel();
+        }
+    };
+
+    const cancelRecording = async () => {
         setIsRecording(false);
-        if (onCancel) onCancel();
-    };
-
-    const cleanup = () => {
-        if (durationInterval.current) {
-            clearInterval(durationInterval.current);
+        if (timerRef.current) {
+            clearInterval(timerRef.current);
         }
-        voiceMessageService.cancelRecording();
+        try {
+            if (AudioRecorderModule) {
+                await AudioRecorderModule.cancelRecording();
+            }
+        } catch (error) {
+            console.error('Error canceling recording:', error);
+        }
+        setRecordTime(0);
+        onCancel();
     };
 
     const formatTime = (seconds) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
+    // Always show recording UI (WhatsApp behavior - no separate button state)
     return (
-        <View style={[styles.container, { backgroundColor: theme.colors.primary + '10' }]}>
+        <View style={styles.recordingContainer}>
             <TouchableOpacity
-                style={[styles.cancelButton, { backgroundColor: '#FF3B30' }]}
-                onPress={handleCancel}
-                disabled={isSending}
+                style={styles.cancelButton}
+                onPress={cancelRecording}
             >
-                <Icon name="close" size={24} color="#fff" />
+                <Icon name="close-circle" size={28} color="#FF3B30" />
             </TouchableOpacity>
 
             <View style={styles.recordingInfo}>
-                <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-                    <Icon name="mic" size={32} color="#FF3B30" />
+                <Animated.View style={[styles.pulseCircle, { transform: [{ scale: pulseAnim }] }]}>
+                    <Icon name="mic" size={20} color="#FF3B30" />
                 </Animated.View>
-                <View style={styles.durationContainer}>
-                    <View style={styles.recordingDot} />
-                    <Text style={[styles.durationText, { color: theme.colors.primary }]}>
-                        {formatTime(duration)}
-                    </Text>
-                </View>
+                <Text style={styles.recordingText}>Recording...</Text>
+                <Text style={styles.timerText}>{formatTime(recordTime)}</Text>
             </View>
 
             <TouchableOpacity
                 style={[styles.sendButton, { backgroundColor: theme.colors.primary }]}
-                onPress={handleSend}
-                disabled={isSending || duration < 1}
+                onPress={stopRecording}
             >
-                {isSending ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                    <Icon name="send" size={24} color="#fff" />
-                )}
+                <Icon name="send" size={20} color="#fff" />
             </TouchableOpacity>
         </View>
     );
-}
+};
 
 const styles = StyleSheet.create({
-    container: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderRadius: 12,
-        marginHorizontal: 12,
-        marginBottom: 8,
-    },
-    cancelButton: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
+    micButton: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    recordingContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFF3F0',
+        paddingHorizontal: 15,
+        paddingVertical: 10,
+        borderRadius: 25,
+        flex: 1,
+    },
+    cancelButton: {
+        padding: 5,
+        marginRight: 10,
     },
     recordingInfo: {
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
+    },
+    pulseCircle: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#FFE5E5',
         justifyContent: 'center',
-        gap: 16,
-    },
-    durationContainer: {
-        flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        marginRight: 10,
     },
-    recordingDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: '#FF3B30',
-    },
-    durationText: {
-        fontSize: 18,
+    recordingText: {
+        fontSize: 14,
+        color: '#FF3B30',
         fontWeight: '600',
+        marginRight: 10,
+    },
+    timerText: {
+        fontSize: 14,
+        color: '#8B95A5',
+        fontWeight: '500',
     },
     sendButton: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         justifyContent: 'center',
         alignItems: 'center',
+        marginLeft: 10,
     },
 });
+
+export default VoiceRecorder;

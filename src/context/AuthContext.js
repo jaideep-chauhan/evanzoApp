@@ -77,9 +77,11 @@ export const AuthProvider = ({ children }) => {
 
             const response = await api.post('/auth/login', loginPayload);
             console.log("Response 0-0-0-0-,", response);
+            console.log("Response data structure:", JSON.stringify(response.data, null, 2));
 
             // Check if response has the expected structure
             if (response.data && response.data.tokens) {
+                console.log("✅ Found tokens in response.data.tokens");
                 // Backend returns tokens object with accessToken and refreshToken
                 const { accessToken, refreshToken } = response.data.tokens;
                 const user = response.data.user;
@@ -100,16 +102,29 @@ export const AuthProvider = ({ children }) => {
                     location: user?.location
                 });
 
-                // Clear any old data first
-                await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'userData']);
+                try {
+                    // Clear any old data first - remove items individually to avoid multiRemove issues
+                    try {
+                        await AsyncStorage.removeItem('authToken');
+                        await AsyncStorage.removeItem('refreshToken');
+                        await AsyncStorage.removeItem('userData');
+                    } catch (removeError) {
+                        console.log("⚠️ Error removing old data (this is OK on first login):", removeError.message);
+                    }
 
-                // Store NEW token and user data
-                await AsyncStorage.setItem('authToken', accessToken);
-                await AsyncStorage.setItem('refreshToken', refreshToken);
-                await AsyncStorage.setItem('userData', JSON.stringify(user));
-                // Store userId separately for easy access
-                await AsyncStorage.setItem('userId', String(user?.user_id || user?.id));
+                    // Store NEW token and user data
+                    await AsyncStorage.setItem('authToken', accessToken);
+                    await AsyncStorage.setItem('refreshToken', refreshToken);
+                    await AsyncStorage.setItem('userData', JSON.stringify(user));
+                    // Store userId separately for easy access
+                    await AsyncStorage.setItem('userId', String(user?.user_id || user?.id));
 
+                    console.log("✅ Tokens and user data stored in AsyncStorage successfully");
+                } catch (storageError) {
+                    console.error("❌ AsyncStorage error:", storageError);
+                    // Don't throw - still set user state even if storage fails
+                    console.log("⚠️ Continuing with login despite storage error...");
+                }
 
                 // Set token in API headers
                 api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
@@ -118,13 +133,15 @@ export const AuthProvider = ({ children }) => {
                 setUser(user);
                 setIsAuthenticated(true);
 
-
+                console.log("✅ Login successful, returning success=true");
                 return { success: true, user };
             } else if (response.data) {
+                console.log("⚠️ No tokens found in response.data.tokens, trying alternative structure");
                 // Try alternative response structure
 
                 // Maybe the response is directly in response.data
                 if (response.data.user && (response.data.accessToken || response.data.token)) {
+                    console.log("✅ Found alternative structure: response.data.user + accessToken");
                     const token = response.data.accessToken || response.data.token;
                     const user = response.data.user;
 
@@ -139,11 +156,13 @@ export const AuthProvider = ({ children }) => {
                     return { success: true, user };
                 }
 
+                console.log("❌ Unexpected response format - no matching structure found");
                 return {
                     success: false,
                     error: response.data.message || 'Unexpected response format'
                 };
             } else {
+                console.log("❌ No response.data found");
                 return {
                     success: false,
                     error: 'Invalid response from server'

@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 
 // Get machine IP dynamically - you might want to update this with your actual IP
-const MACHINE_IP = '10.98.233.131'; // Your machine's IP address
+const MACHINE_IP = '10.169.115.131'; // Your machine's IP address
 
 /**
  * Fix localhost URLs for mobile simulators/devices

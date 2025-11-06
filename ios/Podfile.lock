@@ -2283,7 +2283,7 @@ EXTERNAL SOURCES:
     :podspec: "../node_modules/react-native/third-party-podspecs/glog.podspec"
   hermes-engine:
     :podspec: "../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec"
-    :tag: hermes-2025-01-13-RNv0.78.0-a942ef374897d85da38e9c8904574f8376555388
+    :tag: ''
   RCT-Folly:
     :podspec: "../node_modules/react-native/third-party-podspecs/RCT-Folly.podspec"
   RCTDeprecation:
