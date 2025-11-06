@@ -1,26 +1,16 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
 import { logout } from './navigationService';
 
-// Local development URL - ACTIVE FOR TESTING
+// Production URL - LIVE SERVER
+const BASE_URL = 'https://api.evnzo.com/api';
+
+// Local development URL (commented out for production)
 // Note: iOS Simulator cannot use 'localhost' - must use your Mac's IP address
 // Use your Mac's IP for both iOS Simulator and real iOS devices
-const BASE_URL = Platform.select({
-    ios: 'http://192.168.1.78:3000/api', // Your Mac's local IP (works for both simulator and real device)
-    android: 'http://10.0.2.2:3000/api', // Android emulator uses 10.0.2.2 for host machine
-});
-
-// Alternative: Use localhost only if you're testing on Android emulator
 // const BASE_URL = Platform.select({
-//     ios: 'http://localhost:3000/api', // iOS Simulator
-//     android: 'http://10.0.2.2:3000/api', // Android emulator
-// });
-
-// Production URL (commented out for development)
-// const BASE_URL = Platform.select({
-//     ios: 'https://api.evnzo.com/api',
-//     android: 'https://api.evnzo.com/api',
+//     ios: 'http://192.168.1.78:3000/api', // Your Mac's local IP (works for both simulator and real device)
+//     android: 'http://10.0.2.2:3000/api', // Android emulator uses 10.0.2.2 for host machine
 // });
 
 export const API_BASE_URL = BASE_URL; // Export for socket service
