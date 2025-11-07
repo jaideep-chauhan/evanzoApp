@@ -15,6 +15,7 @@
     "@invertase/react-native-apple-authentication": "^2.4.1",
     "@notifee/react-native": "^9.1.8",
     "@react-native-async-storage/async-storage": "^2.1.2",
+    "@react-native-clipboard/clipboard": "^1.16.3",
     "@react-native-community/blur": "^4.4.1",
     "@react-native-community/checkbox": "^0.5.20",
     "@react-native-community/datetimepicker": "^8.3.0",

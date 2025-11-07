@@ -28,21 +28,34 @@ export default function ChatList({ navigation }) {
 
     useEffect(() => {
         loadUserAndChats();
-        
+
         // Refresh chats when screen comes into focus
-        const unsubscribe = navigation.addListener('focus', () => {
+        const unsubscribe = navigation.addListener('focus', async () => {
             console.log('📱 ChatList screen focused, refreshing...');
-            if (userId) {
-                loadChats(userId);
+
+            // Get userId from storage if not in state
+            let currentUserId = userId;
+            if (!currentUserId) {
+                currentUserId = await AsyncStorage.getItem('userId');
+                console.log('📱 Retrieved userId from storage:', currentUserId);
+            }
+
+            if (currentUserId) {
+                // Reload chats to get fresh unread counts from server
+                console.log('📱 Calling loadChats with userId:', currentUserId);
+                await loadChats(currentUserId);
+            } else {
+                console.error('❌ No userId available for refresh');
             }
         });
-        
+
         return () => {
             unsubscribe();
             socketService.off('chat-updated');
             socketService.off('new-message');
+            socketService.off('chat-read');
         };
-    }, [navigation]);
+    }, [navigation, userId]); // Add userId to dependency array
     
     // Set up socket listeners when userId is available
     useEffect(() => {
@@ -54,12 +67,38 @@ export default function ChatList({ navigation }) {
     const setupSocketListeners = () => {
         // Listen for new messages to update last message
         socketService.on('new-message', (data) => {
+            console.log('📩 New message received in ChatList:', data.message.chat_id);
             updateChatLastMessage(data.message.chat_id, data.message);
         });
 
         // Listen for chat updates
         socketService.on('chat-updated', (data) => {
+            console.log('🔄 Chat updated, reloading list');
             loadChats(userId);
+        });
+
+        // Listen for chat read events to reset unread count
+        socketService.on('chat-read', (data) => {
+            console.log('✅ ChatList - chat-read event received:', {
+                chatId: data.chatId,
+                readBy: data.readBy,
+                currentUserId: userId,
+                match: String(data.readBy) === String(userId)
+            });
+
+            if (String(data.readBy) === String(userId)) {
+                // Current user marked chat as read, reset unread count
+                console.log('✅ Resetting unread count for chat:', data.chatId);
+                setChats(prevChats => {
+                    const updated = prevChats.map(chat =>
+                        String(chat.id) === String(data.chatId)
+                            ? { ...chat, unreadCount: 0 }
+                            : chat
+                    );
+                    console.log('Updated chats:', updated.find(c => String(c.id) === String(data.chatId)));
+                    return updated;
+                });
+            }
         });
     };
 
@@ -70,7 +109,7 @@ export default function ChatList({ navigation }) {
 
             if (chatExists) {
                 // Update existing chat
-                return prevChats.map(chat => {
+                const updatedChats = prevChats.map(chat => {
                     if (chat.id === chatId) {
                         // Format last message based on message type
                         let lastMessage = message.content;
@@ -84,15 +123,28 @@ export default function ChatList({ navigation }) {
                             lastMessage = '📎 Attachment';
                         }
 
+                        // Increment unread count only if message is from another user
+                        const isFromOtherUser = String(message.sender_id) !== String(userId);
+
                         return {
                             ...chat,
                             lastMessage: lastMessage,
                             time: formatTime(message.created_at),
-                            unreadCount: chat.unreadCount + (message.sender_id !== userId ? 1 : 0)
+                            timestamp: message.created_at, // Update raw timestamp for sorting
+                            unreadCount: isFromOtherUser ? (chat.unreadCount || 0) + 1 : chat.unreadCount
                         };
                     }
                     return chat;
                 });
+
+                // Re-sort chats by timestamp (most recent first)
+                updatedChats.sort((a, b) => {
+                    const timeA = a.timestamp ? parseInt(a.timestamp) : 0;
+                    const timeB = b.timestamp ? parseInt(b.timestamp) : 0;
+                    return timeB - timeA;
+                });
+
+                return updatedChats;
             } else {
                 // Chat doesn't exist, reload the chat list to get the new chat
                 console.log('🔄 New chat detected, reloading chat list...');
@@ -230,6 +282,7 @@ export default function ChatList({ navigation }) {
                         name: participantInfo.name || chat.name || 'Unknown User',
                         lastMessage: lastMessage,
                         time: formatTime(chat.last_message_time),
+                        timestamp: chat.last_message_time, // Keep raw timestamp for sorting
                         avatar: participantInfo.avatar || chat.avatar || generateAvatar(participantInfo.name || chat.name),
                         unreadCount: chat.unread_count || 0,
                         isOnline: false, // This will be updated via socket
@@ -250,11 +303,11 @@ export default function ChatList({ navigation }) {
                     return acc;
                 }, []);
                 
-                // Sort by last message time
+                // Sort by last message timestamp (most recent first)
                 uniqueChats.sort((a, b) => {
-                    const timeA = a.time ? new Date(a.time).getTime() : 0;
-                    const timeB = b.time ? new Date(b.time).getTime() : 0;
-                    return timeB - timeA;
+                    const timeA = a.timestamp ? parseInt(a.timestamp) : 0;
+                    const timeB = b.timestamp ? parseInt(b.timestamp) : 0;
+                    return timeB - timeA; // Descending order (newest first)
                 });
 
                 console.log('✅ Formatted', uniqueChats.length, 'chats (removed', formattedChats.length - uniqueChats.length, 'duplicates)');

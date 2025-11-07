@@ -311,16 +311,69 @@ class ChatService {
   }
 
   // Delete message
-  async deleteMessage(messageId) {
+  async deleteMessage(messageId, deleteForEveryone = false) {
     try {
-      const response = await api.delete(`/chat/messages/${messageId}`);
+      console.log('🗑️ ChatService.deleteMessage - Sending request:', {
+        messageId,
+        deleteForEveryone,
+        url: `/chat/messages/${messageId}`,
+        fullURL: `${api.defaults.baseURL}/chat/messages/${messageId}`,
+        baseURL: api.defaults.baseURL
+      });
+
+      const response = await api.delete(`/chat/messages/${messageId}`, {
+        data: { deleteForEveryone }
+      });
+
+      console.log('✅ ChatService.deleteMessage - Response:', response.data);
+      console.log('✅ ChatService.deleteMessage - Full response:', JSON.stringify(response.data, null, 2));
+
       return {
-        success: true
+        success: true,
+        data: response.data.data
       };
     } catch (error) {
+      console.error('❌ ChatService.deleteMessage - Error:', {
+        status: error.response?.status,
+        message: error.response?.data?.message,
+        error: error.message,
+        baseURL: api.defaults.baseURL
+      });
+
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to delete message'
+      };
+    }
+  }
+
+  // Toggle reaction on a message
+  async toggleReaction(messageId, emoji) {
+    try {
+      console.log('👍 ChatService.toggleReaction - Sending request:', {
+        messageId,
+        emoji,
+        url: `/chat/messages/${messageId}/react`
+      });
+
+      const response = await api.post(`/chat/messages/${messageId}/react`, { emoji });
+
+      console.log('✅ ChatService.toggleReaction - Response:', response.data);
+
+      return {
+        success: true,
+        data: response.data.data
+      };
+    } catch (error) {
+      console.error('❌ ChatService.toggleReaction - Error:', {
+        status: error.response?.status,
+        message: error.response?.data?.message,
+        error: error.message
+      });
+
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to add reaction'
       };
     }
   }

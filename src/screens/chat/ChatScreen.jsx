@@ -27,6 +27,9 @@ import DocumentPicker from 'react-native-document-picker';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import VoiceRecorder from '../../components/VoiceRecorder';
 import AudioPlayer from '../../components/AudioPlayer';
+import ReactionPicker from '../../components/ReactionPicker';
+import MessageOptionsModal from '../../components/MessageOptionsModal';
+import MessageReactions from '../../components/MessageReactions';
 
 export default function ChatScreen({ route, navigation }) {
     const { chatId: initialChatId, chatName, avatar, isOnline: initialOnline, recipientId } = route.params;
@@ -48,9 +51,14 @@ export default function ChatScreen({ route, navigation }) {
     const [showAttachmentModal, setShowAttachmentModal] = useState(false);
     const [uploadingFile, setUploadingFile] = useState(false);
     const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+    const [showReactionPicker, setShowReactionPicker] = useState(false);
+    const [showMessageOptions, setShowMessageOptions] = useState(false);
+    const [selectedMessage, setSelectedMessage] = useState(null);
+    const [reactionPickerPosition, setReactionPickerPosition] = useState(null);
     const flatListRef = useRef(null);
     const typingTimeoutRef = useRef(null);
     const currentUserIdRef = useRef(null); // Add ref to maintain userId consistency
+    const selectedMessageRef = useRef(null); // Add ref to preserve selected message during async operations
     const theme = useTheme();
 
     // Initialize chat and socket connection
@@ -67,6 +75,8 @@ export default function ChatScreen({ route, navigation }) {
             socketService.off('user-typing');
             socketService.off('user-stopped-typing');
             socketService.off('user-status-changed');
+            socketService.off('message-reaction');
+            socketService.off('message-deleted');
         };
     }, []);
 
@@ -205,7 +215,28 @@ export default function ChatScreen({ route, navigation }) {
             });
 
             if (result.success && result.data.results) {
-                const formattedMessages = result.data.results.map(msg => {
+                console.log(`📥 loadMessages - Received ${result.data.results.length} messages from backend`);
+
+                // Filter out messages deleted for current user
+                const visibleMessages = result.data.results.filter(msg => {
+                    const deletedFor = msg.metadata?.deleted_for || [];
+                    // Check both string and number formats since backend stores as string
+                    const isDeletedForMe = deletedFor.includes(String(effectiveUserId)) ||
+                                          deletedFor.includes(Number(effectiveUserId)) ||
+                                          deletedFor.includes(effectiveUserId);
+                    if (isDeletedForMe) {
+                        console.log(`🗑️ loadMessages - Message ${msg.message_id} is deleted for user ${effectiveUserId}, hiding it`, {
+                            deletedFor,
+                            effectiveUserId,
+                            type: typeof effectiveUserId
+                        });
+                    }
+                    return !isDeletedForMe;
+                });
+
+                console.log(`📥 loadMessages - After filtering: ${visibleMessages.length} visible messages`);
+
+                const formattedMessages = visibleMessages.map(msg => {
                     const isMyMessage = String(msg.sender_id) === String(effectiveUserId);
                     console.log(`Message ${msg.message_id}: sender_id=${msg.sender_id}, effectiveUserId=${effectiveUserId}, isMe=${isMyMessage}`);
 
@@ -230,6 +261,7 @@ export default function ChatScreen({ route, navigation }) {
                         attachments: processedAttachments,
                         sender: msg.sender,
                         senderId: msg.sender_id,
+                        reactions: msg.reactions || [],
                         createdAt: msg.created_at, // Keep original timestamp for sorting
                         duration: duration // Add duration for audio messages
                     };
@@ -317,7 +349,8 @@ export default function ChatScreen({ route, navigation }) {
                 sender: data.message.sender,
                 senderId: data.message.sender_id,
                 createdAt: data.message.created_at,
-                duration: duration // Add duration for audio messages
+                duration: duration, // Add duration for audio messages
+                reactions: data.message.reactions || []
             };
             
             // Prevent duplicate messages by checking if message already exists
@@ -397,6 +430,44 @@ export default function ChatScreen({ route, navigation }) {
                 setIsOnline(data.status === 'online');
             }
         });
+
+        // Message reaction event
+        socketService.on('message-reaction', (data) => {
+            console.log('👍 Reaction received:', data);
+            setMessages(prev => prev.map(msg =>
+                msg.id === data.messageId
+                    ? { ...msg, reactions: data.reactions }
+                    : msg
+            ));
+        });
+
+        // Message deleted event
+        socketService.on('message-deleted', (data) => {
+            console.log('🗑️ Message deleted:', data);
+            const effectiveUserId = currentUserIdRef.current;
+
+            if (data.deleteForEveryone) {
+                // Replace message content for everyone
+                setMessages(prev => prev.map(msg =>
+                    msg.id === data.messageId
+                        ? {
+                            ...msg,
+                            text: 'This message was deleted',
+                            deleted: true,
+                            messageType: 'text',
+                            attachments: []
+                        }
+                        : msg
+                ));
+            } else {
+                // Remove for the user who deleted it (data.deletedBy)
+                // If I am the one who deleted it, remove it from my view
+                if (String(data.deletedBy) === String(effectiveUserId)) {
+                    setMessages(prev => prev.filter(msg => msg.id !== data.messageId));
+                }
+                // If someone else deleted their message, it won't affect my view
+            }
+        });
     };
 
     const sendMessage = async () => {
@@ -432,7 +503,8 @@ export default function ChatScreen({ route, navigation }) {
             messageType: 'text',
             status: 'sending',
             senderId: currentUserId,
-            createdAt: new Date().toISOString() // Add for consistent sorting
+            createdAt: new Date().toISOString(), // Add for consistent sorting
+            reactions: [] // Initialize with empty reactions array
         };
 
         console.log('📤 Creating optimistic message:', optimisticMessage);
@@ -883,14 +955,177 @@ export default function ChatScreen({ route, navigation }) {
         }
     };
 
+    // Handle long press on message (show options)
+    const handleMessageLongPress = (message, event) => {
+        setSelectedMessage(message);
+        selectedMessageRef.current = message; // Store in ref for persistence
+
+        // Get touch position for reaction picker
+        if (event?.nativeEvent?.pageY) {
+            setReactionPickerPosition({
+                x: event.nativeEvent.pageX,
+                y: event.nativeEvent.pageY
+            });
+        }
+
+        setShowMessageOptions(true);
+    };
+
+    // Handle reaction selection
+    const handleReactionSelect = async (emoji) => {
+        // Get message from ref (persists even if state is cleared)
+        const messageToReact = selectedMessageRef.current;
+
+        console.log('👍 REACTION - handleReactionSelect called:', {
+            emoji,
+            hasSelectedMessage: !!selectedMessage,
+            hasMessageInRef: !!selectedMessageRef.current,
+            messageId: messageToReact?.id
+        });
+
+        if (!messageToReact) {
+            console.error('❌ REACTION - No message selected!');
+            return;
+        }
+
+        try {
+            console.log('👍 REACTION - Starting toggle:', {
+                emoji,
+                messageId: messageToReact.id,
+                currentReactions: messageToReact.reactions,
+                currentUserId: currentUserIdRef.current
+            });
+
+            const result = await chatService.toggleReaction(messageToReact.id, emoji);
+            console.log('👍 REACTION - API Response:', JSON.stringify(result, null, 2));
+
+            if (result.success && result.data) {
+                const newReactions = result.data.reactions || [];
+                console.log('✅ REACTION - Updating UI with reactions:', newReactions);
+
+                setMessages(prev => {
+                    const updated = prev.map(msg => {
+                        if (msg.id === messageToReact.id) {
+                            console.log('🔄 REACTION - Before:', msg.reactions, 'After:', newReactions);
+                            return { ...msg, reactions: newReactions };
+                        }
+                        return msg;
+                    });
+                    console.log('✅ REACTION - Messages state updated');
+                    return updated;
+                });
+            } else {
+                console.error('❌ REACTION - Backend returned error:', result.message);
+                Alert.alert('Error', result.message || 'Failed to add reaction');
+            }
+        } catch (error) {
+            console.error('❌ REACTION - Exception occurred:', error);
+            Alert.alert('Error', 'Failed to add reaction');
+        } finally {
+            // Clear selected message after reaction is processed
+            setSelectedMessage(null);
+            selectedMessageRef.current = null;
+        }
+    };
+
+    // Handle message deletion
+    const handleDeleteMessage = async (messageId, deleteForEveryone) => {
+        try {
+            console.log('🗑️ DELETE - Starting deletion:', {
+                messageId,
+                deleteForEveryone,
+                currentUserId: currentUserIdRef.current
+            });
+
+            const result = await chatService.deleteMessage(messageId, deleteForEveryone);
+
+            console.log('🗑️ DELETE - API Response:', result);
+
+            if (result.success) {
+                console.log('✅ DELETE - Message deleted successfully on backend');
+
+                if (deleteForEveryone) {
+                    // Replace with "deleted" message
+                    setMessages(prev => prev.map(msg =>
+                        msg.id === messageId
+                            ? {
+                                ...msg,
+                                text: 'This message was deleted',
+                                deleted: true,
+                                messageType: 'text',
+                                attachments: []
+                            }
+                            : msg
+                    ));
+                } else {
+                    // Remove from list (delete for me only)
+                    console.log('🗑️ DELETE - Removing message from UI:', messageId);
+                    setMessages(prev => prev.filter(msg => msg.id !== messageId));
+                }
+            } else {
+                console.error('❌ DELETE - Backend returned error:', result.message);
+                Alert.alert('Error', result.message || 'Failed to delete message');
+            }
+        } catch (error) {
+            console.error('❌ DELETE - Exception occurred:', error);
+            Alert.alert('Error', 'Failed to delete message');
+        }
+    };
+
+    // Show reaction picker
+    const handleShowReactionPicker = () => {
+        console.log('👍 ChatScreen - handleShowReactionPicker called');
+        console.log('👍 ChatScreen - Selected message:', selectedMessage?.id);
+        setShowMessageOptions(false);
+        setTimeout(() => {
+            console.log('👍 ChatScreen - Opening reaction picker');
+            setShowReactionPicker(true);
+        }, 300);
+    };
+
+    // Handle reaction press on existing reaction
+    const handleReactionPress = async (messageId, emoji) => {
+        try {
+            const result = await chatService.toggleReaction(messageId, emoji);
+
+            if (result.success) {
+                setMessages(prev => prev.map(msg =>
+                    msg.id === messageId
+                        ? { ...msg, reactions: result.data.reactions }
+                        : msg
+                ));
+            }
+        } catch (error) {
+            console.error('Failed to toggle reaction:', error);
+        }
+    };
+
     const renderMessage = ({ item, index }) => {
         const isMe = item.isMe;
         // Always show timestamp if it exists
         const showTimestamp = item.timestamp && item.timestamp.length > 0;
 
+        // Check if message is deleted
+        if (item.deleted && item.text === 'This message was deleted') {
+            return (
+                <View style={[styles.messageContainer, isMe ? styles.myMessage : styles.theirMessage]}>
+                    <View style={[styles.messageBubble, styles.deletedBubble]}>
+                        <Text style={styles.deletedText}>
+                            <Icon name="ban" size={12} color="#999" /> This message was deleted
+                        </Text>
+                    </View>
+                </View>
+            );
+        }
+
         return (
             <View style={[styles.messageContainer, isMe ? styles.myMessage : styles.theirMessage]}>
-                <View style={[styles.messageBubble, isMe ? [styles.myBubble] : styles.theirBubble]}>
+                <TouchableOpacity
+                    activeOpacity={0.9}
+                    onLongPress={(event) => handleMessageLongPress(item, event)}
+                    delayLongPress={500}
+                >
+                    <View style={[styles.messageBubble, isMe ? [styles.myBubble] : styles.theirBubble]}>
                     {item.messageType === 'image' && item.attachments?.[0] ? (
                         <TouchableOpacity onPress={() => {/* Handle image view */}}>
                             <Image
@@ -941,7 +1176,17 @@ export default function ChatScreen({ route, navigation }) {
                             {item.text}
                         </Text>
                     )}
-                </View>
+                    </View>
+                </TouchableOpacity>
+
+                {/* Reactions Display */}
+                <MessageReactions
+                    reactions={item.reactions}
+                    onReactionPress={(emoji) => handleReactionPress(item.id, emoji)}
+                    currentUserId={currentUserId}
+                    isMe={isMe}
+                />
+
                 <View style={[styles.messageFooter, isMe ? styles.myMessageFooter : styles.theirMessageFooter]}>
                     {showTimestamp && (
                         <Text style={[styles.messageTime, isMe ? styles.myTime : styles.theirTime]}>
@@ -1227,6 +1472,42 @@ export default function ChatScreen({ route, navigation }) {
                     </View>
                 </TouchableOpacity>
             </Modal>
+
+            {/* Reaction Picker Modal */}
+            <ReactionPicker
+                visible={showReactionPicker}
+                onReactionSelect={handleReactionSelect}
+                onClose={() => {
+                    setShowReactionPicker(false);
+                    // Don't clear selectedMessage here - it's cleared in handleReactionSelect's finally block
+                }}
+                position={reactionPickerPosition}
+            />
+
+            {/* Message Options Modal */}
+            <MessageOptionsModal
+                visible={showMessageOptions}
+                onClose={() => {
+                    setShowMessageOptions(false);
+                    // Don't clear selectedMessage here - it might be needed for reactions
+                    // It will be cleared after the reaction is processed or if user cancels
+                    if (!showReactionPicker) {
+                        // Only clear if reaction picker isn't about to open
+                        setTimeout(() => {
+                            if (!showReactionPicker) {
+                                setSelectedMessage(null);
+                            }
+                        }, 400);
+                    }
+                }}
+                message={selectedMessage}
+                currentUserId={currentUserId}
+                onDelete={handleDeleteMessage}
+                onReact={handleShowReactionPicker}
+                onCopy={() => {
+                    // Copy is handled in the modal
+                }}
+            />
         </KeyboardAvoidingView>
     );
 }
@@ -1510,6 +1791,16 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#2C3D5B',
         textAlign: 'center',
+    },
+    deletedBubble: {
+        backgroundColor: '#f5f5f5',
+        borderColor: '#ddd',
+        borderWidth: 1,
+    },
+    deletedText: {
+        color: '#999',
+        fontStyle: 'italic',
+        fontSize: 14,
     },
     attachmentOptions: {
         flexDirection: 'row',

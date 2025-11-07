@@ -378,17 +378,24 @@ class SocketService {
     // Message events
     this.socket.on('new-message', async (data) => {
       console.log('New message received:', data.message.message_id);
-      
-      // Check if app is in background/inactive to show notification
+
+      // Check if app is in background/inactive or user is not on the chat screen
       const currentAppState = AppState.currentState;
       const currentUser = await AsyncStorage.getItem('userData');
       const userData = currentUser ? JSON.parse(currentUser) : null;
       const currentUserId = userData?.user_id || userData?.id;
-      
+
       // Don't show notification if message is from current user
       if (data.message.sender_id !== currentUserId) {
-        // Show notification if app is in background or inactive
-        if (currentAppState === 'background' || currentAppState === 'inactive') {
+        // Show notification if:
+        // 1. App is in background or inactive
+        // 2. OR user is not on this specific chat screen
+        const shouldShowNotification =
+          currentAppState === 'background' ||
+          currentAppState === 'inactive' ||
+          this.currentChatId !== data.chatId;
+
+        if (shouldShowNotification) {
           await notificationService.displayNotification({
             data: {
               type: 'chat_message',
@@ -403,8 +410,16 @@ class SocketService {
             }
           });
         }
+
+        // Auto-send delivered status for messages from others
+        if (this.socket && this.isConnected) {
+          this.socket.emit('message-delivered', {
+            messageId: data.message.message_id,
+            chatId: data.chatId
+          });
+        }
       }
-      
+
       this.emit('new-message', data);
     });
 
