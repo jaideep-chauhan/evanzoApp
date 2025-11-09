@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Animated, RefreshControl, ActivityIndicator, Alert } from 'react-native';
+import { Animated, ActivityIndicator, Alert } from 'react-native';
 import {
     StyleSheet,
     SafeAreaView,
@@ -9,6 +9,7 @@ import {
     TextInput,
     TouchableOpacity,
     Modal,
+    RefreshControl,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import SearchHeader from './SearchHeader';
@@ -310,26 +311,14 @@ export default function Vendor() {
         setRefreshing(true);
 
         try {
-            // Clear vendors array first to prevent duplicates
-            setVendors([]);
-
-            // Reset filters and search
-            setSelectedLocation(null);
-            setSelectedCategory(null);
-            setSelectedCategoryNames([]);
-            setActiveTab(null);
-            setSearchQuery('');
-            setCurrentFilters({});
-            setPagination({ page: 1, limit: 10, totalPages: 1, totalResults: 0 });
-
-            // Fetch fresh data with no filters
-            await fetchVendors({}, true);
+            // Fetch fresh data with existing filters
+            await fetchVendors(currentFilters, true);
         } catch (error) {
             console.error('Error refreshing vendors:', error);
         } finally {
             setRefreshing(false);
         }
-    }, [isFetchingVendors]);
+    }, [isFetchingVendors, currentFilters]);
 
     return (
         <View style={[styles.safe]}>

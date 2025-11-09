@@ -3,10 +3,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logout } from './navigationService';
 import { Platform } from 'react-native';
 
-// Production URL - LIVE SERVER - ACTIVE
+// Production URL - LIVE SERVER (ACTIVE)
 const BASE_URL = 'https://api.evnzo.com/api';
 
-// Local development URL (commented out for production)
+// Local development URL - (commented out)
 // Note: iOS Simulator can use 'localhost' or your Mac's IP address
 // Android emulator must use 10.0.2.2 for host machine
 // const BASE_URL = Platform.select({

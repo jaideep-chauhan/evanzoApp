@@ -53,8 +53,9 @@ export default function VendorDetailsSection({
     console.log('VendorDetailsSection - Received offers:', offers);
     console.log('VendorDetailsSection - Received photos:', photos);
     console.log('VendorDetailsSection - Photos length:', photos?.length);
-    
+
     const [descExpanded, setDescExpanded] = useState(false);
+    const [imageDimensions, setImageDimensions] = useState({});
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
             <View>
@@ -69,18 +70,18 @@ export default function VendorDetailsSection({
                         pagingEnabled
                         showsHorizontalScrollIndicator={false}
                         style={styles.carousel}
-                        contentContainerStyle={{ alignItems: 'center', minWidth: 400 }}
+                        contentContainerStyle={{ alignItems: 'center' }}
                         nestedScrollEnabled={true}
                     >
-                        {photos && photos.length > 0 ? 
+                        {photos && photos.length > 0 ?
                             photos.map((photo, idx) => {
                                 console.log(`Rendering photo ${idx}:`, photo);
                                 const imageSource = getImageSource(photo, defaultImg);
                                 console.log(`Image source for photo ${idx}:`, imageSource);
-                                
+
                                 return (
                                     <View key={idx} style={styles.photoWrapper}>
-                                        <Image 
+                                        <Image
                                             source={imageSource}
                                             style={styles.photo}
                                             onError={(error) => {
@@ -89,19 +90,19 @@ export default function VendorDetailsSection({
                                             onLoad={() => {
                                                 console.log('Successfully loaded image:', photo);
                                             }}
-                                            resizeMode="cover"
+                                            resizeMode="contain"
                                         />
                                     </View>
                                 );
                             })
-                        : 
+                        :
                             // Always show at least one image
                             [0, 1, 2].map((idx) => (
                                 <View key={idx} style={styles.photoWrapper}>
-                                    <Image 
-                                        source={defaultImg} 
+                                    <Image
+                                        source={defaultImg}
                                         style={styles.photo}
-                                        resizeMode="cover"
+                                        resizeMode="contain"
                                     />
                                     {idx === 1 && (
                                         <View style={styles.noImageOverlay}>
@@ -194,7 +195,7 @@ const styles = StyleSheet.create({
     },
     carousel: {
         marginTop: 12,
-        height: 230, // Ensure the carousel has a fixed height
+        height: 230,
     },
     photoWrapper: {
         borderRadius: 12,
@@ -208,8 +209,10 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
     },
     photo: {
+        // Fixed dimensions - images will be displayed with contain mode
+        // This matches the recommended square format (1080x1080) aspect ratio
         width: 380,
-        height: 230,
+        height: 380,
         borderRadius: 12,
         opacity: 1,
         backgroundColor: '#f0f0f0', // Add background color for loading state

@@ -218,36 +218,38 @@ export default function VendorCard({
 
             {/* Card */}
             <View style={styles.card}>
-                {/* Offer Section */}
-                <View style={styles.offerSection}>
-                    <View style={styles.offerTable}>
-                        {/* Header Row */}
-                        <View style={styles.offerHeaderRow}>
-                            <Text style={styles.offerHeaderEmpty}></Text>
-                            <Text style={[styles.offerHeaderText, { color: theme.colors.textSecondary }]}>Amount spent</Text>
-                            <Text style={[styles.offerHeaderText, { color: theme.colors.textSecondary }]}>Discount</Text>
-                        </View>
-                        {/* Values Row - Show first offer or default values */}
-                        <View style={styles.offerValueRow}>
-                            <Text style={styles.offerLabel}>Offer:</Text>
-                            <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
-                                <CurrencyDollarIcon size={12} color={theme.colors.primary} />
-                                <Text style={styles.offerValue}>
-                                    {offers && offers.length > 0 && offers[0].amount ? offers[0].amount : '0'}
-                                </Text>
+                {/* Offer Section - Only show if there's at least one offer with non-zero values */}
+                {offers && offers.length > 0 && offers.some(offer => (offer.amount && offer.amount !== 0) || (offer.discount && offer.discount !== 0)) && (
+                    <View style={styles.offerSection}>
+                        <View style={styles.offerTable}>
+                            {/* Header Row */}
+                            <View style={styles.offerHeaderRow}>
+                                <Text style={styles.offerHeaderEmpty}></Text>
+                                <Text style={[styles.offerHeaderText, { color: theme.colors.textSecondary }]}>Amount spent</Text>
+                                <Text style={[styles.offerHeaderText, { color: theme.colors.textSecondary }]}>Discount</Text>
                             </View>
-                            <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
-                                <TagIcon size={12} color={theme.colors.primary} />
-                                <Text style={styles.offerValue}>
-                                    {offers && offers.length > 0 && offers[0].discount ? `${offers[0].discount}%` : '0%'}
-                                </Text>
+                            {/* Values Row - Show first offer or default values */}
+                            <View style={styles.offerValueRow}>
+                                <Text style={styles.offerLabel}>Offer:</Text>
+                                <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
+                                    <CurrencyDollarIcon size={12} color={theme.colors.primary} />
+                                    <Text style={styles.offerValue}>
+                                        {offers[0].amount || '0'}
+                                    </Text>
+                                </View>
+                                <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
+                                    <TagIcon size={12} color={theme.colors.primary} />
+                                    <Text style={styles.offerValue}>
+                                        {offers[0].discount ? `${offers[0].discount}%` : '0%'}
+                                    </Text>
+                                </View>
                             </View>
                         </View>
+                        <TouchableOpacity style={styles.seeMoreBox} onPress={handleSeeMorePress}>
+                            <Text style={[styles.seeMore, { color: theme.colors.primary }]}>SEE MORE</Text>
+                        </TouchableOpacity>
                     </View>
-                    <TouchableOpacity style={styles.seeMoreBox} onPress={handleSeeMorePress}>
-                        <Text style={[styles.seeMore, { color: theme.colors.primary }]}>SEE MORE</Text>
-                    </TouchableOpacity>
-                </View>
+                )}
 
                 {/* Images Grid */}
                 <View style={styles.imageGrid}>

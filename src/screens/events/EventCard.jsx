@@ -56,8 +56,8 @@ export default function EventCard({ event, onGiveQuote }) {
                 </View>
                 <View style={{ flex: 1 }}>
                     <Text style={styles.description} numberOfLines={4} ellipsizeMode="tail">{event.description}</Text>
-                    {/* Budget */}
-                    {event.budget && (
+                    {/* Budget - Only show if budget exists and is not 0 */}
+                    {event.budget && event.budget !== 0 && event.budget !== '0' && (
                         <View style={styles.budgetContainer}>
                             <Text style={styles.budgetLabel}>Budget: </Text>
                             <View style={styles.budgetItem}>

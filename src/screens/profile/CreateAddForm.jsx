@@ -15,8 +15,8 @@ import {
     KeyboardAvoidingView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { launchImageLibrary } from 'react-native-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { openImagePickerWithCropper, IMAGE_DIMENSIONS } from '../../utils/imageCropperUtils';
 import { useTheme } from '../../ThemeContext';
 // import img from '../../assets/images/dummy.png'; // Removed unused import
 import vendorService from '../../services/vendorService';
@@ -53,6 +53,7 @@ const CreateAddForm = ({ type, onClose }) => {
 
     // Loading state
     const [isLoading, setIsLoading] = useState(false);
+    const [isImageLoading, setIsImageLoading] = useState(false);
     const [modalState, setModalState] = useState({ visible: false, title: '', message: '', type: 'success' });
     const [toastState, setToastState] = useState({ visible: false, message: '', type: 'error' });
 
@@ -197,30 +198,45 @@ const CreateAddForm = ({ type, onClose }) => {
             return;
         }
 
-        const options = {
-            mediaType: 'photo',
-            includeBase64: false,
-            maxHeight: 2000,
-            maxWidth: 2000,
-            quality: 0.8,
-            selectionLimit: 10,
-        };
+        try {
+            setIsImageLoading(true); // Show loading indicator
 
-        launchImageLibrary(options, (response) => {
-            if (response.didCancel) {
-                console.log('User cancelled image picker');
-            } else if (response.errorMessage) {
-                console.log('ImagePicker Error: ', response.errorMessage);
-                setToastState({ visible: true, message: 'Failed to select image', type: 'error' });
-            } else if (response.assets) {
-                const selectedPhotos = response.assets.map(asset => ({
-                    uri: asset.uri,
-                    type: asset.type,
-                    name: asset.fileName || `photo_${Date.now()}.jpg`,
+            // Open image picker with cropper
+            // Using FREE dimensions to allow users to crop to any size they want
+            const selectedImages = await openImagePickerWithCropper({
+                ...IMAGE_DIMENSIONS.FREE,
+                multiple: true,
+                maxFiles: 10,
+                compressImageQuality: 0.8,
+            });
+
+            setIsImageLoading(false); // Hide loading indicator
+
+            if (selectedImages && selectedImages.length > 0) {
+                const formattedPhotos = selectedImages.map((image, index) => ({
+                    uri: image.uri,
+                    type: image.mime || 'image/jpeg',
+                    name: `photo_${Date.now()}_${index}.jpg`,
+                    width: image.width,
+                    height: image.height,
                 }));
-                setPhotos([...photos, ...selectedPhotos]);
+
+                setPhotos([...photos, ...formattedPhotos]);
+                setToastState({
+                    visible: true,
+                    message: `${selectedImages.length} image(s) cropped successfully`,
+                    type: 'success'
+                });
             }
-        });
+        } catch (error) {
+            console.error('Image picker error:', error);
+            setIsImageLoading(false); // Hide loading indicator
+            setToastState({
+                visible: true,
+                message: 'Failed to select images',
+                type: 'error'
+            });
+        }
     };
 
     const removePhoto = (index) => {
@@ -560,6 +576,7 @@ const CreateAddForm = ({ type, onClose }) => {
                                                     <Image
                                                         source={{ uri: photo.uri }}
                                                         style={styles.selectedPhoto}
+                                                        resizeMode="cover"
                                                     />
                                                     <TouchableOpacity
                                                         style={styles.removePhotoBtn}
@@ -733,6 +750,7 @@ const CreateAddForm = ({ type, onClose }) => {
                                                     <Image
                                                         source={{ uri: photo.uri }}
                                                         style={styles.selectedPhoto}
+                                                        resizeMode="cover"
                                                     />
                                                     <TouchableOpacity
                                                         style={styles.removePhotoBtn}
@@ -1392,6 +1410,7 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         borderWidth: 1,
         borderColor: '#ffffff30',
+        overflow: 'hidden', // Clip image to borderRadius
     },
     removePhotoBtn: {
         position: 'absolute',

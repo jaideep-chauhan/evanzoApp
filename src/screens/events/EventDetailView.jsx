@@ -328,12 +328,14 @@ export default function EventDetailView() {
                                     <Icon name="location-outline" size={14} color="#334462" style={{ marginRight: 4 }} />
                                     <Text style={styles.location}>{eventData.location}</Text>
                                 </View>
-                                <View style={styles.budgetRow}>
-                                    {/* <Icon name="cash-outline" size={14} color="#334462" style={{ marginRight: 4 }} /> */}
-                                    <Text style={styles.location}>Budget: </Text>
-
-                                    <Text style={styles.budget}>{eventData.budget}</Text>
-                                </View>
+                                {/* Only show budget if it exists and is not 0 */}
+                                {eventData.budget && eventData.budget !== 'Budget TBD' && eventData.budget !== '$0' && (
+                                    <View style={styles.budgetRow}>
+                                        {/* <Icon name="cash-outline" size={14} color="#334462" style={{ marginRight: 4 }} /> */}
+                                        <Text style={styles.location}>Budget: </Text>
+                                        <Text style={styles.budget}>{eventData.budget}</Text>
+                                    </View>
+                                )}
                             </View>
                         </View>
                         <View style={styles.actionIcons}>

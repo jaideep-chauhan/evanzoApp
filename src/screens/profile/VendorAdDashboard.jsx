@@ -4,7 +4,6 @@ import {
     Text,
     StyleSheet,
     TouchableOpacity,
-    ScrollView,
     Modal,
     ImageBackground,
     Platform,
@@ -20,6 +19,7 @@ import ChangeProfile from './ChangeProfile';
 import CreateAd from './CreateAd';
 import CreateAddForm from './CreateAddForm';
 import EditProfileModal from './EditProfileModal';
+import RefreshableScrollView from '../../components/RefreshableScrollView';
 import img from '../../assets/images/dummy.png';
 import bg from '../../assets/images/profileBG.png';
 
@@ -62,7 +62,7 @@ export default function VendorAdDashboard({ navigation }) {
         try {
             if (activeTab === 'vendor') {
                 const response = await vendorService.getMyVendorAds();
-                
+
                 if (response.success) {
                     const formattedVendors = response.data.map(vendor => {
                         const formatted = vendorService.formatVendorForDisplay(vendor);
@@ -73,7 +73,7 @@ export default function VendorAdDashboard({ navigation }) {
             } else {
                 const response = await eventService.getMyEventAds();
                 if (response.success) {
-                    const formattedEvents = response.data.map(event => 
+                    const formattedEvents = response.data.map(event =>
                         eventService.formatEventForDisplay(event)
                     );
                     setEventAds(formattedEvents);
@@ -89,7 +89,8 @@ export default function VendorAdDashboard({ navigation }) {
     return (
         <View style={[styles.safe, { flex: 1, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 }]}>
             {/* Entire scrollable content */}
-            <ScrollView 
+            <RefreshableScrollView
+                onRefresh={fetchAds}
                 contentContainerStyle={{ flexGrow: 1 }}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
@@ -297,7 +298,7 @@ export default function VendorAdDashboard({ navigation }) {
                         </View>
                     )
                 )}
-            </ScrollView>
+            </RefreshableScrollView>
 
             {/* Popup Modal for PreSavedMessage */}
             <Modal

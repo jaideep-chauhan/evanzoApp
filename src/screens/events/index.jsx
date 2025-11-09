@@ -496,20 +496,13 @@ export default function Events() {
         setRefreshing(true);
 
         try {
-            // Clear events array first to prevent duplicates
-            setEvents([]);
+            // Check if we have any active filters
+            const hasFilters = Object.keys(currentFilters).some(key =>
+                key !== 'page' && key !== 'limit' && currentFilters[key]
+            );
 
-            // Reset filters and search
-            setSelectedLocation(null);
-            setSelectedCategory(null);
-            setSelectedDateRange(null);
-            setActiveTab(null); // Clear active tab
-            setSearchQuery('');
-            setCurrentFilters({});
-            setPagination({ page: 1, limit: 10, totalPages: 1, totalResults: 0 });
-
-            // Fetch fresh data with no filters - pass true for clearAllFilters
-            await fetchEvents({}, true, true);
+            // Fetch fresh data with existing filters
+            await fetchEvents(currentFilters, true, !hasFilters);
 
             console.log('Events refreshed successfully');
         } catch (error) {
@@ -517,7 +510,7 @@ export default function Events() {
         } finally {
             setRefreshing(false);
         }
-    }, [isFetchingEvents]);
+    }, [isFetchingEvents, currentFilters]);
 
     return (
         <View style={[styles.safe, { backgroundColor: '#fff' }]}>

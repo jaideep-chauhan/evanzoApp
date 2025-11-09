@@ -15,6 +15,7 @@ import {
     ActivityIndicator,
     Modal,
     PermissionsAndroid,
+    Linking,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import MessageStatus from './MessageStatus';
@@ -30,6 +31,7 @@ import AudioPlayer from '../../components/AudioPlayer';
 import ReactionPicker from '../../components/ReactionPicker';
 import MessageOptionsModal from '../../components/MessageOptionsModal';
 import MessageReactions from '../../components/MessageReactions';
+import ImagePreview from '../../components/ImagePreview';
 
 export default function ChatScreen({ route, navigation }) {
     const { chatId: initialChatId, chatName, avatar, isOnline: initialOnline, recipientId } = route.params;
@@ -55,10 +57,14 @@ export default function ChatScreen({ route, navigation }) {
     const [showMessageOptions, setShowMessageOptions] = useState(false);
     const [selectedMessage, setSelectedMessage] = useState(null);
     const [reactionPickerPosition, setReactionPickerPosition] = useState(null);
+    const [showImagePreview, setShowImagePreview] = useState(false);
+    const [previewImageUrl, setPreviewImageUrl] = useState(null);
+    const [previewImageName, setPreviewImageName] = useState(null);
     const flatListRef = useRef(null);
     const typingTimeoutRef = useRef(null);
     const currentUserIdRef = useRef(null); // Add ref to maintain userId consistency
     const selectedMessageRef = useRef(null); // Add ref to preserve selected message during async operations
+    const textInputRef = useRef(null); // Add ref for text input to maintain focus
     const theme = useTheme();
 
     // Initialize chat and socket connection
@@ -1100,7 +1106,72 @@ export default function ChatScreen({ route, navigation }) {
         }
     };
 
-    const renderMessage = ({ item, index }) => {
+    // Handle opening image preview
+    const handleImagePreview = (attachment) => {
+        const imageUrl = attachment.url || attachment.uri;
+        const imageName = attachment.name || attachment.originalName || 'Image';
+
+        console.log('🖼️ Opening image preview:', {
+            name: imageName,
+            url: imageUrl
+        });
+
+        setPreviewImageUrl(imageUrl);
+        setPreviewImageName(imageName);
+        setShowImagePreview(true);
+    };
+
+    // Handle downloading image
+    const handleImageDownload = async (imageUrl, imageName) => {
+        try {
+            console.log('💾 Downloading image:', { imageUrl, imageName });
+
+            // Check if URL can be opened
+            const supported = await Linking.canOpenURL(imageUrl);
+
+            if (supported) {
+                await Linking.openURL(imageUrl);
+                Alert.alert('Success', 'Image download started');
+            } else {
+                Alert.alert('Error', 'Cannot download this image');
+            }
+        } catch (error) {
+            console.error('Error downloading image:', error);
+            Alert.alert('Error', 'Failed to download image');
+        }
+    };
+
+    // Handle opening document or file (not images)
+    const handleFileOpen = async (attachment) => {
+        try {
+            const fileUrl = attachment.url || attachment.uri;
+
+            if (!fileUrl) {
+                Alert.alert('Error', 'File URL not available');
+                return;
+            }
+
+            console.log('📂 Opening file:', {
+                name: attachment.name,
+                type: attachment.type,
+                url: fileUrl
+            });
+
+            // Check if URL can be opened
+            const supported = await Linking.canOpenURL(fileUrl);
+
+            if (supported) {
+                await Linking.openURL(fileUrl);
+            } else {
+                Alert.alert('Error', `Cannot open this file type: ${attachment.type || 'unknown'}`);
+            }
+        } catch (error) {
+            console.error('Error opening file:', error);
+            Alert.alert('Error', 'Failed to open file');
+        }
+    };
+
+    const renderMessage = ({ item }) => {
         const isMe = item.isMe;
         // Always show timestamp if it exists
         const showTimestamp = item.timestamp && item.timestamp.length > 0;
@@ -1127,7 +1198,7 @@ export default function ChatScreen({ route, navigation }) {
                 >
                     <View style={[styles.messageBubble, isMe ? [styles.myBubble] : styles.theirBubble]}>
                     {item.messageType === 'image' && item.attachments?.[0] ? (
-                        <TouchableOpacity onPress={() => {/* Handle image view */}}>
+                        <TouchableOpacity onPress={() => handleImagePreview(item.attachments[0])}>
                             <Image
                                 source={{ uri: item.attachments[0].uri || item.attachments[0].url }}
                                 style={styles.messageImage}
@@ -1150,7 +1221,7 @@ export default function ChatScreen({ route, navigation }) {
                     ) : (item.messageType === 'document' || item.messageType === 'file') && item.attachments?.[0] ? (
                         <TouchableOpacity
                             style={styles.documentContainer}
-                            onPress={() => {/* Handle document open */}}
+                            onPress={() => handleFileOpen(item.attachments[0])}
                         >
                             {(() => {
                                 const fileIcon = getFileIcon(item.attachments[0].name, item.attachments[0].type);
@@ -1381,6 +1452,7 @@ export default function ChatScreen({ route, navigation }) {
                                     <Icon name="add" size={24} color={uploadingFile ? "#ccc" : "#8B95A5"} />
                                 </TouchableOpacity>
                                 <TextInput
+                                    ref={textInputRef}
                                     style={styles.textInput}
                                     placeholder="Type a message..."
                                     placeholderTextColor="#8B95A5"
@@ -1391,7 +1463,8 @@ export default function ChatScreen({ route, navigation }) {
                                     }}
                                     multiline
                                     maxLength={1000}
-                                    editable={!isSending}
+                                    blurOnSubmit={false}
+                                    keyboardType="default"
                                 />
                             </View>
                             {newMessage.trim().length > 0 ? (
@@ -1507,6 +1580,19 @@ export default function ChatScreen({ route, navigation }) {
                 onCopy={() => {
                     // Copy is handled in the modal
                 }}
+            />
+
+            {/* Image Preview Modal */}
+            <ImagePreview
+                visible={showImagePreview}
+                imageUrl={previewImageUrl}
+                imageName={previewImageName}
+                onClose={() => {
+                    setShowImagePreview(false);
+                    setPreviewImageUrl(null);
+                    setPreviewImageName(null);
+                }}
+                onDownload={handleImageDownload}
             />
         </KeyboardAvoidingView>
     );

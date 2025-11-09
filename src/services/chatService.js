@@ -604,7 +604,8 @@ class ChatService {
 
       return {
         ...attachment,
-        url: processedUrl
+        url: processedUrl,
+        name: attachment.name || attachment.originalName || 'Document' // Map originalName to name for display
       };
     };
 
