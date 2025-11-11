@@ -23,6 +23,11 @@ const VoiceRecorder = ({ onSendVoiceNote, onCancel }) => {
     const pulseAnim = useRef(new Animated.Value(1)).current;
     const timerRef = useRef(null);
 
+    // Create animated values for waveform bars (25 bars for WhatsApp-like effect)
+    const waveAnims = useRef(
+        Array.from({ length: 25 }, () => new Animated.Value(0.3))
+    ).current;
+
     // Check if AudioRecorderModule is available
     useEffect(() => {
         if (!AudioRecorderModule) {
@@ -46,8 +51,10 @@ const VoiceRecorder = ({ onSendVoiceNote, onCancel }) => {
         };
     }, []);
 
+    // Simple continuous wave animation
     useEffect(() => {
         if (isRecording) {
+            // Pulse animation for mic icon
             Animated.loop(
                 Animated.sequence([
                     Animated.timing(pulseAnim, {
@@ -62,8 +69,37 @@ const VoiceRecorder = ({ onSendVoiceNote, onCancel }) => {
                     }),
                 ])
             ).start();
+
+            // Simple continuous wave animation for each bar
+            waveAnims.forEach((anim, index) => {
+                // Each bar has a different phase to create wave effect
+                const phase = (index / waveAnims.length) * Math.PI * 2;
+
+                const animateBar = () => {
+                    // Create a sine wave pattern
+                    const minHeight = 0.2;
+                    const maxHeight = 1.0;
+                    const speed = 1500; // milliseconds for one complete cycle
+
+                    // Animate to a random height for natural look
+                    const targetHeight = minHeight + (Math.sin(Date.now() / speed + phase) + 1) / 2 * (maxHeight - minHeight);
+
+                    Animated.timing(anim, {
+                        toValue: targetHeight,
+                        duration: 100,
+                        useNativeDriver: true,
+                    }).start(() => {
+                        if (isRecording) {
+                            animateBar(); // Continue animation
+                        }
+                    });
+                };
+
+                animateBar();
+            });
         } else {
             pulseAnim.setValue(1);
+            waveAnims.forEach(anim => anim.setValue(0.3));
         }
     }, [isRecording]);
 
@@ -262,7 +298,22 @@ const VoiceRecorder = ({ onSendVoiceNote, onCancel }) => {
                 <Animated.View style={[styles.pulseCircle, { transform: [{ scale: pulseAnim }] }]}>
                     <Icon name="mic" size={20} color="#FF3B30" />
                 </Animated.View>
-                <Text style={styles.recordingText}>Recording...</Text>
+
+                {/* Animated Waveform - WhatsApp style */}
+                <View style={styles.waveformContainer}>
+                    {waveAnims.map((anim, index) => (
+                        <Animated.View
+                            key={index}
+                            style={[
+                                styles.waveBar,
+                                {
+                                    transform: [{ scaleY: anim }],
+                                }
+                            ]}
+                        />
+                    ))}
+                </View>
+
                 <Text style={styles.timerText}>{formatTime(recordTime)}</Text>
             </View>
 
@@ -309,7 +360,22 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFE5E5',
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 10,
+        marginRight: 12,
+    },
+    waveformContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        height: 30,
+        marginRight: 12,
+        gap: 2,
+        flex: 1,
+        maxWidth: 150,
+    },
+    waveBar: {
+        width: 2.5,
+        height: 20,
+        backgroundColor: '#FF3B30',
+        borderRadius: 1.5,
     },
     recordingText: {
         fontSize: 14,
@@ -318,9 +384,10 @@ const styles = StyleSheet.create({
         marginRight: 10,
     },
     timerText: {
-        fontSize: 14,
-        color: '#8B95A5',
-        fontWeight: '500',
+        fontSize: 15,
+        color: '#333',
+        fontWeight: '600',
+        minWidth: 45,
     },
     sendButton: {
         width: 44,

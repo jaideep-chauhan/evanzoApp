@@ -4,9 +4,25 @@
 @implementation AudioRecorderModule {
     AVAudioRecorder *_audioRecorder;
     NSString *_audioFilePath;
+    NSTimer *_meteringTimer;
+    BOOL _hasListeners;
 }
 
 RCT_EXPORT_MODULE();
+
+// Required for event emitter
+- (NSArray<NSString *> *)supportedEvents {
+    return @[@"audioLevel"];
+}
+
+// Track whether we have listeners
+- (void)startObserving {
+    _hasListeners = YES;
+}
+
+- (void)stopObserving {
+    _hasListeners = NO;
+}
 
 RCT_EXPORT_METHOD(checkPermission:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
@@ -108,6 +124,9 @@ RCT_EXPORT_METHOD(startRecording:(RCTPromiseResolveBlock)resolve
 
             NSLog(@"✅ [AudioRecorder] Recorder created successfully");
 
+            // Enable metering for audio level monitoring
+            self->_audioRecorder.meteringEnabled = YES;
+
             // Start recording
             [self->_audioRecorder prepareToRecord];
             NSLog(@"🎙️ [AudioRecorder] Prepared to record, now starting...");
@@ -118,6 +137,14 @@ RCT_EXPORT_METHOD(startRecording:(RCTPromiseResolveBlock)resolve
 
             if (success) {
                 NSLog(@"✅ [AudioRecorder] Recording started successfully!");
+
+                // Start metering timer to send audio levels to React Native
+                self->_meteringTimer = [NSTimer scheduledTimerWithTimeInterval:0.05 // 50ms = 20 updates per second
+                                                                        target:self
+                                                                      selector:@selector(updateMeters)
+                                                                      userInfo:nil
+                                                                       repeats:YES];
+
                 resolve(@{@"success": @YES});
             } else {
                 NSLog(@"❌ [AudioRecorder] Failed to start recording");
@@ -127,9 +154,47 @@ RCT_EXPORT_METHOD(startRecording:(RCTPromiseResolveBlock)resolve
     }];
 }
 
+// Update and send audio level to React Native
+- (void)updateMeters {
+    if (_audioRecorder && _audioRecorder.isRecording) {
+        [_audioRecorder updateMeters];
+
+        // Get peak power for channel 0 (ranges from -160 dB to 0 dB)
+        // Using peakPower instead of averagePower for more responsive visualization
+        float peakPower = [_audioRecorder peakPowerForChannel:0];
+
+        // More sensitive normalization for better visualization
+        // Focus on the -50 dB to 0 dB range which is typical for speech
+        // Anything below -50 dB is considered silence
+        float minDB = -50.0;
+        float maxDB = 0.0;
+
+        // Clamp to our range
+        float clampedDB = MAX(minDB, MIN(maxDB, peakPower));
+
+        // Normalize to 0.0 - 1.0
+        float normalizedLevel = (clampedDB - minDB) / (maxDB - minDB);
+
+        // Apply power curve to make quieter sounds more visible
+        // This makes the waveform more dramatic and easier to see
+        normalizedLevel = powf(normalizedLevel, 0.5); // Square root for sensitivity boost
+
+        // Send event to React Native if we have listeners
+        if (_hasListeners) {
+            [self sendEventWithName:@"audioLevel" body:@{@"level": @(normalizedLevel)}];
+        }
+    }
+}
+
 RCT_EXPORT_METHOD(stopRecording:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 {
+    // Stop metering timer
+    if (_meteringTimer) {
+        [_meteringTimer invalidate];
+        _meteringTimer = nil;
+    }
+
     if (_audioRecorder && _audioRecorder.isRecording) {
         [_audioRecorder stop];
 
@@ -152,6 +217,12 @@ RCT_EXPORT_METHOD(stopRecording:(RCTPromiseResolveBlock)resolve
 RCT_EXPORT_METHOD(cancelRecording:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 {
+    // Stop metering timer
+    if (_meteringTimer) {
+        [_meteringTimer invalidate];
+        _meteringTimer = nil;
+    }
+
     if (_audioRecorder && _audioRecorder.isRecording) {
         [_audioRecorder stop];
         [_audioRecorder deleteRecording];

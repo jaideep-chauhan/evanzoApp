@@ -2,18 +2,32 @@ package com.yourteam.evnzo
 
 import android.media.MediaRecorder
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import com.facebook.react.bridge.*
+import com.facebook.react.modules.core.DeviceEventManagerModule
 import java.io.File
 import java.io.IOException
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.pow
 
 class AudioRecorderModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
     private var mediaRecorder: MediaRecorder? = null
     private var audioFilePath: String? = null
     private var startTime: Long = 0
+    private val meteringHandler = Handler(Looper.getMainLooper())
+    private var meteringRunnable: Runnable? = null
 
     override fun getName(): String {
         return "AudioRecorderModule"
+    }
+
+    private fun sendEvent(eventName: String, params: WritableMap?) {
+        reactApplicationContext
+            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+            .emit(eventName, params)
     }
 
     @ReactMethod
@@ -45,6 +59,9 @@ class AudioRecorderModule(reactContext: ReactApplicationContext) : ReactContextB
                     start()
                     startTime = System.currentTimeMillis()
 
+                    // Start audio level metering
+                    startMetering()
+
                     val result = Arguments.createMap()
                     result.putBoolean("success", true)
                     promise.resolve(result)
@@ -57,9 +74,63 @@ class AudioRecorderModule(reactContext: ReactApplicationContext) : ReactContextB
         }
     }
 
+    private fun startMetering() {
+        meteringRunnable = object : Runnable {
+            override fun run() {
+                mediaRecorder?.let { recorder ->
+                    try {
+                        // Get max amplitude (0 to 32767)
+                        val amplitude = recorder.maxAmplitude
+
+                        // Convert to normalized level (0.0 to 1.0)
+                        // Using logarithmic scale for better visualization
+                        val normalizedLevel = if (amplitude > 0) {
+                            // Convert to dB: 20 * log10(amplitude / 32767)
+                            val db = 20.0 * kotlin.math.log10(amplitude.toDouble() / 32767.0)
+
+                            // Focus on -50 dB to 0 dB range (typical speech)
+                            val minDB = -50.0
+                            val maxDB = 0.0
+                            val clampedDB = max(minDB, min(maxDB, db))
+
+                            // Normalize to 0.0 - 1.0
+                            var level = (clampedDB - minDB) / (maxDB - minDB)
+
+                            // Apply power curve for sensitivity boost
+                            level = level.pow(0.5)
+
+                            level
+                        } else {
+                            0.0
+                        }
+
+                        // Send event to React Native
+                        val params = Arguments.createMap()
+                        params.putDouble("level", normalizedLevel)
+                        sendEvent("audioLevel", params)
+
+                        // Schedule next update in 50ms (20 updates per second)
+                        meteringHandler.postDelayed(this, 50)
+                    } catch (e: Exception) {
+                        // Recorder might have been stopped, ignore errors
+                    }
+                }
+            }
+        }
+        meteringRunnable?.let { meteringHandler.post(it) }
+    }
+
+    private fun stopMetering() {
+        meteringRunnable?.let { meteringHandler.removeCallbacks(it) }
+        meteringRunnable = null
+    }
+
     @ReactMethod
     fun stopRecording(promise: Promise) {
         try {
+            // Stop metering
+            stopMetering()
+
             mediaRecorder?.let { recorder ->
                 try {
                     recorder.stop()
@@ -89,6 +160,9 @@ class AudioRecorderModule(reactContext: ReactApplicationContext) : ReactContextB
     @ReactMethod
     fun cancelRecording(promise: Promise) {
         try {
+            // Stop metering
+            stopMetering()
+
             mediaRecorder?.let { recorder ->
                 try {
                     recorder.stop()
@@ -120,6 +194,7 @@ class AudioRecorderModule(reactContext: ReactApplicationContext) : ReactContextB
 
     override fun onCatalystInstanceDestroy() {
         super.onCatalystInstanceDestroy()
+        stopMetering()
         mediaRecorder?.release()
         mediaRecorder = null
     }

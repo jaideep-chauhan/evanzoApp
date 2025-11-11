@@ -231,6 +231,9 @@ export const IMAGE_DIMENSIONS = {
     // 16:9 ratio - widescreen format
     WIDESCREEN: { width: 1080, height: 607 },
 
-    // Free form - user can crop to any dimension
+    // Free form - user can crop to any dimension (dynamic ratio)
     FREE: { width: 1080, height: 1080, freeStyleCropEnabled: true },
+
+    // Fixed square ratio - maintains 1:1 aspect ratio
+    FIXED_SQUARE: { width: 1080, height: 1080, freeStyleCropEnabled: false },
 };

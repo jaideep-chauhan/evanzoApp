@@ -202,9 +202,9 @@ const CreateAddForm = ({ type, onClose }) => {
             setIsImageLoading(true); // Show loading indicator
 
             // Open image picker with cropper
-            // Using FREE dimensions to allow users to crop to any size they want
+            // Using FIXED_SQUARE dimensions to maintain 1:1 aspect ratio
             const selectedImages = await openImagePickerWithCropper({
-                ...IMAGE_DIMENSIONS.FREE,
+                ...IMAGE_DIMENSIONS.FIXED_SQUARE,
                 multiple: true,
                 maxFiles: 10,
                 compressImageQuality: 0.8,
