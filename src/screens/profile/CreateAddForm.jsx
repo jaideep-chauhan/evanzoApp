@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
     View,
     Text,
@@ -23,9 +23,12 @@ import vendorService from '../../services/vendorService';
 import eventService from '../../services/eventService';
 import { CustomSuccessModal } from '../../components/CustomSuccessModal';
 import { CustomToast } from '../../components/CustomToast';
+import ImageEditorModal from '../../components/ImageEditorModal';
+import LocationAutocomplete from '../../components/LocationAutocomplete';
 
 const CreateAddForm = ({ type, onClose }) => {
     const theme = useTheme();
+    const scrollViewRef = useRef(null);
 
     // Event Ad fields
     const [service, setService] = useState('');
@@ -53,9 +56,12 @@ const CreateAddForm = ({ type, onClose }) => {
 
     // Loading state
     const [isLoading, setIsLoading] = useState(false);
-    const [isImageLoading, setIsImageLoading] = useState(false);
     const [modalState, setModalState] = useState({ visible: false, title: '', message: '', type: 'success' });
     const [toastState, setToastState] = useState({ visible: false, message: '', type: 'error' });
+
+    // Image editor modal
+    const [showImageEditor, setShowImageEditor] = useState(false);
+    const [tempSelectedImages, setTempSelectedImages] = useState([]);
 
     // Categories list
     const categories = [
@@ -199,44 +205,59 @@ const CreateAddForm = ({ type, onClose }) => {
         }
 
         try {
-            setIsImageLoading(true); // Show loading indicator
-
-            // Open image picker with cropper
-            // Using FIXED_SQUARE dimensions to maintain 1:1 aspect ratio
+            console.log('📸 Opening image picker...');
+            // Open image picker - select multiple images
             const selectedImages = await openImagePickerWithCropper({
-                ...IMAGE_DIMENSIONS.FIXED_SQUARE,
                 multiple: true,
-                maxFiles: 10,
+                maxFiles: type === 'vendor' ? 20 : 10,
                 compressImageQuality: 0.8,
             });
 
-            setIsImageLoading(false); // Hide loading indicator
+            console.log('📸 Selected images:', selectedImages?.length || 0);
 
             if (selectedImages && selectedImages.length > 0) {
+                // Format images and open editor modal
                 const formattedPhotos = selectedImages.map((image, index) => ({
                     uri: image.uri,
+                    originalUri: image.originalUri || image.uri,
                     type: image.mime || 'image/jpeg',
                     name: `photo_${Date.now()}_${index}.jpg`,
                     width: image.width,
                     height: image.height,
+                    cropped: false,
                 }));
 
-                setPhotos([...photos, ...formattedPhotos]);
-                setToastState({
-                    visible: true,
-                    message: `${selectedImages.length} image(s) cropped successfully`,
-                    type: 'success'
-                });
+                console.log('📸 Opening image editor modal with', formattedPhotos.length, 'images');
+                console.log('📸 First image URI:', formattedPhotos[0]?.uri);
+
+                // Open image editor modal with selected images
+                setTempSelectedImages(formattedPhotos);
+                setShowImageEditor(true);
+            } else {
+                console.log('📸 No images selected or user cancelled');
             }
         } catch (error) {
-            console.error('Image picker error:', error);
-            setIsImageLoading(false); // Hide loading indicator
+            console.error('📸 Image picker error:', error);
             setToastState({
                 visible: true,
                 message: 'Failed to select images',
                 type: 'error'
             });
         }
+    };
+
+    const handleImageEditorDone = (editedImages) => {
+        // Add edited images to photos array
+        setPhotos([...photos, ...editedImages]);
+        setShowImageEditor(false);
+        setTempSelectedImages([]);
+
+        const croppedCount = editedImages.filter(img => img.cropped).length;
+        setToastState({
+            visible: true,
+            message: `${editedImages.length} image(s) added${croppedCount > 0 ? ` (${croppedCount} cropped)` : ''}`,
+            type: 'success'
+        });
     };
 
     const removePhoto = (index) => {
@@ -258,8 +279,8 @@ const CreateAddForm = ({ type, onClose }) => {
 
                 // Validate description word count
                 const wordCount = description.trim().split(/\s+/).filter(word => word.length > 0).length;
-                if (description && wordCount < 100) {
-                    setToastState({ visible: true, message: `Description must be at least 100 words. Current: ${wordCount} words`, type: 'error' });
+                if (description && wordCount < 30) {
+                    setToastState({ visible: true, message: `Description must be at least 30 words. Current: ${wordCount} words`, type: 'error' });
                     setIsLoading(false);
                     return;
                 }
@@ -350,8 +371,8 @@ const CreateAddForm = ({ type, onClose }) => {
 
                 // Validate description word count
                 const wordCount = vendorDescription.trim().split(/\s+/).filter(word => word.length > 0).length;
-                if (vendorDescription && wordCount < 100) {
-                    setToastState({ visible: true, message: `Description must be at least 100 words. Current: ${wordCount} words`, type: 'error' });
+                if (vendorDescription && wordCount < 30) {
+                    setToastState({ visible: true, message: `Description must be at least 30 words. Current: ${wordCount} words`, type: 'error' });
                     setIsLoading(false);
                     return;
                 }
@@ -415,23 +436,25 @@ const CreateAddForm = ({ type, onClose }) => {
     };
 
     return (
-        <KeyboardAvoidingView 
+        <KeyboardAvoidingView
             style={styles.modalBorderWrapPro}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
         >
             {/* Header */}
             <View style={styles.headerPro}>
                 <Text style={styles.headerTitlePro}>
                     {type === 'event' ? 'Create Event Ad' : 'Create Vendor Ad'}
-                </Text> 
+                </Text>
             </View>
             <ScrollView
+                ref={scrollViewRef}
                 style={styles.scrollViewPro}
                 contentContainerStyle={styles.containerPro}
                 showsVerticalScrollIndicator={false}
                 nestedScrollEnabled={true}
                 keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
             >
                 {type === 'event' ? (
                     <>
@@ -482,12 +505,12 @@ const CreateAddForm = ({ type, onClose }) => {
 
                         <View style={styles.fieldGroupPro}>
                             <Text style={styles.labelPro}>Location</Text>
-                            <TextInput
-                                style={styles.inputPro}
+                            <LocationAutocomplete
                                 value={location}
                                 onChangeText={setLocation}
                                 placeholder="Enter location"
                                 placeholderTextColor="#ffffff80"
+                                style={styles.inputPro}
                             />
                         </View>
 
@@ -527,6 +550,11 @@ const CreateAddForm = ({ type, onClose }) => {
                                     onChangeText={setDuration}
                                     placeholder="e.g. 4 hours"
                                     placeholderTextColor="#ffffff80"
+                                    onFocus={() => {
+                                        setTimeout(() => {
+                                            scrollViewRef.current?.scrollTo({ y: 400, animated: true });
+                                        }, 300);
+                                    }}
                                 />
                             </View>
                             {type === 'vendor' && photos.length > 0 && (
@@ -545,22 +573,32 @@ const CreateAddForm = ({ type, onClose }) => {
                                 placeholder="$0"
                                 placeholderTextColor="#ffffff80"
                                 keyboardType="numeric"
+                                onFocus={() => {
+                                    setTimeout(() => {
+                                        scrollViewRef.current?.scrollTo({ y: 500, animated: true });
+                                    }, 300);
+                                }}
                             />
                         </View>
 
                         <View style={styles.fieldGroupPro}>
-                            <Text style={styles.labelPro}>Description (optional, min. 100 words if provided)</Text>
+                            <Text style={styles.labelPro}>Description (optional, min. 30 words if provided)</Text>
                             <TextInput
                                 style={[styles.inputPro, styles.textAreaPro, { backgroundColor: theme.colors.primary }]}
                                 value={description}
                                 onChangeText={setDescription}
-                                placeholder="Describe your needs in detail (minimum 100 words if provided)..."
+                                placeholder="Describe your needs in detail (minimum 30 words if provided)..."
                                 placeholderTextColor="#ffffff80"
                                 multiline
+                                onFocus={() => {
+                                    setTimeout(() => {
+                                        scrollViewRef.current?.scrollTo({ y: 600, animated: true });
+                                    }, 300);
+                                }}
                             />
                             {description && (
                                 <Text style={styles.wordCount}>
-                                    {description.trim().split(/\s+/).filter(word => word.length > 0).length} / 100 words
+                                    {description.trim().split(/\s+/).filter(word => word.length > 0).length} / 30 words
                                 </Text>
                             )}
                         </View>
@@ -578,6 +616,11 @@ const CreateAddForm = ({ type, onClose }) => {
                                                         style={styles.selectedPhoto}
                                                         resizeMode="cover"
                                                     />
+                                                    {photo.cropped && (
+                                                        <View style={styles.croppedBadgeSmall}>
+                                                            <Icon name="checkmark-circle" size={12} color="#4CAF50" />
+                                                        </View>
+                                                    )}
                                                     <TouchableOpacity
                                                         style={styles.removePhotoBtn}
                                                         onPress={() => removePhoto(index)}
@@ -624,13 +667,13 @@ const CreateAddForm = ({ type, onClose }) => {
                                 style={[styles.inputPro, styles.textAreaPro, { backgroundColor: theme.colors.primary }]}
                                 value={vendorDescription}
                                 onChangeText={setVendorDescription}
-                                placeholder="Describe your services in detail (minimum 100 words)..."
+                                placeholder="Describe your services in detail (minimum 30 words)..."
                                 placeholderTextColor="#ffffff80"
                                 multiline
                             />
                             {vendorDescription && (
                                 <Text style={styles.wordCount}>
-                                    {vendorDescription.trim().split(/\s+/).filter(word => word.length > 0).length} / 100 words
+                                    {vendorDescription.trim().split(/\s+/).filter(word => word.length > 0).length} / 30 words
                                 </Text>
                             )}
                         </View>
@@ -683,12 +726,12 @@ const CreateAddForm = ({ type, onClose }) => {
                         </View>
                         <View style={styles.fieldGroupPro}>
                             <Text style={styles.labelPro}>Location</Text>
-                            <TextInput
-                                style={styles.inputPro}
+                            <LocationAutocomplete
                                 value={vendorLocation}
                                 onChangeText={setVendorLocation}
-                                placeholder="text field..."
+                                placeholder="Enter location"
                                 placeholderTextColor="#ffffff80"
+                                style={styles.inputPro}
                             />
                         </View>
 
@@ -705,6 +748,12 @@ const CreateAddForm = ({ type, onClose }) => {
                                             placeholder="$1000"
                                             placeholderTextColor="#ffffff80"
                                             keyboardType="numeric"
+                                            onFocus={() => {
+                                                // Scroll to show the input above keyboard
+                                                setTimeout(() => {
+                                                    scrollViewRef.current?.scrollToEnd({ animated: true });
+                                                }, 300);
+                                            }}
                                         />
                                     </View>
                                     <View style={styles.offerInputContainer}>
@@ -716,6 +765,12 @@ const CreateAddForm = ({ type, onClose }) => {
                                             placeholder="10%"
                                             placeholderTextColor="#ffffff80"
                                             keyboardType="numeric"
+                                            onFocus={() => {
+                                                // Scroll to show the input above keyboard
+                                                setTimeout(() => {
+                                                    scrollViewRef.current?.scrollToEnd({ animated: true });
+                                                }, 300);
+                                            }}
                                         />
                                     </View>
                                     <View style={styles.offerButtons}>
@@ -752,6 +807,11 @@ const CreateAddForm = ({ type, onClose }) => {
                                                         style={styles.selectedPhoto}
                                                         resizeMode="cover"
                                                     />
+                                                    {photo.cropped && (
+                                                        <View style={styles.croppedBadgeSmall}>
+                                                            <Icon name="checkmark-circle" size={12} color="#4CAF50" />
+                                                        </View>
+                                                    )}
                                                     <TouchableOpacity
                                                         style={styles.removePhotoBtn}
                                                         onPress={() => removePhoto(index)}
@@ -1010,6 +1070,17 @@ const CreateAddForm = ({ type, onClose }) => {
                 message={toastState.message}
                 type={toastState.type}
                 onHide={() => setToastState({ ...toastState, visible: false })}
+            />
+
+            {/* Image Editor Modal */}
+            <ImageEditorModal
+                visible={showImageEditor}
+                images={tempSelectedImages}
+                onClose={() => {
+                    setShowImageEditor(false);
+                    setTempSelectedImages([]);
+                }}
+                onDone={handleImageEditorDone}
             />
         </KeyboardAvoidingView>
     );
@@ -1418,6 +1489,15 @@ const styles = StyleSheet.create({
         right: -8,
         backgroundColor: '#2C3D5B',
         borderRadius: 10,
+        zIndex: 10,
+    },
+    croppedBadgeSmall: {
+        position: 'absolute',
+        bottom: 4,
+        right: 4,
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        borderRadius: 10,
+        padding: 2,
     },
     photoCount: {
         color: '#ffffff80',

@@ -26,6 +26,8 @@ import api from '../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DocumentPicker from 'react-native-document-picker';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
+import FileViewer from 'react-native-file-viewer';
+import RNFS from 'react-native-fs';
 import VoiceRecorder from '../../components/VoiceRecorder';
 import AudioPlayer from '../../components/AudioPlayer';
 import ReactionPicker from '../../components/ReactionPicker';
@@ -1157,17 +1159,69 @@ export default function ChatScreen({ route, navigation }) {
                 url: fileUrl
             });
 
-            // Check if URL can be opened
-            const supported = await Linking.canOpenURL(fileUrl);
+            // Show loading indicator
+            Alert.alert('Opening File', 'Please wait...');
 
-            if (supported) {
-                await Linking.openURL(fileUrl);
-            } else {
-                Alert.alert('Error', `Cannot open this file type: ${attachment.type || 'unknown'}`);
+            // Download file to local cache if it's a remote URL
+            let localFilePath = fileUrl;
+
+            if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+                // Remote file - download it first
+                const fileName = attachment.name || `file_${Date.now()}`;
+                const localPath = `${RNFS.CachesDirectoryPath}/${fileName}`;
+
+                console.log('📥 Downloading file from:', fileUrl);
+                console.log('📥 Saving to:', localPath);
+
+                try {
+                    const downloadResult = await RNFS.downloadFile({
+                        fromUrl: fileUrl,
+                        toFile: localPath,
+                    }).promise;
+
+                    if (downloadResult.statusCode === 200) {
+                        console.log('✅ File downloaded successfully');
+                        localFilePath = localPath;
+                    } else {
+                        throw new Error(`Download failed with status: ${downloadResult.statusCode}`);
+                    }
+                } catch (downloadError) {
+                    console.error('❌ Download error:', downloadError);
+                    Alert.alert('Error', 'Failed to download file. Opening in browser instead.');
+                    // Fallback to opening in browser
+                    const supported = await Linking.canOpenURL(fileUrl);
+                    if (supported) {
+                        await Linking.openURL(fileUrl);
+                    }
+                    return;
+                }
             }
+
+            // Open file with FileViewer (works for documents, PDFs, videos, etc.)
+            console.log('📱 Opening file with FileViewer:', localFilePath);
+
+            await FileViewer.open(localFilePath, {
+                showOpenWithDialog: true, // Show "Open with" dialog on Android
+                showAppsSuggestions: true, // Show app suggestions
+                displayName: attachment.name || 'File', // Display name for the file
+            });
+
+            console.log('✅ File opened successfully');
         } catch (error) {
-            console.error('Error opening file:', error);
-            Alert.alert('Error', 'Failed to open file');
+            console.error('❌ Error opening file:', error);
+
+            // Provide more specific error messages
+            let errorMessage = 'Failed to open file';
+
+            if (error.message?.includes('No app associated')) {
+                errorMessage = 'No app found to open this file type. Please install a suitable app.';
+            } else if (error.message?.includes('Download')) {
+                errorMessage = 'Failed to download file. Please check your internet connection.';
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+
+            Alert.alert('Error', errorMessage);
         }
     };
 
