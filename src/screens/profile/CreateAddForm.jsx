@@ -614,7 +614,7 @@ const CreateAddForm = ({ type, onClose }) => {
                                                     <Image
                                                         source={{ uri: photo.uri }}
                                                         style={styles.selectedPhoto}
-                                                        resizeMode="cover"
+                                                        resizeMode="contain"
                                                     />
                                                     {photo.cropped && (
                                                         <View style={styles.croppedBadgeSmall}>
@@ -805,7 +805,7 @@ const CreateAddForm = ({ type, onClose }) => {
                                                     <Image
                                                         source={{ uri: photo.uri }}
                                                         style={styles.selectedPhoto}
-                                                        resizeMode="cover"
+                                                        resizeMode="contain"
                                                     />
                                                     {photo.cropped && (
                                                         <View style={styles.croppedBadgeSmall}>

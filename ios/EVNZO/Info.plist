@@ -43,6 +43,8 @@
 	<string>Allow gallery access to pick photos</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Allow microphone access to record voice messages</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Allow contacts access to share contacts with your friends</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>AntDesign.ttf</string>

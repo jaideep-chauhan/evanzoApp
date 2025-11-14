@@ -28,6 +28,8 @@ import DocumentPicker from 'react-native-document-picker';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import FileViewer from 'react-native-file-viewer';
 import RNFS from 'react-native-fs';
+import Contacts from 'react-native-contacts';
+import Video from 'react-native-video';
 import VoiceRecorder from '../../components/VoiceRecorder';
 import AudioPlayer from '../../components/AudioPlayer';
 import ReactionPicker from '../../components/ReactionPicker';
@@ -62,6 +64,9 @@ export default function ChatScreen({ route, navigation }) {
     const [showImagePreview, setShowImagePreview] = useState(false);
     const [previewImageUrl, setPreviewImageUrl] = useState(null);
     const [previewImageName, setPreviewImageName] = useState(null);
+    const [showContactPicker, setShowContactPicker] = useState(false);
+    const [contactsList, setContactsList] = useState([]);
+    const [contactSearchQuery, setContactSearchQuery] = useState('');
     const flatListRef = useRef(null);
     const typingTimeoutRef = useRef(null);
     const currentUserIdRef = useRef(null); // Add ref to maintain userId consistency
@@ -789,6 +794,160 @@ export default function ChatScreen({ route, navigation }) {
         }
     };
 
+    const handleContactPicker = async () => {
+        console.log('📇 handleContactPicker called');
+        setShowAttachmentModal(false);
+
+        // Small delay to ensure modal is closed before opening picker
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        try {
+            console.log('📇 Requesting contacts permission...');
+            // Request permission directly (combines check + request)
+            const permission = await Contacts.requestPermission();
+            console.log('📇 Permission status:', permission);
+
+            // On iOS simulator, permission might be 'undefined' but still work
+            // Only block if explicitly denied
+            if (permission === 'denied') {
+                console.log('📇 Permission explicitly denied');
+                Alert.alert('Permission Denied', 'Cannot access contacts without permission. Please enable contacts access in Settings.');
+                return;
+            }
+
+            console.log('📇 Attempting to fetch contacts...');
+            // Try to get contacts regardless of permission status (works on simulator)
+            const contacts = await Contacts.getAll();
+            console.log('📇 Fetched contacts count:', contacts?.length || 0);
+
+            if (!contacts || contacts.length === 0) {
+                console.log('📇 No contacts found');
+                Alert.alert('No Contacts', 'No contacts found on your device');
+                return;
+            }
+
+            // Sort contacts by display name
+            const sortedContacts = contacts.sort((a, b) => {
+                const nameA = a.displayName || a.givenName || '';
+                const nameB = b.displayName || b.givenName || '';
+                return nameA.localeCompare(nameB);
+            });
+
+            console.log('📇 Setting contacts list and showing modal...');
+            // Set contacts list and show picker modal
+            setContactsList(sortedContacts);
+            setShowContactPicker(true);
+            console.log('📇 Modal should be visible now');
+        } catch (error) {
+            console.error('📇 Error opening contact picker:', error);
+            console.error('📇 Error details:', error.message, error.stack);
+            Alert.alert('Error', `Failed to access contacts: ${error.message}`);
+        }
+    };
+
+    const handleContactSelect = (contact) => {
+        setShowContactPicker(false);
+        setContactSearchQuery('');
+        sendContactMessage(contact);
+    };
+
+    const filteredContacts = contactSearchQuery
+        ? contactsList.filter(contact => {
+            const name = contact.displayName || contact.givenName || '';
+            return name.toLowerCase().includes(contactSearchQuery.toLowerCase());
+        })
+        : contactsList;
+
+    const sendContactMessage = async (contact) => {
+        if (!chatId || !contact) return;
+
+        setIsSending(true);
+        const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+
+        // Format contact data
+        const contactData = {
+            name: contact.displayName || contact.givenName + ' ' + contact.familyName,
+            phone: contact.phoneNumbers && contact.phoneNumbers.length > 0
+                ? contact.phoneNumbers[0].number
+                : '',
+            email: contact.emailAddresses && contact.emailAddresses.length > 0
+                ? contact.emailAddresses[0].email
+                : '',
+        };
+
+        // Add optimistic message
+        const optimisticMessage = {
+            id: tempId,
+            text: `📇 ${contactData.name}`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            isMe: true,
+            messageType: 'contact',
+            status: 'sending',
+            contactData: contactData,
+            createdAt: new Date().toISOString()
+        };
+
+        setMessages(prev => [...prev, optimisticMessage]);
+
+        try {
+            // Send contact message via socket
+            const messageData = {
+                chatId: chatId,
+                content: JSON.stringify(contactData),
+                messageType: 'contact',
+                contactData: contactData
+            };
+
+            console.log('Sending contact message:', messageData);
+
+            // Emit via socket
+            socketService.emit('send-message', messageData);
+
+            // Update message status to sent
+            setMessages(prev => prev.map(msg =>
+                msg.id === tempId
+                    ? { ...msg, status: 'sent' }
+                    : msg
+            ));
+        } catch (error) {
+            console.error('Error sending contact:', error);
+            setMessages(prev => prev.filter(msg => msg.id !== tempId));
+            Alert.alert('Error', 'Failed to send contact');
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+    const handleVideoPicker = async () => {
+        setShowAttachmentModal(false);
+
+        const hasPermission = await requestGalleryPermission();
+        if (!hasPermission) {
+            Alert.alert('Permission Required', 'Gallery permission is required to select videos');
+            return;
+        }
+
+        const options = {
+            mediaType: 'video',
+            includeBase64: false,
+            videoQuality: 'medium',
+        };
+
+        launchImageLibrary(options, (response) => {
+            if (response.didCancel) {
+                console.log('User cancelled video picker');
+            } else if (response.errorMessage) {
+                console.log('VideoPicker Error: ', response.errorMessage);
+                Alert.alert('Error', 'Failed to select video');
+            } else if (response.assets && response.assets[0]) {
+                const asset = response.assets[0];
+                console.log('Selected video:', asset);
+                // Pass the complete asset object with all properties
+                sendMediaMessage(asset, 'video');
+            }
+        });
+    };
+
     const sendMediaMessage = async (file, type) => {
         if (!chatId) return;
         
@@ -798,10 +957,10 @@ export default function ChatScreen({ route, navigation }) {
         // Add optimistic message
         const optimisticMessage = {
             id: tempId,
-            text: type === 'image' ? '📷 Photo' : '📄 Document',
+            text: type === 'image' ? '📷 Photo' : type === 'video' ? '🎥 Video' : '📄 Document',
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             isMe: true,
-            messageType: type === 'image' ? 'image' : 'file', // Use 'file' for documents
+            messageType: type, // 'image', 'video', or 'file'
             status: 'sending',
             attachments: [{
                 type: type,
@@ -822,13 +981,13 @@ export default function ChatScreen({ route, navigation }) {
             // Backend expects 'message_type' not 'messageType'
             // Backend accepts: text, image, video, audio, file, location, contact
             formData.append('content', '');
-            formData.append('message_type', type === 'image' ? 'image' : 'file');
-            
+            formData.append('message_type', type); // Pass the actual type: 'image', 'video', or 'file'
+
             // Prepare file object - ensuring we have all required fields
             const fileObject = {
                 uri: file.uri || file.fileCopyUri,
-                type: file.type || (type === 'image' ? 'image/jpeg' : 'application/octet-stream'), 
-                name: file.fileName || file.name || (type === 'image' ? `photo_${Date.now()}.jpg` : `document_${Date.now()}`),
+                type: file.type || (type === 'image' ? 'image/jpeg' : type === 'video' ? 'video/mp4' : 'application/octet-stream'),
+                name: file.fileName || file.name || (type === 'image' ? `photo_${Date.now()}.jpg` : type === 'video' ? `video_${Date.now()}.mp4` : `document_${Date.now()}`),
             };
             
             // Backend now expects 'file' field name (singular) after route update
@@ -1159,9 +1318,6 @@ export default function ChatScreen({ route, navigation }) {
                 url: fileUrl
             });
 
-            // Show loading indicator
-            Alert.alert('Opening File', 'Please wait...');
-
             // Download file to local cache if it's a remote URL
             let localFilePath = fileUrl;
 
@@ -1187,22 +1343,17 @@ export default function ChatScreen({ route, navigation }) {
                     }
                 } catch (downloadError) {
                     console.error('❌ Download error:', downloadError);
-                    Alert.alert('Error', 'Failed to download file. Opening in browser instead.');
-                    // Fallback to opening in browser
-                    const supported = await Linking.canOpenURL(fileUrl);
-                    if (supported) {
-                        await Linking.openURL(fileUrl);
-                    }
+                    Alert.alert('Error', 'Failed to download file. Please check your internet connection.');
                     return;
                 }
             }
 
-            // Open file with FileViewer (works for documents, PDFs, videos, etc.)
+            // Open file with FileViewer in-app (works for documents, PDFs, etc.)
             console.log('📱 Opening file with FileViewer:', localFilePath);
 
             await FileViewer.open(localFilePath, {
-                showOpenWithDialog: true, // Show "Open with" dialog on Android
-                showAppsSuggestions: true, // Show app suggestions
+                showOpenWithDialog: false, // Don't show "Open with" dialog - keep it in-app
+                showAppsSuggestions: false, // Don't show external app suggestions
                 displayName: attachment.name || 'File', // Display name for the file
             });
 
@@ -1214,7 +1365,7 @@ export default function ChatScreen({ route, navigation }) {
             let errorMessage = 'Failed to open file';
 
             if (error.message?.includes('No app associated')) {
-                errorMessage = 'No app found to open this file type. Please install a suitable app.';
+                errorMessage = 'No app found to open this file type.';
             } else if (error.message?.includes('Download')) {
                 errorMessage = 'Failed to download file. Please check your internet connection.';
             } else if (error.message) {
@@ -1272,6 +1423,23 @@ export default function ChatScreen({ route, navigation }) {
                             duration={item.duration || item.attachments?.[0]?.metadata?.duration || 0}
                             isMe={isMe}
                         />
+                    ) : item.messageType === 'video' && item.attachments?.[0] ? (
+                        <View style={styles.videoContainer}>
+                            <Video
+                                source={{ uri: item.attachments[0].uri || item.attachments[0].url }}
+                                style={styles.messageVideo}
+                                controls={true}
+                                resizeMode="contain"
+                                paused={true}
+                                onError={(error) => {
+                                    console.error('Video load error:', error);
+                                    console.log('Failed to load video from:', item.attachments[0]);
+                                }}
+                                onLoad={() => {
+                                    console.log('Video loaded successfully from:', item.attachments[0].uri || item.attachments[0].url);
+                                }}
+                            />
+                        </View>
                     ) : (item.messageType === 'document' || item.messageType === 'file') && item.attachments?.[0] ? (
                         <TouchableOpacity
                             style={styles.documentContainer}
@@ -1296,6 +1464,27 @@ export default function ChatScreen({ route, navigation }) {
                                 )}
                             </View>
                         </TouchableOpacity>
+                    ) : item.messageType === 'contact' && item.contactData ? (
+                        <View style={styles.contactContainer}>
+                            <View style={[styles.contactIconWrapper, { backgroundColor: '#E8F5E9' }]}>
+                                <Icon name="person" size={30} color="#4CAF50" />
+                            </View>
+                            <View style={styles.contactInfo}>
+                                <Text style={[styles.contactName, isMe ? styles.myText : styles.theirText]}>
+                                    {item.contactData.name}
+                                </Text>
+                                {item.contactData.phone && (
+                                    <Text style={[styles.contactDetail, isMe ? styles.myTime : styles.theirTime]}>
+                                        📞 {item.contactData.phone}
+                                    </Text>
+                                )}
+                                {item.contactData.email && (
+                                    <Text style={[styles.contactDetail, isMe ? styles.myTime : styles.theirTime]}>
+                                        ✉️ {item.contactData.email}
+                                    </Text>
+                                )}
+                            </View>
+                        </View>
                     ) : (
                         <Text style={[styles.messageText, isMe ? styles.myText : [styles.theirText, { color: theme.colors.primary }]]}>
                             {item.text}
@@ -1586,7 +1775,7 @@ export default function ChatScreen({ route, navigation }) {
                                 </View>
                                 <Text style={styles.attachmentLabel}>Gallery</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 style={styles.attachmentOption}
                                 onPress={handleDocumentPicker}
                             >
@@ -1594,6 +1783,24 @@ export default function ChatScreen({ route, navigation }) {
                                     <Icon name="document" size={24} color="#FF9800" />
                                 </View>
                                 <Text style={styles.attachmentLabel}>Document</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.attachmentOption}
+                                onPress={handleVideoPicker}
+                            >
+                                <View style={[styles.attachmentIcon, { backgroundColor: '#E0F2F1' }]}>
+                                    <Icon name="videocam" size={24} color="#00796B" />
+                                </View>
+                                <Text style={styles.attachmentLabel}>Video</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.attachmentOption}
+                                onPress={handleContactPicker}
+                            >
+                                <View style={[styles.attachmentIcon, { backgroundColor: '#E8F5E9' }]}>
+                                    <Icon name="person" size={24} color="#4CAF50" />
+                                </View>
+                                <Text style={styles.attachmentLabel}>Contact</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -1648,6 +1855,88 @@ export default function ChatScreen({ route, navigation }) {
                 }}
                 onDownload={handleImageDownload}
             />
+
+            {/* Contact Picker Modal */}
+            <Modal
+                visible={showContactPicker}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => {
+                    setShowContactPicker(false);
+                    setContactSearchQuery('');
+                }}
+            >
+                <TouchableOpacity
+                    style={styles.contactPickerContainer}
+                    activeOpacity={1}
+                    onPress={() => {
+                        setShowContactPicker(false);
+                        setContactSearchQuery('');
+                    }}
+                >
+                    <TouchableOpacity
+                        style={styles.contactPickerContent}
+                        activeOpacity={1}
+                        onPress={(e) => e.stopPropagation()}
+                    >
+                        <View style={styles.contactPickerHeader}>
+                            <Text style={styles.contactPickerTitle}>Select Contact</Text>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    setShowContactPicker(false);
+                                    setContactSearchQuery('');
+                                }}
+                            >
+                                <Icon name="close" size={24} color="#2C3D5B" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.contactSearchContainer}>
+                            <Icon name="search" size={20} color="#8B95A5" style={styles.contactSearchIcon} />
+                            <TextInput
+                                style={styles.contactSearchInput}
+                                placeholder="Search contacts..."
+                                placeholderTextColor="#8B95A5"
+                                value={contactSearchQuery}
+                                onChangeText={setContactSearchQuery}
+                            />
+                        </View>
+
+                        <FlatList
+                            data={filteredContacts}
+                            keyExtractor={(item) => item.recordID}
+                            renderItem={({ item }) => (
+                                <TouchableOpacity
+                                    style={styles.contactItem}
+                                    onPress={() => handleContactSelect(item)}
+                                >
+                                    <View style={styles.contactAvatar}>
+                                        <Icon name="person" size={24} color="#fff" />
+                                    </View>
+                                    <View style={styles.contactDetails}>
+                                        <Text style={styles.contactName}>
+                                            {item.displayName || `${item.givenName || ''} ${item.familyName || ''}`.trim() || 'Unknown'}
+                                        </Text>
+                                        {item.phoneNumbers && item.phoneNumbers.length > 0 && (
+                                            <Text style={styles.contactPhone}>
+                                                {item.phoneNumbers[0].number}
+                                            </Text>
+                                        )}
+                                    </View>
+                                </TouchableOpacity>
+                            )}
+                            style={styles.contactList}
+                            ListEmptyComponent={
+                                <View style={styles.emptyContactsContainer}>
+                                    <Text style={styles.emptyContactsText}>
+                                        {contactSearchQuery ? 'No contacts found' : 'No contacts available'}
+                                    </Text>
+                                </View>
+                            }
+                        />
+                    </TouchableOpacity>
+                </TouchableOpacity>
+            </Modal>
         </KeyboardAvoidingView>
     );
 }
@@ -1883,6 +2172,17 @@ const styles = StyleSheet.create({
         height: 200,
         borderRadius: 10,
     },
+    videoContainer: {
+        width: 250,
+        height: 200,
+        borderRadius: 10,
+        overflow: 'hidden',
+        backgroundColor: '#000',
+    },
+    messageVideo: {
+        width: '100%',
+        height: '100%',
+    },
     documentContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1907,6 +2207,32 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     documentSize: {
+        fontSize: 12,
+        marginTop: 2,
+    },
+    contactContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        minWidth: 200,
+    },
+    contactIconWrapper: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    contactInfo: {
+        marginLeft: 12,
+        flex: 1,
+    },
+    contactName: {
+        fontSize: 15,
+        fontWeight: '600',
+        marginBottom: 4,
+    },
+    contactDetail: {
         fontSize: 12,
         marginTop: 2,
     },
@@ -1962,5 +2288,88 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#2C3D5B',
         fontWeight: '500',
+    },
+    contactPickerContainer: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'flex-end',
+    },
+    contactPickerContent: {
+        backgroundColor: '#fff',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        maxHeight: '80%',
+        paddingBottom: 20,
+    },
+    contactPickerHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E5E5',
+    },
+    contactPickerTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#2C3D5B',
+    },
+    contactSearchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F5F5F5',
+        borderRadius: 10,
+        margin: 16,
+        paddingHorizontal: 12,
+    },
+    contactSearchIcon: {
+        marginRight: 8,
+    },
+    contactSearchInput: {
+        flex: 1,
+        paddingVertical: 12,
+        fontSize: 16,
+        color: '#2C3D5B',
+    },
+    contactList: {
+        flex: 1,
+    },
+    contactItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F0F0F0',
+    },
+    contactAvatar: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: '#4CAF50',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    contactDetails: {
+        flex: 1,
+    },
+    contactName: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#2C3D5B',
+        marginBottom: 4,
+    },
+    contactPhone: {
+        fontSize: 14,
+        color: '#8B95A5',
+    },
+    emptyContactsContainer: {
+        padding: 40,
+        alignItems: 'center',
+    },
+    emptyContactsText: {
+        fontSize: 16,
+        color: '#8B95A5',
+        textAlign: 'center',
     },
 });
