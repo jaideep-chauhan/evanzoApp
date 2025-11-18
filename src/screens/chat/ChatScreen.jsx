@@ -16,6 +16,7 @@ import {
     Modal,
     PermissionsAndroid,
     Linking,
+    ScrollView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import MessageStatus from './MessageStatus';
@@ -36,6 +37,7 @@ import ReactionPicker from '../../components/ReactionPicker';
 import MessageOptionsModal from '../../components/MessageOptionsModal';
 import MessageReactions from '../../components/MessageReactions';
 import ImagePreview from '../../components/ImagePreview';
+import preSavedMessageService from '../../services/preSavedMessageService';
 
 export default function ChatScreen({ route, navigation }) {
     const { chatId: initialChatId, chatName, avatar, isOnline: initialOnline, recipientId } = route.params;
@@ -67,6 +69,10 @@ export default function ChatScreen({ route, navigation }) {
     const [showContactPicker, setShowContactPicker] = useState(false);
     const [contactsList, setContactsList] = useState([]);
     const [contactSearchQuery, setContactSearchQuery] = useState('');
+    const [showQuickMessageModal, setShowQuickMessageModal] = useState(false);
+    const [quickMessageTemplate, setQuickMessageTemplate] = useState('');
+    const [editableQuickMessage, setEditableQuickMessage] = useState('');
+    const [loadingQuickMessage, setLoadingQuickMessage] = useState(false);
     const flatListRef = useRef(null);
     const typingTimeoutRef = useRef(null);
     const currentUserIdRef = useRef(null); // Add ref to maintain userId consistency
@@ -264,6 +270,16 @@ export default function ChatScreen({ route, navigation }) {
                     // Process attachments to fix URLs (localhost → API URL)
                     const processedAttachments = chatService.processAttachments(msg.attachments);
 
+                    // Parse contact data if message type is contact
+                    let contactData = null;
+                    if (msg.message_type === 'contact' && msg.content) {
+                        try {
+                            contactData = JSON.parse(msg.content);
+                        } catch (e) {
+                            console.warn('Failed to parse contact data:', e);
+                        }
+                    }
+
                     return {
                         id: msg.message_id,
                         text: msg.content,
@@ -276,7 +292,8 @@ export default function ChatScreen({ route, navigation }) {
                         senderId: msg.sender_id,
                         reactions: msg.reactions || [],
                         createdAt: msg.created_at, // Keep original timestamp for sorting
-                        duration: duration // Add duration for audio messages
+                        duration: duration, // Add duration for audio messages
+                        contactData: contactData // Add parsed contact data for contact messages
                     };
                 });
                 
@@ -350,6 +367,16 @@ export default function ChatScreen({ route, navigation }) {
             // Process attachments to fix URLs (localhost → API URL)
             const processedAttachments = chatService.processAttachments(data.message.attachments);
 
+            // Parse contact data if message type is contact
+            let contactData = null;
+            if (data.message.message_type === 'contact' && data.message.content) {
+                try {
+                    contactData = JSON.parse(data.message.content);
+                } catch (e) {
+                    console.warn('Failed to parse contact data from socket:', e);
+                }
+            }
+
             // This is a message from another user
             const newMsg = {
                 id: data.message.message_id,
@@ -363,7 +390,8 @@ export default function ChatScreen({ route, navigation }) {
                 senderId: data.message.sender_id,
                 createdAt: data.message.created_at,
                 duration: duration, // Add duration for audio messages
-                reactions: data.message.reactions || []
+                reactions: data.message.reactions || [],
+                contactData: contactData // Add parsed contact data for contact messages
             };
             
             // Prevent duplicate messages by checking if message already exists
@@ -679,31 +707,36 @@ export default function ChatScreen({ route, navigation }) {
 
     const handleImagePicker = async () => {
         setShowAttachmentModal(false);
-        
+
         const hasPermission = await requestGalleryPermission();
         if (!hasPermission) {
-            Alert.alert('Permission Required', 'Gallery permission is required to select photos');
+            Alert.alert('Permission Required', 'Gallery permission is required to select photos and videos');
             return;
         }
-        
+
         const options = {
-            mediaType: 'photo',
+            mediaType: 'mixed', // Allow both photos and videos
             includeBase64: false,
             maxHeight: 2000,
             maxWidth: 2000,
             quality: 0.8,
+            videoQuality: 'medium',
         };
 
         launchImageLibrary(options, (response) => {
             if (response.didCancel) {
-                console.log('User cancelled image picker');
+                console.log('User cancelled media picker');
             } else if (response.errorMessage) {
-                console.log('ImagePicker Error: ', response.errorMessage);
-                Alert.alert('Error', 'Failed to select image');
+                console.log('MediaPicker Error: ', response.errorMessage);
+                Alert.alert('Error', 'Failed to select media');
             } else if (response.assets && response.assets[0]) {
                 const asset = response.assets[0];
+                // Determine if it's a video or image based on the type
+                const isVideo = asset.type?.startsWith('video/');
+                const messageType = isVideo ? 'video' : 'image';
+                console.log('Selected media:', { type: asset.type, messageType });
                 // Pass the complete asset object with all properties
-                sendMediaMessage(asset, 'image');
+                sendMediaMessage(asset, messageType);
             }
         });
     };
@@ -851,6 +884,123 @@ export default function ChatScreen({ route, navigation }) {
         sendContactMessage(contact);
     };
 
+    const handleQuickMessage = async () => {
+        setShowAttachmentModal(false);
+        setLoadingQuickMessage(true);
+
+        // Small delay to ensure modal is closed
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        try {
+            console.log('📨 Loading quick message template...');
+            const response = await preSavedMessageService.getPreSavedMessage();
+
+            if (response.success && response.data && response.data.message_template) {
+                const template = response.data.message_template;
+                setQuickMessageTemplate(template);
+                setEditableQuickMessage(template);
+                setShowQuickMessageModal(true);
+                console.log('✅ Quick message loaded successfully');
+            } else {
+                Alert.alert(
+                    'No Quick Message',
+                    'You haven\'t created a quick message template yet. Please create one in your profile settings first.',
+                    [{ text: 'OK' }]
+                );
+            }
+        } catch (error) {
+            console.error('❌ Error loading quick message:', error);
+            Alert.alert('Error', 'Failed to load quick message template');
+        } finally {
+            setLoadingQuickMessage(false);
+        }
+    };
+
+    const handleSendQuickMessage = async () => {
+        if (!editableQuickMessage.trim()) {
+            Alert.alert('Error', 'Message cannot be empty');
+            return;
+        }
+
+        setShowQuickMessageModal(false);
+
+        // Send the message using the existing sendMessage function
+        const messageText = editableQuickMessage.trim();
+        const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+
+        // Add optimistic message
+        const optimisticMessage = {
+            id: tempId,
+            text: messageText,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            isMe: true,
+            messageType: 'text',
+            status: 'sending',
+            senderId: currentUserId,
+            createdAt: new Date().toISOString(),
+            reactions: []
+        };
+
+        setMessages(prev => {
+            const messageExists = prev.some(msg => msg.id === tempId);
+            if (messageExists) {
+                return prev;
+            }
+
+            // Auto-scroll to the new message
+            setTimeout(() => {
+                if (flatListRef.current) {
+                    flatListRef.current.scrollToEnd({ animated: true });
+                }
+            }, 100);
+
+            return [...prev, optimisticMessage];
+        });
+
+        setIsSending(true);
+
+        try {
+            const result = await chatService.sendMessage(chatId, messageText);
+
+            if (result.success && result.data) {
+                console.log('✅ Quick message sent successfully!');
+
+                // Update optimistic message with real data
+                setMessages(prev => prev.map(msg => {
+                    if (msg.id === tempId) {
+                        return {
+                            ...msg,
+                            id: result.data.message_id,
+                            status: 'sent',
+                            createdAt: result.data.created_at,
+                            senderId: result.data.sender_id
+                        };
+                    }
+                    return msg;
+                }));
+
+                // Track usage of the pre-saved message
+                if (quickMessageTemplate) {
+                    try {
+                        await preSavedMessageService.usePreSavedMessage(quickMessageTemplate.id);
+                    } catch (error) {
+                        console.warn('Failed to track message usage:', error);
+                    }
+                }
+            } else {
+                console.error('❌ Failed to send quick message:', result.message);
+                setMessages(prev => prev.filter(msg => msg.id !== tempId));
+                Alert.alert('Error', result.message || 'Failed to send message');
+            }
+        } catch (error) {
+            console.error('❌ Error sending quick message:', error);
+            setMessages(prev => prev.filter(msg => msg.id !== tempId));
+            Alert.alert('Error', 'Failed to send message');
+        } finally {
+            setIsSending(false);
+        }
+    };
+
     const filteredContacts = contactSearchQuery
         ? contactsList.filter(contact => {
             const name = contact.displayName || contact.givenName || '';
@@ -884,33 +1034,55 @@ export default function ChatScreen({ route, navigation }) {
             messageType: 'contact',
             status: 'sending',
             contactData: contactData,
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            reactions: []
         };
 
         setMessages(prev => [...prev, optimisticMessage]);
 
         try {
-            // Send contact message via socket
-            const messageData = {
-                chatId: chatId,
-                content: JSON.stringify(contactData),
-                messageType: 'contact',
-                contactData: contactData
-            };
+            console.log('📇 Sending contact message via API:', contactData);
 
-            console.log('Sending contact message:', messageData);
+            // Send contact message via API (like text messages)
+            const result = await chatService.sendMessage(
+                chatId,
+                JSON.stringify(contactData),
+                'contact'
+            );
 
-            // Emit via socket
-            socketService.emit('send-message', messageData);
+            if (result.success && result.data) {
+                console.log('✅ Contact message sent successfully:', result.data);
 
-            // Update message status to sent
-            setMessages(prev => prev.map(msg =>
-                msg.id === tempId
-                    ? { ...msg, status: 'sent' }
-                    : msg
-            ));
+                // Parse the contact data from response if it's a string
+                let responseContactData = contactData;
+                if (result.data.content) {
+                    try {
+                        responseContactData = JSON.parse(result.data.content);
+                    } catch (e) {
+                        console.warn('Failed to parse contact data from response:', e);
+                    }
+                }
+
+                // Update optimistic message with real data
+                setMessages(prev => prev.map(msg =>
+                    msg.id === tempId
+                        ? {
+                            ...msg,
+                            id: result.data.message_id,
+                            status: 'sent',
+                            createdAt: result.data.created_at,
+                            senderId: result.data.sender_id,
+                            contactData: responseContactData
+                        }
+                        : msg
+                ));
+            } else {
+                console.error('❌ Failed to send contact message:', result.message);
+                setMessages(prev => prev.filter(msg => msg.id !== tempId));
+                Alert.alert('Error', result.message || 'Failed to send contact');
+            }
         } catch (error) {
-            console.error('Error sending contact:', error);
+            console.error('❌ Error sending contact:', error);
             setMessages(prev => prev.filter(msg => msg.id !== tempId));
             Alert.alert('Error', 'Failed to send contact');
         } finally {
@@ -918,35 +1090,6 @@ export default function ChatScreen({ route, navigation }) {
         }
     };
 
-    const handleVideoPicker = async () => {
-        setShowAttachmentModal(false);
-
-        const hasPermission = await requestGalleryPermission();
-        if (!hasPermission) {
-            Alert.alert('Permission Required', 'Gallery permission is required to select videos');
-            return;
-        }
-
-        const options = {
-            mediaType: 'video',
-            includeBase64: false,
-            videoQuality: 'medium',
-        };
-
-        launchImageLibrary(options, (response) => {
-            if (response.didCancel) {
-                console.log('User cancelled video picker');
-            } else if (response.errorMessage) {
-                console.log('VideoPicker Error: ', response.errorMessage);
-                Alert.alert('Error', 'Failed to select video');
-            } else if (response.assets && response.assets[0]) {
-                const asset = response.assets[0];
-                console.log('Selected video:', asset);
-                // Pass the complete asset object with all properties
-                sendMediaMessage(asset, 'video');
-            }
-        });
-    };
 
     const sendMediaMessage = async (file, type) => {
         if (!chatId) return;
@@ -1757,7 +1900,16 @@ export default function ChatScreen({ route, navigation }) {
                             <Text style={styles.modalTitle}>Send Attachment</Text>
                         </View>
                         <View style={styles.attachmentOptions}>
-                            <TouchableOpacity 
+                            <TouchableOpacity
+                                style={styles.attachmentOption}
+                                onPress={handleQuickMessage}
+                            >
+                                <View style={[styles.attachmentIcon, { backgroundColor: '#FFF3E0' }]}>
+                                    <Icon name="flash" size={24} color="#FF9800" />
+                                </View>
+                                <Text style={styles.attachmentLabel}>Quick Message</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
                                 style={styles.attachmentOption}
                                 onPress={handleCameraLaunch}
                             >
@@ -1766,12 +1918,12 @@ export default function ChatScreen({ route, navigation }) {
                                 </View>
                                 <Text style={styles.attachmentLabel}>Camera</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 style={styles.attachmentOption}
                                 onPress={handleImagePicker}
                             >
                                 <View style={[styles.attachmentIcon, { backgroundColor: '#E3F2FD' }]}>
-                                    <Icon name="image" size={24} color="#2196F3" />
+                                    <Icon name="images" size={24} color="#2196F3" />
                                 </View>
                                 <Text style={styles.attachmentLabel}>Gallery</Text>
                             </TouchableOpacity>
@@ -1779,19 +1931,10 @@ export default function ChatScreen({ route, navigation }) {
                                 style={styles.attachmentOption}
                                 onPress={handleDocumentPicker}
                             >
-                                <View style={[styles.attachmentIcon, { backgroundColor: '#FFF3E0' }]}>
-                                    <Icon name="document" size={24} color="#FF9800" />
+                                <View style={[styles.attachmentIcon, { backgroundColor: '#E0F2F1' }]}>
+                                    <Icon name="document" size={24} color="#00796B" />
                                 </View>
                                 <Text style={styles.attachmentLabel}>Document</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={styles.attachmentOption}
-                                onPress={handleVideoPicker}
-                            >
-                                <View style={[styles.attachmentIcon, { backgroundColor: '#E0F2F1' }]}>
-                                    <Icon name="videocam" size={24} color="#00796B" />
-                                </View>
-                                <Text style={styles.attachmentLabel}>Video</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={styles.attachmentOption}
@@ -1866,19 +2009,16 @@ export default function ChatScreen({ route, navigation }) {
                     setContactSearchQuery('');
                 }}
             >
-                <TouchableOpacity
-                    style={styles.contactPickerContainer}
-                    activeOpacity={1}
-                    onPress={() => {
-                        setShowContactPicker(false);
-                        setContactSearchQuery('');
-                    }}
-                >
+                <View style={styles.contactPickerContainer}>
                     <TouchableOpacity
-                        style={styles.contactPickerContent}
+                        style={styles.contactPickerOverlay}
                         activeOpacity={1}
-                        onPress={(e) => e.stopPropagation()}
-                    >
+                        onPress={() => {
+                            setShowContactPicker(false);
+                            setContactSearchQuery('');
+                        }}
+                    />
+                    <View style={styles.contactPickerContent}>
                         <View style={styles.contactPickerHeader}>
                             <Text style={styles.contactPickerTitle}>Select Contact</Text>
                             <TouchableOpacity
@@ -1926,6 +2066,7 @@ export default function ChatScreen({ route, navigation }) {
                                 </TouchableOpacity>
                             )}
                             style={styles.contactList}
+                            contentContainerStyle={styles.contactListContent}
                             ListEmptyComponent={
                                 <View style={styles.emptyContactsContainer}>
                                     <Text style={styles.emptyContactsText}>
@@ -1934,8 +2075,79 @@ export default function ChatScreen({ route, navigation }) {
                                 </View>
                             }
                         />
-                    </TouchableOpacity>
-                </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Quick Message Modal */}
+            <Modal
+                visible={showQuickMessageModal}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => {
+                    setShowQuickMessageModal(false);
+                    setEditableQuickMessage('');
+                }}
+            >
+                <View style={styles.quickMessageContainer}>
+                    <TouchableOpacity
+                        style={styles.quickMessageOverlay}
+                        activeOpacity={1}
+                        onPress={() => {
+                            setShowQuickMessageModal(false);
+                            setEditableQuickMessage('');
+                        }}
+                    />
+                    <KeyboardAvoidingView
+                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        style={styles.quickMessageContent}
+                    >
+                        <View style={styles.quickMessageHeader}>
+                            <Text style={styles.quickMessageTitle}>Quick Message</Text>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    setShowQuickMessageModal(false);
+                                    setEditableQuickMessage('');
+                                }}
+                            >
+                                <Icon name="close" size={24} color="#2C3D5B" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text style={styles.quickMessageLabel}>Edit message before sending:</Text>
+
+                        <ScrollView style={styles.quickMessageScroll}>
+                            <TextInput
+                                style={styles.quickMessageInput}
+                                value={editableQuickMessage}
+                                onChangeText={setEditableQuickMessage}
+                                multiline
+                                placeholder="Your quick message will appear here..."
+                                placeholderTextColor="#999"
+                            />
+                        </ScrollView>
+
+                        <View style={styles.quickMessageButtons}>
+                            <TouchableOpacity
+                                style={[styles.quickMessageButton, styles.quickMessageCancelButton]}
+                                onPress={() => {
+                                    setShowQuickMessageModal(false);
+                                    setEditableQuickMessage('');
+                                }}
+                            >
+                                <Text style={[styles.quickMessageButtonText, styles.quickMessageCancelText]}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.quickMessageButton, styles.quickMessageSendButton, { backgroundColor: theme.colors.primary }]}
+                                onPress={handleSendQuickMessage}
+                                disabled={!editableQuickMessage.trim()}
+                            >
+                                <Icon name="send" size={18} color="#fff" style={styles.quickMessageSendIcon} />
+                                <Text style={styles.quickMessageSendText}>Send</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </KeyboardAvoidingView>
+                </View>
             </Modal>
         </KeyboardAvoidingView>
     );
@@ -2291,15 +2503,22 @@ const styles = StyleSheet.create({
     },
     contactPickerContainer: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
         justifyContent: 'flex-end',
+    },
+    contactPickerOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
     },
     contactPickerContent: {
         backgroundColor: '#fff',
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
-        maxHeight: '80%',
-        paddingBottom: 20,
+        height: '80%',
+        paddingBottom: Platform.OS === 'ios' ? 34 : 20,
     },
     contactPickerHeader: {
         flexDirection: 'row',
@@ -2333,6 +2552,9 @@ const styles = StyleSheet.create({
     },
     contactList: {
         flex: 1,
+    },
+    contactListContent: {
+        flexGrow: 1,
     },
     contactItem: {
         flexDirection: 'row',
@@ -2371,5 +2593,90 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#8B95A5',
         textAlign: 'center',
+    },
+    quickMessageContainer: {
+        flex: 1,
+        justifyContent: 'flex-end',
+    },
+    quickMessageOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    quickMessageContent: {
+        backgroundColor: '#fff',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        maxHeight: '85%',
+        paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    },
+    quickMessageHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E5E5',
+    },
+    quickMessageTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#2C3D5B',
+    },
+    quickMessageLabel: {
+        fontSize: 14,
+        color: '#666',
+        paddingHorizontal: 20,
+        paddingTop: 16,
+        paddingBottom: 8,
+    },
+    quickMessageScroll: {
+        flex: 1,
+        paddingHorizontal: 20,
+    },
+    quickMessageInput: {
+        backgroundColor: '#F5F5F5',
+        borderRadius: 12,
+        padding: 16,
+        fontSize: 15,
+        color: '#2C3D5B',
+        minHeight: 200,
+        textAlignVertical: 'top',
+    },
+    quickMessageButtons: {
+        flexDirection: 'row',
+        padding: 20,
+        gap: 12,
+    },
+    quickMessageButton: {
+        flex: 1,
+        paddingVertical: 14,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'row',
+    },
+    quickMessageCancelButton: {
+        backgroundColor: '#F5F5F5',
+    },
+    quickMessageSendButton: {
+        // backgroundColor set dynamically from theme
+    },
+    quickMessageButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    quickMessageCancelText: {
+        color: '#666',
+    },
+    quickMessageSendText: {
+        color: '#fff',
+        marginLeft: 8,
+    },
+    quickMessageSendIcon: {
+        marginRight: 4,
     },
 });
