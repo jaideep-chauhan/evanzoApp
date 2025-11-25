@@ -1,5 +1,6 @@
 import api from './api';
 import { Share } from 'react-native';
+import savedEventsStorage from './savedEventsStorage';
 
 class EventDetailsService {
     // Check if event is saved by current user
@@ -7,39 +8,65 @@ class EventDetailsService {
         try {
             // Convert eventId to number
             const eventIdNum = parseInt(eventId, 10);
-            
+
             if (isNaN(eventIdNum)) {
                 console.error('Invalid eventId for isEventSaved:', eventId);
                 return false;
             }
-            
-            console.log('Checking if event is saved, eventId:', eventIdNum);
-            
-            // Make a direct API call to check if this specific event is saved
-            const response = await api.get('/profile/saved-items', {
-                params: {
-                    itemType: 'event',
-                    limit: 100 // Get more items to ensure we find it
-                }
-            });
-            
-            console.log('Saved events response:', response.data);
-            
-            if (response.data.status && response.data.data) {
-                const savedItems = response.data.data.items || response.data.data;
-                // Check if this event is in the saved items
-                const isSaved = savedItems.some(item => {
-                    const itemId = item.item_id || item.itemId;
-                    return parseInt(itemId, 10) === eventIdNum;
+
+            console.log('🔍 Checking if event is saved, eventId:', eventIdNum);
+
+            // Try to check backend first (primary source of truth)
+            try {
+                const response = await api.get('/profile/saved-items', {
+                    params: {
+                        itemType: 'event',
+                        limit: 500
+                    }
                 });
-                
-                console.log('Event saved status:', isSaved);
-                return isSaved;
+
+                console.log('📦 Saved events API response:', JSON.stringify(response.data, null, 2));
+
+                if (response.data.status && response.data.data) {
+                    const savedItems = response.data.data.items || response.data.data;
+                    console.log('📋 Total saved items:', Array.isArray(savedItems) ? savedItems.length : 0);
+
+                    // Check if this event is in the saved items
+                    const isSaved = savedItems.some(item => {
+                        const itemId = item.item_id || item.itemId || item.event_ad_id || item.id;
+                        const itemIdNum = parseInt(itemId, 10);
+                        console.log(`  Comparing saved item ID ${itemIdNum} with target ${eventIdNum}`);
+                        return itemIdNum === eventIdNum;
+                    });
+
+                    // Sync local storage with backend
+                    if (isSaved) {
+                        await savedEventsStorage.saveEvent(eventIdNum);
+                    } else {
+                        await savedEventsStorage.unsaveEvent(eventIdNum);
+                    }
+
+                    console.log('✅ Event saved status (from backend):', isSaved);
+                    return isSaved;
+                }
+
+                console.log('⚠️ No saved items data found, checking local storage');
+                const isLocallySaved = await savedEventsStorage.isEventSaved(eventIdNum);
+                return isLocallySaved;
+
+            } catch (backendError) {
+                console.error('❌ Backend check failed, falling back to local storage:', {
+                    message: backendError.message,
+                    status: backendError.response?.status
+                });
+
+                // Fall back to local storage if backend fails
+                const isLocallySaved = await savedEventsStorage.isEventSaved(eventIdNum);
+                console.log('✅ Event saved status (from local storage):', isLocallySaved);
+                return isLocallySaved;
             }
-            
-            return false;
         } catch (error) {
-            console.error('Check event saved error:', error);
+            console.error('❌ Check event saved error:', error);
             return false;
         }
     }
@@ -49,7 +76,7 @@ class EventDetailsService {
         try {
             // Ensure eventId is a number
             const itemId = parseInt(eventId, 10);
-            
+
             if (isNaN(itemId)) {
                 console.error('Invalid eventId:', eventId);
                 return {
@@ -57,23 +84,30 @@ class EventDetailsService {
                     message: 'Invalid event ID'
                 };
             }
-            
+
             console.log('Toggling save for event with itemId:', itemId);
-            
+
             const response = await api.post('/profile/saved-items/toggle', {
                 itemId: itemId,
                 itemType: 'event'
             });
-            
+
             console.log('Toggle save event response:', response.data);
-            
+
             // The backend returns: { status: true, message: '...', data: { saved: true/false, message: '...' } }
-            const isSaved = response.data.data?.saved !== undefined ? response.data.data.saved : 
+            const isSaved = response.data.data?.saved !== undefined ? response.data.data.saved :
                            response.data.saved !== undefined ? response.data.saved :
                            true; // Default to saved if we got a successful response
-            
+
             const message = response.data.data?.message || response.data.message || (isSaved ? 'Event saved' : 'Event unsaved');
-            
+
+            // Update local storage to match backend state
+            if (isSaved) {
+                await savedEventsStorage.saveEvent(itemId);
+            } else {
+                await savedEventsStorage.unsaveEvent(itemId);
+            }
+
             return {
                 success: true,
                 saved: isSaved,

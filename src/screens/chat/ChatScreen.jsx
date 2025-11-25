@@ -1890,64 +1890,73 @@ export default function ChatScreen({ route, navigation }) {
                 animationType="slide"
                 onRequestClose={() => setShowAttachmentModal(false)}
             >
-                <TouchableOpacity 
-                    style={styles.modalOverlay}
-                    activeOpacity={1}
-                    onPress={() => setShowAttachmentModal(false)}
-                >
+                <View style={styles.modalOverlay}>
+                    <TouchableOpacity
+                        style={styles.modalBackdrop}
+                        activeOpacity={1}
+                        onPress={() => setShowAttachmentModal(false)}
+                    />
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
                             <Text style={styles.modalTitle}>Send Attachment</Text>
-                        </View>
-                        <View style={styles.attachmentOptions}>
-                            <TouchableOpacity
-                                style={styles.attachmentOption}
-                                onPress={handleQuickMessage}
-                            >
-                                <View style={[styles.attachmentIcon, { backgroundColor: '#FFF3E0' }]}>
-                                    <Icon name="flash" size={24} color="#FF9800" />
-                                </View>
-                                <Text style={styles.attachmentLabel}>Quick Message</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={styles.attachmentOption}
-                                onPress={handleCameraLaunch}
-                            >
-                                <View style={[styles.attachmentIcon, { backgroundColor: '#F3E5F5' }]}>
-                                    <Icon name="camera" size={24} color="#9C27B0" />
-                                </View>
-                                <Text style={styles.attachmentLabel}>Camera</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={styles.attachmentOption}
-                                onPress={handleImagePicker}
-                            >
-                                <View style={[styles.attachmentIcon, { backgroundColor: '#E3F2FD' }]}>
-                                    <Icon name="images" size={24} color="#2196F3" />
-                                </View>
-                                <Text style={styles.attachmentLabel}>Gallery</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={styles.attachmentOption}
-                                onPress={handleDocumentPicker}
-                            >
-                                <View style={[styles.attachmentIcon, { backgroundColor: '#E0F2F1' }]}>
-                                    <Icon name="document" size={24} color="#00796B" />
-                                </View>
-                                <Text style={styles.attachmentLabel}>Document</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={styles.attachmentOption}
-                                onPress={handleContactPicker}
-                            >
-                                <View style={[styles.attachmentIcon, { backgroundColor: '#E8F5E9' }]}>
-                                    <Icon name="person" size={24} color="#4CAF50" />
-                                </View>
-                                <Text style={styles.attachmentLabel}>Contact</Text>
+                            <TouchableOpacity onPress={() => setShowAttachmentModal(false)}>
+                                <Icon name="close" size={24} color="#2C3D5B" />
                             </TouchableOpacity>
                         </View>
+                        <ScrollView
+                            contentContainerStyle={styles.attachmentScrollContent}
+                            showsVerticalScrollIndicator={false}
+                        >
+                            <View style={styles.attachmentGrid}>
+                                <TouchableOpacity
+                                    style={styles.attachmentOption}
+                                    onPress={handleQuickMessage}
+                                >
+                                    <View style={[styles.attachmentIcon, { backgroundColor: '#FFF3E0' }]}>
+                                        <Icon name="flash" size={28} color="#FF9800" />
+                                    </View>
+                                    <Text style={styles.attachmentLabel}>Quick{'\n'}Message</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.attachmentOption}
+                                    onPress={handleCameraLaunch}
+                                >
+                                    <View style={[styles.attachmentIcon, { backgroundColor: '#F3E5F5' }]}>
+                                        <Icon name="camera" size={28} color="#9C27B0" />
+                                    </View>
+                                    <Text style={styles.attachmentLabel}>Camera</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.attachmentOption}
+                                    onPress={handleImagePicker}
+                                >
+                                    <View style={[styles.attachmentIcon, { backgroundColor: '#E3F2FD' }]}>
+                                        <Icon name="images" size={28} color="#2196F3" />
+                                    </View>
+                                    <Text style={styles.attachmentLabel}>Gallery</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.attachmentOption}
+                                    onPress={handleDocumentPicker}
+                                >
+                                    <View style={[styles.attachmentIcon, { backgroundColor: '#E0F2F1' }]}>
+                                        <Icon name="document" size={28} color="#00796B" />
+                                    </View>
+                                    <Text style={styles.attachmentLabel}>Document</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.attachmentOption}
+                                    onPress={handleContactPicker}
+                                >
+                                    <View style={[styles.attachmentIcon, { backgroundColor: '#E8F5E9' }]}>
+                                        <Icon name="person" size={28} color="#4CAF50" />
+                                    </View>
+                                    <Text style={styles.attachmentLabel}>Contact</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </ScrollView>
                     </View>
-                </TouchableOpacity>
+                </View>
             </Modal>
 
             {/* Reaction Picker Modal */}
@@ -2450,16 +2459,27 @@ const styles = StyleSheet.create({
     },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
         justifyContent: 'flex-end',
+    },
+    modalBackdrop: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.5)',
     },
     modalContent: {
         backgroundColor: '#fff',
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
-        paddingBottom: 30,
+        paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+        maxHeight: '70%',
     },
     modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         padding: 20,
         borderBottomWidth: 1,
         borderBottomColor: '#e3e8f0',
@@ -2468,7 +2488,16 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: '600',
         color: '#2C3D5B',
-        textAlign: 'center',
+    },
+    attachmentScrollContent: {
+        paddingVertical: 20,
+        paddingHorizontal: 16,
+    },
+    attachmentGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        gap: 16,
     },
     deletedBubble: {
         backgroundColor: '#f5f5f5',
@@ -2480,26 +2509,32 @@ const styles = StyleSheet.create({
         fontStyle: 'italic',
         fontSize: 14,
     },
-    attachmentOptions: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        padding: 30,
-    },
     attachmentOption: {
         alignItems: 'center',
+        justifyContent: 'center',
+        width: '30%',
+        minWidth: 90,
+        marginBottom: 16,
     },
     attachmentIcon: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
+        width: 64,
+        height: 64,
+        borderRadius: 32,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 10,
+        marginBottom: 8,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
     },
     attachmentLabel: {
-        fontSize: 14,
+        fontSize: 12,
         color: '#2C3D5B',
-        fontWeight: '500',
+        fontWeight: '600',
+        textAlign: 'center',
+        lineHeight: 16,
     },
     contactPickerContainer: {
         flex: 1,
