@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
     View,
     Text,
@@ -21,10 +21,12 @@ import { useTheme } from '../../ThemeContext';
 // import img from '../../assets/images/dummy.png'; // Removed unused import
 import vendorService from '../../services/vendorService';
 import eventService from '../../services/eventService';
+import categoryService from '../../services/categoryService';
 import { CustomSuccessModal } from '../../components/CustomSuccessModal';
 import { CustomToast } from '../../components/CustomToast';
 import ImageEditorModal from '../../components/ImageEditorModal';
 import LocationAutocomplete from '../../components/LocationAutocomplete';
+import CategorySelectionModalEnhanced from '../vendors/CategorySelectionModalEnhanced';
 
 const CreateAddForm = ({ type, onClose }) => {
     const theme = useTheme();
@@ -32,8 +34,11 @@ const CreateAddForm = ({ type, onClose }) => {
 
     // Event Ad fields
     const [service, setService] = useState('');
-    const [eventType, setEventType] = useState('');
+    const [eventType, setEventType] = useState(null); // Will store category IDs array
+    const [eventTypeNames, setEventTypeNames] = useState([]); // Will store category names for display
+    const [selectedEventCategoryData, setSelectedEventCategoryData] = useState([]); // Full category data with subcategories
     const [eventTags, setEventTags] = useState([]);
+    const [availableEventTags, setAvailableEventTags] = useState([]); // Dynamic tags based on selected event category
     const [location, setLocation] = useState('');
     const [date, setDate] = useState(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
@@ -42,17 +47,24 @@ const CreateAddForm = ({ type, onClose }) => {
     const [budget, setBudget] = useState('');
     const [description, setDescription] = useState('');
     const [showServiceDropdown, setShowServiceDropdown] = useState(false);
-    const [showEventTypeDropdown, setShowEventTypeDropdown] = useState(false);
+    const [showEventCategoryModal, setShowEventCategoryModal] = useState(false);
+    const [eventCategories, setEventCategories] = useState([]); // Available event categories from backend
+    const [filteredEventCategories, setFilteredEventCategories] = useState([]); // Filtered based on selected service
 
     // Vendor Ad fields
-    const [category, setCategory] = useState('Photographer');
+    const [category, setCategory] = useState(null); // Will store category IDs array
+    const [categoryNames, setCategoryNames] = useState([]); // Will store category names for display
+    const [selectedCategoryData, setSelectedCategoryData] = useState([]); // Full category data with subcategories
     const [vendorDescription, setVendorDescription] = useState('');
     const [companyName, setCompanyName] = useState('');
     const [vendorLocation, setVendorLocation] = useState('Ontario, Canada');
     const [selectedTags, setSelectedTags] = useState([]);
+    const [availableTags, setAvailableTags] = useState([]); // Dynamic tags based on selected category
     const [offers, setOffers] = useState([{ amount: '', discount: '' }]);
     const [photos, setPhotos] = useState([]);
-    const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+    const [showCategoryModal, setShowCategoryModal] = useState(false);
+    const [vendorCategories, setVendorCategories] = useState([]); // Available categories from backend
+    const [categorySearchQuery, setCategorySearchQuery] = useState('');
 
     // Loading state
     const [isLoading, setIsLoading] = useState(false);
@@ -62,6 +74,97 @@ const CreateAddForm = ({ type, onClose }) => {
     // Image editor modal
     const [showImageEditor, setShowImageEditor] = useState(false);
     const [tempSelectedImages, setTempSelectedImages] = useState([]);
+
+    // Fetch vendor categories on mount
+    useEffect(() => {
+        const loadVendorCategories = async () => {
+            try {
+                const response = await categoryService.getVendorCategories(true); // Include subcategories
+                if (response.success && response.data) {
+                    setVendorCategories(response.data);
+                    console.log('✅ Loaded vendor categories:', response.data.length);
+                }
+            } catch (error) {
+                console.error('Error loading vendor categories:', error);
+            }
+        };
+
+        const loadEventCategories = async () => {
+            try {
+                const response = await categoryService.getEventCategories(true); // Include subcategories
+                if (response.success && response.data) {
+                    setEventCategories(response.data);
+                    console.log('✅ Loaded event categories:', response.data.length);
+                }
+            } catch (error) {
+                console.error('Error loading event categories:', error);
+            }
+        };
+
+        if (type === 'vendor') {
+            loadVendorCategories();
+        } else if (type === 'event') {
+            loadEventCategories();
+        }
+    }, [type]);
+
+    // Service name to category name mapping
+    const serviceToCategoryMap = {
+        'Photographer': 'Photography',
+        'Videographer': 'Videography',
+        'Caterer': 'Catering',
+        'Decorator': 'Event Decoration',
+        'DJ': 'DJ / Music',
+        'Event Planner': 'Event Planning',
+        'Florist': 'Florist',
+        'Makeup Artist': 'Makeup Artist',
+        'Venue': 'Venue Rental',
+        'Transport': 'Transportation',
+        'Security': 'Security Services',
+        'Sound System': 'Audio Visual',
+        'Lighting': 'Lighting',
+        'Entertainment': 'Entertainment',
+    };
+
+    // Filter event categories when service changes
+    useEffect(() => {
+        if (!service || eventCategories.length === 0) {
+            setFilteredEventCategories([]);
+            return;
+        }
+
+        // Map service to category name
+        const categoryName = serviceToCategoryMap[service];
+
+        if (!categoryName) {
+            console.log('⚠️ No category mapping found for service:', service);
+            setFilteredEventCategories([]);
+            return;
+        }
+
+        // Find the matching category
+        const matchingCategory = eventCategories.find(
+            cat => cat.name.toLowerCase() === categoryName.toLowerCase()
+        );
+
+        if (matchingCategory) {
+            // If category has subcategories, show only those as available options
+            if (matchingCategory.subcategories && matchingCategory.subcategories.length > 0) {
+                console.log('✅ Found matching category with subcategories:', {
+                    service,
+                    category: matchingCategory.name,
+                    subcategoriesCount: matchingCategory.subcategories.length
+                });
+                setFilteredEventCategories(matchingCategory.subcategories);
+            } else {
+                console.log('⚠️ Category has no subcategories:', matchingCategory.name);
+                setFilteredEventCategories([]);
+            }
+        } else {
+            console.log('⚠️ No matching category found for:', categoryName);
+            setFilteredEventCategories([]);
+        }
+    }, [service, eventCategories]);
 
     // Categories list
     const categories = [
@@ -271,7 +374,7 @@ const CreateAddForm = ({ type, onClose }) => {
         try {
             if (type === 'event') {
                 // Validate event fields
-                if (!service || !eventType || !location || !dateSelected) {
+                if (!service || !eventType || eventTypeNames.length === 0 || !location || !dateSelected) {
                     setToastState({ visible: true, message: 'Please fill in all required fields', type: 'error' });
                     setIsLoading(false);
                     return;
@@ -321,7 +424,8 @@ const CreateAddForm = ({ type, onClose }) => {
                 
                 // Add text fields
                 formData.append('service_needed', service);
-                formData.append('event_type', eventType);
+                // Send event categories as array of IDs
+                formData.append('categories', JSON.stringify(eventType || []));
                 formData.append('event_tags', JSON.stringify(eventTags));
                 formData.append('location', location);
                 formData.append('date', date.toISOString().split('T')[0]); // Format as YYYY-MM-DD
@@ -392,7 +496,8 @@ const CreateAddForm = ({ type, onClose }) => {
                 
                 // Add text fields
                 formData.append('title', companyName);
-                formData.append('category', category);
+                // Send categories as array of IDs
+                formData.append('categories', JSON.stringify(category || []));
                 formData.append('description', vendorDescription || '');
                 formData.append('company_name', companyName);
                 formData.append('location', vendorLocation);
@@ -435,6 +540,70 @@ const CreateAddForm = ({ type, onClose }) => {
         if (onClose) onClose();
     };
 
+    const handleCategorySelect = (categoryIds, categoryData) => {
+        console.log('📋 Category selected:', { categoryIds, categoryData });
+        setCategory(categoryIds);
+        setSelectedCategoryData(categoryData || []);
+
+        if (categoryData) {
+            setCategoryNames(categoryData.map(cat => cat.name));
+
+            // Extract subcategories as available tags
+            // If subcategories were selected, use them as tags
+            // Otherwise, fetch parent category's subcategories
+            if (categoryData.length > 0 && categoryData[0].parent_id) {
+                // These are subcategories, use them as tags
+                setAvailableTags(categoryData.map(cat => cat.name));
+            } else {
+                // This is a parent category, get its subcategories for tags
+                const parentCategory = categoryData[0];
+                if (parentCategory && parentCategory.subcategories && parentCategory.subcategories.length > 0) {
+                    setAvailableTags(parentCategory.subcategories.map(sub => sub.name));
+                } else {
+                    setAvailableTags([]);
+                }
+            }
+        } else {
+            setCategoryNames([]);
+            setAvailableTags([]);
+        }
+
+        // Reset selected tags when category changes
+        setSelectedTags([]);
+        setShowCategoryModal(false);
+    };
+
+    const handleEventCategorySelect = (categoryIds, categoryData) => {
+        console.log('📋 Event category selected:', { categoryIds, categoryData });
+        setEventType(categoryIds);
+        setSelectedEventCategoryData(categoryData || []);
+
+        if (categoryData) {
+            setEventTypeNames(categoryData.map(cat => cat.name));
+
+            // Extract subcategories as available tags
+            if (categoryData.length > 0 && categoryData[0].parent_id) {
+                // These are subcategories, use them as tags
+                setAvailableEventTags(categoryData.map(cat => cat.name));
+            } else {
+                // This is a parent category, get its subcategories for tags
+                const parentCategory = categoryData[0];
+                if (parentCategory && parentCategory.subcategories && parentCategory.subcategories.length > 0) {
+                    setAvailableEventTags(parentCategory.subcategories.map(sub => sub.name));
+                } else {
+                    setAvailableEventTags([]);
+                }
+            }
+        } else {
+            setEventTypeNames([]);
+            setAvailableEventTags([]);
+        }
+
+        // Reset selected event tags when category changes
+        setEventTags([]);
+        setShowEventCategoryModal(false);
+    };
+
     return (
         <KeyboardAvoidingView
             style={styles.modalBorderWrapPro}
@@ -472,34 +641,69 @@ const CreateAddForm = ({ type, onClose }) => {
                         <View style={styles.fieldGroupPro}>
                             <Text style={styles.labelPro}>Event Type</Text>
                             <TouchableOpacity
-                                style={[styles.inputPro, styles.dropdownButton]}
-                                onPress={() => setShowEventTypeDropdown(true)}
+                                style={[
+                                    styles.inputPro,
+                                    styles.dropdownButton,
+                                    !service && { opacity: 0.6 }
+                                ]}
+                                onPress={() => {
+                                    if (service) {
+                                        setShowEventCategoryModal(true);
+                                    } else {
+                                        setToastState({
+                                            visible: true,
+                                            message: 'Please select a service first',
+                                            type: 'error'
+                                        });
+                                    }
+                                }}
                             >
-                                <Text style={styles.dropdownText}>{eventType || 'Select event type'}</Text>
+                                <Text style={styles.dropdownText}>
+                                    {eventTypeNames.length > 0
+                                        ? (eventTypeNames.length > 2
+                                            ? `${eventTypeNames.length} categories selected`
+                                            : eventTypeNames.join(', '))
+                                        : service
+                                            ? 'Select event type'
+                                            : 'Select a service first'}
+                                </Text>
                                 <Icon name="chevron-down" size={20} color="#ffffff80" />
                             </TouchableOpacity>
+                            {service && eventCategories.length > 0 && filteredEventCategories.length === 0 && (
+                                <Text style={[styles.helperText, { color: '#ffcc00', marginTop: 8 }]}>
+                                    No event types available for {service}
+                                </Text>
+                            )}
 
                             {/* Event Type Tags */}
-                            {eventType && (
-                                <View style={styles.tagsContainer}>
-                                    {eventTypeTagOptions.map((tag) => (
-                                        <TouchableOpacity
-                                            key={tag}
-                                            style={[
-                                                styles.tagButton,
-                                                eventTags.includes(tag) && styles.tagButtonSelected
-                                            ]}
-                                            onPress={() => toggleEventTag(tag)}
-                                        >
-                                            <Text style={[
-                                                styles.tagText,
-                                                eventTags.includes(tag) && styles.tagTextSelected
-                                            ]}>
-                                                {tag}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </View>
+                            {eventTypeNames.length > 0 && (
+                                <>
+                                    {availableEventTags.length > 0 ? (
+                                        <View style={styles.tagsContainer}>
+                                            {availableEventTags.map((tag) => (
+                                                <TouchableOpacity
+                                                    key={tag}
+                                                    style={[
+                                                        styles.tagButton,
+                                                        eventTags.includes(tag) && styles.tagButtonSelected
+                                                    ]}
+                                                    onPress={() => toggleEventTag(tag)}
+                                                >
+                                                    <Text style={[
+                                                        styles.tagText,
+                                                        eventTags.includes(tag) && styles.tagTextSelected
+                                                    ]}>
+                                                        {tag}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    ) : (
+                                        <Text style={[styles.helperText, { color: '#999', marginTop: 8 }]}>
+                                            No specific services available for this category
+                                        </Text>
+                                    )}
+                                </>
                             )}
                         </View>
 
@@ -514,54 +718,68 @@ const CreateAddForm = ({ type, onClose }) => {
                             />
                         </View>
 
-                        <View style={styles.rowPro}>
-                            <View style={[styles.fieldGroupPro, styles.halfPro]}>
-                                <Text style={styles.labelPro}>Date</Text>
-                                <TouchableOpacity
-                                    style={[styles.inputPro, styles.datePickerButton]}
-                                    onPress={() => setShowDatePicker(true)}
-                                >
-                                    <Text style={dateSelected ? styles.dateText : styles.placeholderText}>
-                                        {dateSelected ? date.toLocaleDateString() : 'Select Date'}
-                                    </Text>
-                                    <Icon name="calendar" size={20} color="#ffffff80" />
-                                </TouchableOpacity>
-                                {showDatePicker && (
+                        <View style={styles.fieldGroupPro}>
+                            <Text style={styles.labelPro}>Date</Text>
+                            <TouchableOpacity
+                                style={[styles.inputPro, styles.datePickerButton]}
+                                onPress={() => setShowDatePicker(true)}
+                            >
+                                <Text style={dateSelected ? styles.dateText : styles.placeholderText}>
+                                    {dateSelected ? date.toLocaleDateString() : 'Select Date'}
+                                </Text>
+                                <Icon name="calendar" size={20} color="#ffffff80" />
+                            </TouchableOpacity>
+                            {showDatePicker && Platform.OS === 'ios' && (
+                                <View style={styles.datePickerContainer}>
                                     <DateTimePicker
                                         value={date}
                                         mode="date"
-                                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                                        display="spinner"
                                         onChange={(event, selectedDate) => {
-                                            setShowDatePicker(Platform.OS === 'android');
+                                            setShowDatePicker(false);
                                             if (selectedDate) {
                                                 setDate(selectedDate);
                                                 setDateSelected(true);
                                             }
                                         }}
                                         minimumDate={new Date()}
+                                        themeVariant="dark"
+                                        textColor="#ffffff"
+                                        style={styles.datePicker}
                                     />
-                                )}
-                            </View>
-                            <View style={[styles.fieldGroupPro, styles.halfPro]}>
-                                <Text style={styles.labelPro}>Duration</Text>
-                                <TextInput
-                                    style={styles.inputPro}
-                                    value={duration}
-                                    onChangeText={setDuration}
-                                    placeholder="e.g. 4 hours"
-                                    placeholderTextColor="#ffffff80"
-                                    onFocus={() => {
-                                        setTimeout(() => {
-                                            scrollViewRef.current?.scrollTo({ y: 400, animated: true });
-                                        }, 300);
-                                    }}
-                                />
-                            </View>
-                            {type === 'vendor' && photos.length > 0 && (
-                                <Text style={styles.photoCount}>
-                                    {photos.length} / 10 photos (minimum)
-                                </Text>
+                                </View>
                             )}
+                            {showDatePicker && Platform.OS === 'android' && (
+                                <DateTimePicker
+                                    value={date}
+                                    mode="date"
+                                    display="default"
+                                    onChange={(event, selectedDate) => {
+                                        setShowDatePicker(false);
+                                        if (selectedDate) {
+                                            setDate(selectedDate);
+                                            setDateSelected(true);
+                                        }
+                                    }}
+                                    minimumDate={new Date()}
+                                />
+                            )}
+                        </View>
+
+                        <View style={styles.fieldGroupPro}>
+                            <Text style={styles.labelPro}>Duration (optional)</Text>
+                            <TextInput
+                                style={styles.inputPro}
+                                value={duration}
+                                onChangeText={setDuration}
+                                placeholder="e.g. 4 hours"
+                                placeholderTextColor="#ffffff80"
+                                onFocus={() => {
+                                    setTimeout(() => {
+                                        scrollViewRef.current?.scrollTo({ y: 400, animated: true });
+                                    }, 300);
+                                }}
+                            />
                         </View>
 
                         <View style={styles.fieldGroupPro}>
@@ -655,9 +873,11 @@ const CreateAddForm = ({ type, onClose }) => {
                             <Text style={styles.labelPro}>Category</Text>
                             <TouchableOpacity
                                 style={[styles.inputPro, styles.dropdownButton]}
-                                onPress={() => setShowCategoryDropdown(true)}
+                                onPress={() => setShowCategoryModal(true)}
                             >
-                                <Text style={styles.dropdownText}>{category || 'Select Category'}</Text>
+                                <Text style={styles.dropdownText}>
+                                    {categoryNames.length > 0 ? categoryNames[0] : 'Select Category'}
+                                </Text>
                                 <Icon name="chevron-down" size={20} color="#ffffff80" />
                             </TouchableOpacity>
                         </View>
@@ -679,35 +899,41 @@ const CreateAddForm = ({ type, onClose }) => {
                         </View>
 
                         <View style={styles.fieldGroupPro}>
-                            <Text style={styles.labelPro}>Tags (Optional)</Text>
-                            <View style={styles.tagsInputContainer}>
-                                <ScrollView
-                                    horizontal={false}
-                                    style={styles.tagsScrollView}
-                                    showsVerticalScrollIndicator={false}
-                                    nestedScrollEnabled={true}
-                                >
-                                    <View style={styles.tagsContainer}>
-                                        {tagOptions.map((tag) => (
-                                            <TouchableOpacity
-                                                key={tag}
-                                                style={[
-                                                    styles.tagButton,
-                                                    selectedTags.includes(tag) && styles.tagButtonSelected
-                                                ]}
-                                                onPress={() => toggleTag(tag)}
-                                            >
-                                                <Text style={[
-                                                    styles.tagText,
-                                                    selectedTags.includes(tag) && styles.tagTextSelected
-                                                ]}>
-                                                    {tag}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        ))}
-                                    </View>
-                                </ScrollView>
-                            </View>
+                            <Text style={styles.labelPro}>Services Offered (Optional)</Text>
+                            {availableTags.length > 0 ? (
+                                <View style={styles.tagsInputContainer}>
+                                    <ScrollView
+                                        horizontal={false}
+                                        style={styles.tagsScrollView}
+                                        showsVerticalScrollIndicator={false}
+                                        nestedScrollEnabled={true}
+                                    >
+                                        <View style={styles.tagsContainer}>
+                                            {availableTags.map((tag) => (
+                                                <TouchableOpacity
+                                                    key={tag}
+                                                    style={[
+                                                        styles.tagButton,
+                                                        selectedTags.includes(tag) && styles.tagButtonSelected
+                                                    ]}
+                                                    onPress={() => toggleTag(tag)}
+                                                >
+                                                    <Text style={[
+                                                        styles.tagText,
+                                                        selectedTags.includes(tag) && styles.tagTextSelected
+                                                    ]}>
+                                                        {tag}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    </ScrollView>
+                                </View>
+                            ) : (
+                                <Text style={[styles.helperText, { color: '#999', marginTop: 8 }]}>
+                                    Select a category to see available services
+                                </Text>
+                            )}
                             {type === 'vendor' && photos.length > 0 && (
                                 <Text style={styles.photoCount}>
                                     {photos.length} / 10 photos (minimum)
@@ -859,24 +1085,24 @@ const CreateAddForm = ({ type, onClose }) => {
                 </TouchableOpacity>
             </View>
 
-            {/* Category Dropdown Modal */}
+            {/* Vendor Category Dropdown Modal */}
             <Modal
-                visible={showCategoryDropdown}
+                visible={showCategoryModal}
                 transparent={true}
                 animationType="slide"
-                onRequestClose={() => setShowCategoryDropdown(false)}
+                onRequestClose={() => setShowCategoryModal(false)}
             >
                 <View style={styles.modalContainer}>
                     <TouchableOpacity
                         style={styles.modalBackdrop}
                         activeOpacity={1}
-                        onPress={() => setShowCategoryDropdown(false)}
+                        onPress={() => setShowCategoryModal(false)}
                     />
                     <View style={styles.professionalDropdown}>
                         <View style={styles.dropdownHeader}>
                             <Text style={styles.dropdownTitle}>Select Category</Text>
                             <TouchableOpacity
-                                onPress={() => setShowCategoryDropdown(false)}
+                                onPress={() => setShowCategoryModal(false)}
                                 style={styles.dropdownCloseBtn}
                             >
                                 <Icon name="close" size={24} color="#2C3D5B" />
@@ -888,35 +1114,94 @@ const CreateAddForm = ({ type, onClose }) => {
                                 style={styles.dropdownSearch}
                                 placeholder="Search category..."
                                 placeholderTextColor="#999"
+                                value={categorySearchQuery}
+                                onChangeText={setCategorySearchQuery}
                             />
                         </View>
                         <FlatList
-                            data={categories}
-                            keyExtractor={(item) => item}
-                            style={styles.dropdownList}
-                            renderItem={({ item }) => (
-                                <TouchableOpacity
-                                    style={styles.dropdownItem}
-                                    onPress={() => {
-                                        setCategory(item);
-                                        setShowCategoryDropdown(false);
-                                    }}
-                                >
-                                    <View style={styles.dropdownItemContent}>
-                                        <View style={styles.dropdownItemLeft}>
-                                            <View style={styles.dropdownItemIcon}>
-                                                <Icon name="briefcase" size={18} color={category === item ? '#2C3D5B' : '#666'} />
-                                            </View>
-                                            <Text style={[styles.dropdownItemText, category === item && styles.dropdownItemTextSelected]}>
-                                                {item}
-                                            </Text>
-                                        </View>
-                                        {category === item && (
-                                            <Icon name="checkmark-circle" size={22} color="#2C3D5B" />
-                                        )}
-                                    </View>
-                                </TouchableOpacity>
+                            data={vendorCategories.filter(cat =>
+                                cat.name.toLowerCase().includes(categorySearchQuery.toLowerCase())
                             )}
+                            keyExtractor={(item) => item.category_id?.toString() || item.id?.toString()}
+                            contentContainerStyle={styles.dropdownList}
+                            showsVerticalScrollIndicator={false}
+                            ListEmptyComponent={() => (
+                                <View style={styles.emptyDropdownState}>
+                                    <Icon name="search-outline" size={48} color="#ccc" />
+                                    <Text style={styles.emptyDropdownText}>
+                                        {categorySearchQuery ? 'No categories found' : 'No categories available'}
+                                    </Text>
+                                    {categorySearchQuery && (
+                                        <Text style={styles.emptyDropdownSubtext}>
+                                            Try a different search term
+                                        </Text>
+                                    )}
+                                </View>
+                            )}
+                            renderItem={({ item }) => {
+                                const isSelected = category && category[0] === item.category_id;
+                                const hasSubcategories = item.subcategories && item.subcategories.length > 0;
+
+                                return (
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.professionalDropdownItem,
+                                            isSelected && styles.professionalDropdownItemSelected
+                                        ]}
+                                        onPress={() => {
+                                            setCategory([item.category_id]);
+                                            setCategoryNames([item.name]);
+                                            setSelectedCategoryData([item]);
+
+                                            // Set available tags from subcategories if available
+                                            if (hasSubcategories) {
+                                                setAvailableTags(item.subcategories.map(sub => sub.name));
+                                            } else {
+                                                setAvailableTags([]);
+                                            }
+
+                                            setSelectedTags([]);
+                                            setCategorySearchQuery('');
+                                            setShowCategoryModal(false);
+                                        }}
+                                    >
+                                        <View style={styles.dropdownItemContent}>
+                                            <View style={styles.dropdownItemLeft}>
+                                                <View style={[
+                                                    styles.categoryIconContainer,
+                                                    isSelected && { backgroundColor: theme.colors.primary + '15' }
+                                                ]}>
+                                                    <Icon
+                                                        name="folder-outline"
+                                                        size={22}
+                                                        color={isSelected ? theme.colors.primary : '#666'}
+                                                    />
+                                                </View>
+                                                <View style={styles.categoryTextContainer}>
+                                                    <Text style={[
+                                                        styles.professionalDropdownItemText,
+                                                        isSelected && styles.professionalDropdownItemTextSelected
+                                                    ]}>
+                                                        {item.name}
+                                                    </Text>
+                                                    {hasSubcategories && (
+                                                        <Text style={styles.categorySubtext}>
+                                                            {item.subcategories.length} {item.subcategories.length === 1 ? 'service' : 'services'}
+                                                        </Text>
+                                                    )}
+                                                </View>
+                                            </View>
+                                            {isSelected && (
+                                                <Icon
+                                                    name="checkmark-circle"
+                                                    size={24}
+                                                    color={theme.colors.primary}
+                                                />
+                                            )}
+                                        </View>
+                                    </TouchableOpacity>
+                                );
+                            }}
                         />
                     </View>
                 </View>
@@ -962,6 +1247,12 @@ const CreateAddForm = ({ type, onClose }) => {
                                     style={styles.dropdownItem}
                                     onPress={() => {
                                         setService(item);
+                                        // Reset event type and tags when service changes
+                                        setEventType(null);
+                                        setEventTypeNames([]);
+                                        setSelectedEventCategoryData([]);
+                                        setEventTags([]);
+                                        setAvailableEventTags([]);
                                         setShowServiceDropdown(false);
                                     }}
                                 >
@@ -985,68 +1276,16 @@ const CreateAddForm = ({ type, onClose }) => {
                 </View>
             </Modal>
 
-            {/* Event Type Dropdown Modal */}
-            <Modal
-                visible={showEventTypeDropdown}
-                transparent={true}
-                animationType="slide"
-                onRequestClose={() => setShowEventTypeDropdown(false)}
-            >
-                <View style={styles.modalContainer}>
-                    <TouchableOpacity
-                        style={styles.modalBackdrop}
-                        activeOpacity={1}
-                        onPress={() => setShowEventTypeDropdown(false)}
-                    />
-                    <View style={styles.professionalDropdown}>
-                        <View style={styles.dropdownHeader}>
-                            <Text style={styles.dropdownTitle}>Select Event Type</Text>
-                            <TouchableOpacity
-                                onPress={() => setShowEventTypeDropdown(false)}
-                                style={styles.dropdownCloseBtn}
-                            >
-                                <Icon name="close" size={24} color="#2C3D5B" />
-                            </TouchableOpacity>
-                        </View>
-                        <View style={styles.dropdownSearchContainer}>
-                            <Icon name="search" size={20} color="#999" style={styles.searchIcon} />
-                            <TextInput
-                                style={styles.dropdownSearch}
-                                placeholder="Search event type..."
-                                placeholderTextColor="#999"
-                            />
-                        </View>
-                        <FlatList
-                            data={eventTypeOptions}
-                            keyExtractor={(item) => item}
-                            style={styles.dropdownList}
-                            renderItem={({ item }) => (
-                                <TouchableOpacity
-                                    style={styles.dropdownItem}
-                                    onPress={() => {
-                                        setEventType(item);
-                                        setShowEventTypeDropdown(false);
-                                    }}
-                                >
-                                    <View style={styles.dropdownItemContent}>
-                                        <View style={styles.dropdownItemLeft}>
-                                            <View style={styles.dropdownItemIcon}>
-                                                <Icon name="calendar" size={18} color={eventType === item ? '#2C3D5B' : '#666'} />
-                                            </View>
-                                            <Text style={[styles.dropdownItemText, eventType === item && styles.dropdownItemTextSelected]}>
-                                                {item}
-                                            </Text>
-                                        </View>
-                                        {eventType === item && (
-                                            <Icon name="checkmark-circle" size={22} color="#2C3D5B" />
-                                        )}
-                                    </View>
-                                </TouchableOpacity>
-                            )}
-                        />
-                    </View>
-                </View>
-            </Modal>
+            {/* Event Category Selection Modal - Enhanced with Subcategories */}
+            <CategorySelectionModalEnhanced
+                visible={showEventCategoryModal}
+                onClose={() => setShowEventCategoryModal(false)}
+                onCategorySelect={handleEventCategorySelect}
+                currentCategory={eventType}
+                screenType="events"
+                filteredCategories={filteredEventCategories.length > 0 ? filteredEventCategories : null}
+                showOnlySubcategories={filteredEventCategories.length > 0}
+            />
             
             {/* Custom Success Modal */}
             <CustomSuccessModal
@@ -1518,5 +1757,82 @@ const styles = StyleSheet.create({
     placeholderText: {
         color: '#ffffff80',
         fontSize: 15,
+    },
+    professionalDropdownItem: {
+        paddingVertical: 16,
+        paddingHorizontal: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F0F0F0',
+        backgroundColor: '#fff',
+    },
+    professionalDropdownItemSelected: {
+        backgroundColor: '#F8FAFC',
+    },
+    professionalDropdownItemText: {
+        fontSize: 16,
+        color: '#333',
+        fontWeight: '500',
+    },
+    professionalDropdownItemTextSelected: {
+        color: '#2C3D5B',
+        fontWeight: '700',
+    },
+    categoryIconContainer: {
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        backgroundColor: '#F5F5F5',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 14,
+    },
+    categoryTextContainer: {
+        flex: 1,
+        justifyContent: 'center',
+    },
+    categorySubtext: {
+        fontSize: 13,
+        color: '#999',
+        marginTop: 3,
+        fontWeight: '400',
+    },
+    emptyDropdownState: {
+        paddingVertical: 60,
+        paddingHorizontal: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    emptyDropdownText: {
+        fontSize: 16,
+        color: '#999',
+        fontWeight: '600',
+        marginTop: 16,
+        textAlign: 'center',
+    },
+    emptyDropdownSubtext: {
+        fontSize: 14,
+        color: '#bbb',
+        marginTop: 8,
+        textAlign: 'center',
+    },
+    helperText: {
+        fontSize: 13,
+        fontStyle: 'italic',
+    },
+    datePickerContainer: {
+        backgroundColor: '#41547A',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#ffffff',
+        padding: 8,
+        marginTop: 8,
+        shadowColor: '#000',
+        shadowOpacity: 0.10,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 3,
+    },
+    datePicker: {
+        backgroundColor: 'transparent',
     },
 });

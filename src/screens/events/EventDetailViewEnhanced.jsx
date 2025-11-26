@@ -367,27 +367,63 @@ export default function EventDetailViewEnhanced() {
                 <View style={styles.aboutSection}>
                     <Text style={styles.sectionTitle}>About</Text>
 
-                    {/* Image */}
-                    <Image
-                        source={eventData.images[currentImageIndex]}
-                        style={styles.eventImage}
-                        resizeMode="cover"
-                    />
+                    {/* Images Carousel */}
+                    <ScrollView
+                        horizontal
+                        pagingEnabled
+                        showsHorizontalScrollIndicator={false}
+                        style={styles.carousel}
+                        nestedScrollEnabled={true}
+                        snapToInterval={width - 40}
+                        decelerationRate="fast"
+                        snapToAlignment="start"
+                        onScroll={(event) => {
+                            const slideSize = event.nativeEvent.layoutMeasurement.width;
+                            const index = Math.floor(event.nativeEvent.contentOffset.x / slideSize);
+                            setCurrentImageIndex(index);
+                        }}
+                        scrollEventThrottle={16}
+                    >
+                        {eventData.images && eventData.images.length > 0 ? (
+                            eventData.images.map((imageSource, idx) => (
+                                <View key={idx} style={styles.photoWrapper}>
+                                    <Image
+                                        source={imageSource}
+                                        style={styles.eventImage}
+                                        resizeMode="cover"
+                                        onError={(error) => {
+                                            console.log('Error loading event image:', imageSource, error.nativeEvent?.error);
+                                        }}
+                                    />
+                                </View>
+                            ))
+                        ) : (
+                            <View style={styles.photoWrapper}>
+                                <Image
+                                    source={img}
+                                    style={styles.eventImage}
+                                    resizeMode="cover"
+                                />
+                            </View>
+                        )}
+                    </ScrollView>
 
                     {/* Description */}
-                    <Text
-                        style={styles.description}
-                        numberOfLines={showFullDesc ? undefined : 3}
-                    >
-                        {eventData.description}
-                    </Text>
-                    {eventData.description.length > 150 && (
-                        <TouchableOpacity onPress={() => setShowFullDesc(!showFullDesc)}>
-                            <Text style={styles.readMoreText}>
-                                {showFullDesc ? 'Read less' : 'Read more'}
-                            </Text>
-                        </TouchableOpacity>
-                    )}
+                    <View style={styles.descContainer}>
+                        <Text
+                            style={styles.description}
+                            numberOfLines={showFullDesc ? undefined : 3}
+                        >
+                            {eventData.description}
+                        </Text>
+                        {eventData.description.length > 150 && (
+                            <TouchableOpacity onPress={() => setShowFullDesc(!showFullDesc)}>
+                                <Text style={styles.readMoreText}>
+                                    {showFullDesc ? 'Read less' : 'Read more'}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
                 </View>
 
                 {/* User Information */}
@@ -594,11 +630,28 @@ const styles = StyleSheet.create({
         color: '#1E293B',
         marginBottom: 16,
     },
-    eventImage: {
-        width: '100%',
-        height: 200,
+    carousel: {
+        marginBottom: 12,
+        height: width - 40,
+    },
+    photoWrapper: {
+        width: width - 40, // Full width minus margins (20 on each side)
         borderRadius: 16,
-        marginBottom: 16,
+        overflow: 'hidden',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+        backgroundColor: '#fff',
+    },
+    eventImage: {
+        width: width - 40, // Full width single image display
+        height: width - 40,
+        borderRadius: 16,
+    },
+    descContainer: {
+        marginTop: 12,
     },
     description: {
         fontSize: 13,
@@ -610,6 +663,7 @@ const styles = StyleSheet.create({
         color: '#334462',
         fontWeight: '600',
         marginTop: 8,
+        alignSelf: 'flex-end',
     },
     userInfoSection: {
         backgroundColor: '#fff',

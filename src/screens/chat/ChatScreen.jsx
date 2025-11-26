@@ -275,8 +275,10 @@ export default function ChatScreen({ route, navigation }) {
                     if (msg.message_type === 'contact' && msg.content) {
                         try {
                             contactData = JSON.parse(msg.content);
+                            console.log('📇 Parsed contact data from message:', contactData);
                         } catch (e) {
                             console.warn('Failed to parse contact data:', e);
+                            console.warn('Contact content was:', msg.content);
                         }
                     }
 
@@ -1519,6 +1521,97 @@ export default function ChatScreen({ route, navigation }) {
         }
     };
 
+    // Handle opening/viewing contact
+    const handleContactOpen = async (contactData) => {
+        if (!contactData) {
+            Alert.alert('Error', 'Contact data not available');
+            return;
+        }
+
+        console.log('📇 Opening contact:', contactData);
+
+        // Create options for the alert
+        const options = [];
+
+        // Try different possible phone field names
+        const phoneNumber = contactData.phone || contactData.phoneNumber || contactData.number;
+
+        if (phoneNumber) {
+            options.push({
+                text: `Call ${phoneNumber}`,
+                onPress: () => {
+                    const phoneUrl = `tel:${phoneNumber}`;
+                    Linking.canOpenURL(phoneUrl)
+                        .then(supported => {
+                            if (supported) {
+                                Linking.openURL(phoneUrl);
+                            } else {
+                                Alert.alert('Error', 'Cannot make phone calls on this device');
+                            }
+                        })
+                        .catch(err => {
+                            console.error('Error opening phone dialer:', err);
+                            Alert.alert('Error', 'Failed to open phone dialer');
+                        });
+                }
+            });
+
+            options.push({
+                text: `Send SMS to ${phoneNumber}`,
+                onPress: () => {
+                    const smsUrl = `sms:${phoneNumber}`;
+                    Linking.canOpenURL(smsUrl)
+                        .then(supported => {
+                            if (supported) {
+                                Linking.openURL(smsUrl);
+                            } else {
+                                Alert.alert('Error', 'Cannot send SMS on this device');
+                            }
+                        })
+                        .catch(err => {
+                            console.error('Error opening SMS:', err);
+                            Alert.alert('Error', 'Failed to open SMS');
+                        });
+                }
+            });
+        }
+
+        if (contactData.email) {
+            options.push({
+                text: `Email ${contactData.email}`,
+                onPress: () => {
+                    const emailUrl = `mailto:${contactData.email}`;
+                    Linking.canOpenURL(emailUrl)
+                        .then(supported => {
+                            if (supported) {
+                                Linking.openURL(emailUrl);
+                            } else {
+                                Alert.alert('Error', 'Cannot send emails on this device');
+                            }
+                        })
+                        .catch(err => {
+                            console.error('Error opening email:', err);
+                            Alert.alert('Error', 'Failed to open email client');
+                        });
+                }
+            });
+        }
+
+        // Add cancel option
+        options.push({
+            text: 'Cancel',
+            style: 'cancel'
+        });
+
+        // Show action sheet
+        Alert.alert(
+            contactData.name || 'Contact',
+            contactData.phone || contactData.email || '',
+            options,
+            { cancelable: true }
+        );
+    };
+
     const renderMessage = ({ item }) => {
         const isMe = item.isMe;
         // Always show timestamp if it exists
@@ -1608,17 +1701,24 @@ export default function ChatScreen({ route, navigation }) {
                             </View>
                         </TouchableOpacity>
                     ) : item.messageType === 'contact' && item.contactData ? (
-                        <View style={styles.contactContainer}>
+                        <TouchableOpacity
+                            style={styles.contactContainer}
+                            onPress={() => {
+                                console.log('📇 Contact tapped, data:', item.contactData);
+                                handleContactOpen(item.contactData);
+                            }}
+                            activeOpacity={0.7}
+                        >
                             <View style={[styles.contactIconWrapper, { backgroundColor: '#E8F5E9' }]}>
                                 <Icon name="person" size={30} color="#4CAF50" />
                             </View>
                             <View style={styles.contactInfo}>
                                 <Text style={[styles.contactName, isMe ? styles.myText : styles.theirText]}>
-                                    {item.contactData.name}
+                                    {item.contactData.name || item.contactData.displayName || 'Contact'}
                                 </Text>
-                                {item.contactData.phone && (
+                                {(item.contactData.phone || item.contactData.phoneNumber || item.contactData.number) && (
                                     <Text style={[styles.contactDetail, isMe ? styles.myTime : styles.theirTime]}>
-                                        📞 {item.contactData.phone}
+                                        📞 {item.contactData.phone || item.contactData.phoneNumber || item.contactData.number}
                                     </Text>
                                 )}
                                 {item.contactData.email && (
@@ -1627,7 +1727,8 @@ export default function ChatScreen({ route, navigation }) {
                                     </Text>
                                 )}
                             </View>
-                        </View>
+                            <Icon name="chevron-forward" size={20} color={isMe ? '#fff' : '#94A3B8'} style={{ marginLeft: 8 }} />
+                        </TouchableOpacity>
                     ) : (
                         <Text style={[styles.messageText, isMe ? styles.myText : [styles.theirText, { color: theme.colors.primary }]]}>
                             {item.text}
@@ -1933,7 +2034,7 @@ export default function ChatScreen({ route, navigation }) {
                                     <View style={[styles.attachmentIcon, { backgroundColor: '#E3F2FD' }]}>
                                         <Icon name="images" size={28} color="#2196F3" />
                                     </View>
-                                    <Text style={styles.attachmentLabel}>Gallery</Text>
+                                    <Text style={styles.attachmentLabel}>Photos &{'\n'}Videos</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     style={styles.attachmentOption}

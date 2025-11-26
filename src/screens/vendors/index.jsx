@@ -16,7 +16,7 @@ import SearchHeader from './SearchHeader';
 import Tabs from './Tabs';
 import VendorCard from './VendorCard';
 import LocationSearchModal from './LocationSearchModal';
-import CategorySelectionModal from './CategorySelectionModal';
+import CategorySelectionModalEnhanced from './CategorySelectionModalEnhanced';
 import PreSavedMessage from '../profile/PreSavedMessage';
 import img from '../../assets/images/dummy.png'; // Fallback image
 import { useNavigation } from '@react-navigation/native';
@@ -57,7 +57,7 @@ export default function Vendor() {
     // - Backend filters for approval_status='approved'
     // - Frontend adds an additional safety layer to ensure only approved ads are shown
     // - User's own ads (in Profile -> My Ads) can show all statuses (pending, approved, rejected)
-    const fetchVendors = async (filters = {}, resetResults = false) => {
+    const fetchVendors = async (filters = {}, resetResults = false, clearAllFilters = false) => {
         if (isFetchingVendors) {
             console.log('Already fetching vendors, skipping...');
             return;
@@ -75,8 +75,11 @@ export default function Vendor() {
                 setIsLoading(true);
             }
 
-            // Combine current filters with new ones
-            const searchFilters = {
+            // If clearing all filters, use empty filters, otherwise combine with current
+            const searchFilters = clearAllFilters ? {
+                page: 1,
+                limit: 10
+            } : {
                 ...currentFilters,
                 ...filters,
                 page: resetResults ? 1 : (filters.page || currentFilters.page || 1),
@@ -88,6 +91,7 @@ export default function Vendor() {
                 currentFilters,
                 searchFilters,
                 resetResults,
+                clearAllFilters,
                 filterCount: Object.keys(searchFilters).length
             });
 
@@ -101,6 +105,12 @@ export default function Vendor() {
             if (!hasFilters) {
                 console.log('📋 No filters applied, fetching all vendors');
                 response = await vendorService.getPublicVendorAds();
+                console.log('📋 getPublicVendorAds response:', {
+                    success: response?.success,
+                    dataLength: response?.data?.length,
+                    firstItem: response?.data?.[0]
+                });
+
                 if (response.success && response.data) {
                     // Filter to only show approved vendor ads
                     const approvedVendors = response.data.filter(vendor =>
@@ -120,6 +130,12 @@ export default function Vendor() {
             } else {
                 console.log('🔍 Filters applied, searching vendors');
                 response = await filterService.searchVendors(searchFilters);
+                console.log('🔍 searchVendors response:', {
+                    success: response?.success,
+                    dataLength: response?.data?.length,
+                    firstItem: response?.data?.[0]
+                });
+
                 if (response.success && response.data) {
                     // Filter to only show approved vendor ads
                     const approvedVendors = response.data.filter(vendor =>
@@ -133,8 +149,15 @@ export default function Vendor() {
                 }
             }
 
+            console.log('📊 Response processing:', {
+                success: response?.success,
+                dataLength: response?.data?.length,
+                resetResults
+            });
+
             if (response.success) {
                 if (resetResults) {
+                    console.log('✨ Setting vendors state to:', response.data?.length, 'items');
                     setVendors(response.data || []);
                 } else {
                     // For pagination, append results and remove duplicates based on vendor_ad_id
@@ -142,12 +165,19 @@ export default function Vendor() {
                         const newData = response.data || [];
                         const existingIds = new Set(prev.map(v => v._original?.vendor_ad_id || v.id));
                         const uniqueNewData = newData.filter(v => !existingIds.has(v._original?.vendor_ad_id || v.id));
+                        console.log('📝 Appending vendors:', {
+                            previousCount: prev.length,
+                            newCount: uniqueNewData.length,
+                            totalCount: prev.length + uniqueNewData.length
+                        });
                         return [...prev, ...uniqueNewData];
                     });
                 }
                 setPagination(response.pagination || { page: 1, limit: 10, totalPages: 1, totalResults: 0 });
                 setCurrentFilters(searchFilters);
+                console.log('✅ fetchVendors completed successfully');
             } else {
+                console.log('❌ Response not successful, setting network error');
                 if (resetResults) {
                     setVendors([]);
                 }
@@ -307,12 +337,25 @@ export default function Vendor() {
             return;
         }
 
-        console.log('🔄 Refresh triggered');
+        console.log('🔄 Refresh triggered with currentFilters:', currentFilters);
         setRefreshing(true);
+        setNetworkError(false); // Clear network error on refresh
 
         try {
-            // Fetch fresh data with existing filters
-            await fetchVendors(currentFilters, true);
+            // Check if we have any actual filters (excluding page/limit)
+            const hasActualFilters = Object.keys(currentFilters).some(key =>
+                key !== 'page' && key !== 'limit' && currentFilters[key]
+            );
+
+            if (!hasActualFilters) {
+                // No filters, fetch all vendors fresh
+                console.log('🔄 No filters, fetching all vendors');
+                await fetchVendors({}, true, true);
+            } else {
+                // Has filters, fetch with existing filters
+                console.log('🔄 Has filters, fetching with existing filters');
+                await fetchVendors(currentFilters, true);
+            }
         } catch (error) {
             console.error('Error refreshing vendors:', error);
         } finally {
@@ -451,13 +494,15 @@ export default function Vendor() {
                                     <TouchableOpacity
                                         style={[styles.clearFiltersButton, { backgroundColor: theme.colors.primary, marginTop: 16 }]}
                                         onPress={() => {
+                                            console.log('🧹 Clear All Filters button clicked');
                                             setSelectedLocation(null);
                                             setSelectedCategory(null);
                                             setSelectedCategoryNames([]);
                                             setSearchQuery('');
                                             setActiveTab(null); // Clear active tab when clearing all filters
                                             setCurrentFilters({});
-                                            fetchVendors({}, true);
+                                            setNetworkError(false); // Explicitly clear network error
+                                            fetchVendors({}, true, true); // Pass true for clearAllFilters
                                         }}
                                     >
                                         <Text style={styles.clearFiltersButtonText}>Clear All Filters</Text>
@@ -657,7 +702,7 @@ export default function Vendor() {
             </Modal>
 
             {/* Category Selection Modal */}
-            <CategorySelectionModal
+            <CategorySelectionModalEnhanced
                 visible={showCategoryModal}
                 onClose={() => setShowCategoryModal(false)}
                 onCategorySelect={handleCategorySelect}

@@ -16,21 +16,45 @@ class CategoryService {
     }
 
     // Get vendor categories from backend
-    async getVendorCategories() {
+    async getVendorCategories(includeSubcategories = true) {
         try {
-            if (this.vendorCategoriesCache && this.isCacheValid()) {
-                return {
-                    success: true,
-                    data: this.vendorCategoriesCache
-                };
+            // Don't use cache if we need subcategories, as cached data might not have them
+            // Also bypass cache to ensure we get fresh data with subcategories
+            if (!includeSubcategories && this.vendorCategoriesCache && this.isCacheValid()) {
+                // Check if cached data has subcategories
+                const hasSubcategoriesInCache = this.vendorCategoriesCache.some(cat =>
+                    cat.subcategories && cat.subcategories.length > 0
+                );
+
+                if (hasSubcategoriesInCache) {
+                    console.log('📦 Using cached vendor categories with subcategories');
+                    return {
+                        success: true,
+                        data: this.vendorCategoriesCache
+                    };
+                }
+                // If cache doesn't have subcategories, fetch fresh data
+                console.log('📦 Cache exists but lacks subcategories, fetching fresh data');
             }
 
-            const response = await api.get('/vendor-enhanced/categories');
-            
+            // Request categories with subcategories
+            const response = await api.get('/vendor-enhanced/categories', {
+                params: {
+                    includeSubcategories: includeSubcategories
+                }
+            });
+
+            console.log('📦 Vendor categories API response:', {
+                status: response.data?.status,
+                count: response.data?.data?.length,
+                firstCategory: response.data?.data?.[0],
+                hasSubcategories: response.data?.data?.[0]?.subcategories?.length > 0
+            });
+
             if (response.data.status && response.data.data) {
                 this.vendorCategoriesCache = response.data.data;
                 this.cacheTimestamp = Date.now();
-                
+
                 return {
                     success: true,
                     data: response.data.data
@@ -45,28 +69,45 @@ class CategoryService {
     }
 
     // Get event categories from backend
-    async getEventCategories() {
+    async getEventCategories(includeSubcategories = true) {
         try {
-            if (this.eventCategoriesCache && this.isCacheValid()) {
-                return {
-                    success: true,
-                    data: this.eventCategoriesCache
-                };
+            // Don't use cache if we need subcategories, as cached data might not have them
+            // Also bypass cache to ensure we get fresh data with subcategories
+            if (!includeSubcategories && this.eventCategoriesCache && this.isCacheValid()) {
+                // Check if cached data has subcategories
+                const hasSubcategoriesInCache = this.eventCategoriesCache.some(cat =>
+                    cat.subcategories && cat.subcategories.length > 0
+                );
+
+                if (hasSubcategoriesInCache) {
+                    console.log('📦 Using cached event categories with subcategories');
+                    return {
+                        success: true,
+                        data: this.eventCategoriesCache
+                    };
+                }
+                // If cache doesn't have subcategories, fetch fresh data
+                console.log('📦 Cache exists but lacks subcategories, fetching fresh data');
             }
 
-            const response = await api.get('/events/categories');
-            
-            console.log('Event categories API response:', {
-                status: response.data?.status,
-                dataType: typeof response.data?.data,
-                isArray: Array.isArray(response.data?.data),
-                sample: response.data?.data?.slice(0, 3)
+            // Request categories with subcategories
+            const response = await api.get('/events/categories', {
+                params: {
+                    includeSubcategories: includeSubcategories
+                }
             });
-            
+
+            console.log('📦 Event categories API response:', {
+                status: response.data?.status,
+                count: response.data?.data?.length,
+                firstCategory: response.data?.data?.[0],
+                hasSubcategories: response.data?.data?.[0]?.subcategories?.length > 0
+            });
+
             if (response.data.status && response.data.data) {
                 this.eventCategoriesCache = response.data.data;
                 this.cacheTimestamp = Date.now();
-                
+
                 return {
                     success: true,
                     data: response.data.data

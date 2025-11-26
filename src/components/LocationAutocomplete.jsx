@@ -11,9 +11,6 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 
-// Google Places API configuration
-const GOOGLE_PLACES_API_KEY = 'YOUR_GOOGLE_PLACES_API_KEY'; // Replace with your API key
-
 const LocationAutocomplete = ({ value, onChangeText, placeholder, style, placeholderTextColor }) => {
     const [searchText, setSearchText] = useState(value || '');
     const [suggestions, setSuggestions] = useState([]);
@@ -32,6 +29,7 @@ const LocationAutocomplete = ({ value, onChangeText, placeholder, style, placeho
                 fetchLocationSuggestions(searchText);
             } else {
                 setSuggestions([]);
+                setShowSuggestions(false);
             }
         }, 500);
 
@@ -41,19 +39,44 @@ const LocationAutocomplete = ({ value, onChangeText, placeholder, style, placeho
     const fetchLocationSuggestions = async (text) => {
         setIsLoading(true);
         try {
+            // Using Nominatim API (OpenStreetMap) - Free and no API key required
             const response = await fetch(
-                `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
-                    text
-                )}&key=${GOOGLE_PLACES_API_KEY}&types=(cities)&components=country:us|country:ca`
+                `https://nominatim.openstreetmap.org/search?` +
+                `q=${encodeURIComponent(text)}` +
+                `&format=json` +
+                `&addressdetails=1` +
+                `&limit=10` +
+                `&countrycodes=us,ca`, // Focus on US and Canada, remove this to search worldwide
+                {
+                    headers: {
+                        'User-Agent': 'EvanzoApp/1.0', // Required by Nominatim API
+                    }
+                }
             );
             const data = await response.json();
 
-            if (data.predictions) {
-                setSuggestions(data.predictions);
+            if (data && data.length > 0) {
+                // Transform Nominatim response to our format
+                const transformedSuggestions = data.map(item => ({
+                    place_id: item.place_id.toString(),
+                    description: item.display_name,
+                    structured_formatting: {
+                        main_text: item.name || item.display_name.split(',')[0],
+                        secondary_text: item.display_name.split(',').slice(1).join(',').trim()
+                    },
+                    raw: item
+                }));
+
+                setSuggestions(transformedSuggestions);
                 setShowSuggestions(true);
+            } else {
+                setSuggestions([]);
+                setShowSuggestions(false);
             }
         } catch (error) {
             console.error('Error fetching location suggestions:', error);
+            setSuggestions([]);
+            setShowSuggestions(false);
         } finally {
             setIsLoading(false);
         }
@@ -71,11 +94,16 @@ const LocationAutocomplete = ({ value, onChangeText, placeholder, style, placeho
     const handleTextChange = (text) => {
         setSearchText(text);
         onChangeText(text);
+        // Show suggestions inline when user is typing
+        if (text.length > 2 && suggestions.length > 0) {
+            setShowSuggestions(true);
+        }
     };
 
     const handleFocus = () => {
-        if (suggestions.length > 0) {
-            setShowModal(true);
+        // Show suggestions when input is focused and there are suggestions
+        if (searchText.length > 2 && suggestions.length > 0) {
+            setShowSuggestions(true);
         }
     };
 

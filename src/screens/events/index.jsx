@@ -15,7 +15,7 @@ import Tabs from '../vendors/Tabs';
 import EventCard from './EventCard';
 import LocationSearchModal from '../vendors/LocationSearchModal';
 import DateRangePickerModal from '../vendors/DateRangePickerModal';
-import CategorySelectionModal from '../vendors/CategorySelectionModal';
+import CategorySelectionModalEnhanced from '../vendors/CategorySelectionModalEnhanced';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
 import SearchHeader from '../vendors/SearchHeader';
@@ -30,6 +30,7 @@ export default function Events() {
     const [selectedDateRange, setSelectedDateRange] = useState(null);
     const [showDateRangeModal, setShowDateRangeModal] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState(null);
+    const [selectedCategoryNames, setSelectedCategoryNames] = useState([]);
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [activeTab, setActiveTab] = useState(null); // No tab active by default
     const scrollY = useRef(new Animated.Value(0)).current;
@@ -447,13 +448,25 @@ export default function Events() {
         fetchEvents(newFilters, true, !hasAnyFilter);
     };
 
-    const handleCategorySelect = (category) => {
-        console.log('📱 Event category selected:', category);
-        setSelectedCategory(category);
+    const handleCategorySelect = (categoryIds, categoryData) => {
+        console.log('📱 Event category selected:', {
+            categoryIds,
+            categoryData,
+            isArray: Array.isArray(categoryIds)
+        });
+
+        setSelectedCategory(categoryIds);
         setShowCategoryModal(false);
 
+        // Store category names for display
+        if (categoryData) {
+            setSelectedCategoryNames(categoryData.map(cat => cat.name));
+        } else {
+            setSelectedCategoryNames([]);
+        }
+
         // Set active tab only if a category is selected
-        if (category && category.length > 0) {
+        if (categoryIds && categoryIds.length > 0) {
             setActiveTab(2); // Category is index 2
         } else {
             setActiveTab(null);
@@ -461,10 +474,10 @@ export default function Events() {
 
         // Apply category filter
         const newFilters = { ...currentFilters };
-        if (category && category.length > 0) {
-            newFilters.category = Array.isArray(category) ? category.join(',') : category;
+        if (categoryIds && categoryIds.length > 0) {
+            newFilters.categories = Array.isArray(categoryIds) ? categoryIds : [categoryIds];
         } else {
-            delete newFilters.category;
+            delete newFilters.categories;
         }
 
         console.log('🎯 Event filters to apply:', newFilters);
@@ -574,9 +587,9 @@ export default function Events() {
                 ) : (
                     <>
                 {/* Filter status */}
-                {(selectedLocation || selectedCategory || selectedDateRange || searchQuery) && (
+                {(selectedLocation || selectedCategoryNames.length > 0 || selectedDateRange || searchQuery) && (
                     <View style={[styles.filterIndicator, { backgroundColor: '#f0f4ff', borderColor: theme.colors.primary + '33' }]}>
-                        {(selectedLocation || selectedCategory || selectedDateRange || searchQuery) && (
+                        {(selectedLocation || selectedCategoryNames.length > 0 || selectedDateRange || searchQuery) && (
                             <View style={styles.activeFilters}>
                                 {searchQuery && (
                                     <View style={[styles.filterChip, { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary + '30' }]}>
@@ -595,10 +608,13 @@ export default function Events() {
                                         </Text>
                                     </View>
                                 )}
-                                {selectedCategory && (
+                                {selectedCategoryNames.length > 0 && (
                                     <View style={[styles.filterChip, { backgroundColor: '#e91e6315', borderColor: '#e91e6330' }]}>
                                         <Text style={[styles.filterChipText, { color: '#e91e63' }]}>
-                                            {Array.isArray(selectedCategory) ? `${selectedCategory.length} categories` : selectedCategory}
+                                            {selectedCategoryNames.length > 2
+                                                ? `${selectedCategoryNames.length} categories`
+                                                : selectedCategoryNames.join(', ')
+                                            }
                                         </Text>
                                     </View>
                                 )}
@@ -611,15 +627,15 @@ export default function Events() {
                 {events.length === 0 ? (
                     <View style={styles.noEventsContainer}>
                         <Text style={styles.noEventsText}>
-                            {networkError ? 'Unable to load events' : 
-                             ((searchQuery || selectedLocation || selectedCategory || selectedDateRange) ? 'No events match your filters' : 'No events found')}
+                            {networkError ? 'Unable to load events' :
+                             ((searchQuery || selectedLocation || selectedCategoryNames.length > 0 || selectedDateRange) ? 'No events match your filters' : 'No events found')}
                         </Text>
                         <Text style={styles.noEventsSubtext}>
-                            {networkError ? 'Check your internet connection' : 
-                             ((searchQuery || selectedLocation || selectedCategory || selectedDateRange) ? 'Try adjusting your filters or clear them to see all events' : 'Pull down to refresh')}
+                            {networkError ? 'Check your internet connection' :
+                             ((searchQuery || selectedLocation || selectedCategoryNames.length > 0 || selectedDateRange) ? 'Try adjusting your filters or clear them to see all events' : 'Pull down to refresh')}
                         </Text>
                         {networkError && (
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 style={[styles.retryButton, { backgroundColor: theme.colors.primary, marginTop: 16 }]}
                                 onPress={() => fetchEvents({}, true)}
                                 disabled={isFetchingEvents}
@@ -629,12 +645,13 @@ export default function Events() {
                                 </Text>
                             </TouchableOpacity>
                         )}
-                        {!networkError && (searchQuery || selectedLocation || selectedCategory || selectedDateRange) && (
-                            <TouchableOpacity 
+                        {!networkError && (searchQuery || selectedLocation || selectedCategoryNames.length > 0 || selectedDateRange) && (
+                            <TouchableOpacity
                                 style={[styles.clearFiltersButton, { backgroundColor: theme.colors.primary, marginTop: 16 }]}
                                 onPress={() => {
                                     setSelectedLocation(null);
                                     setSelectedCategory(null);
+                                    setSelectedCategoryNames([]);
                                     setSelectedDateRange(null);
                                     setActiveTab(null); // Clear active tab
                                     setSearchQuery('');
@@ -736,7 +753,7 @@ export default function Events() {
             />
 
             {/* Category Selection Modal */}
-            <CategorySelectionModal
+            <CategorySelectionModalEnhanced
                 visible={showCategoryModal}
                 onClose={() => setShowCategoryModal(false)}
                 onCategorySelect={handleCategorySelect}

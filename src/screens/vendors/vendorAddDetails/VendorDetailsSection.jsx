@@ -7,8 +7,11 @@ import {
     TextInput,
     TouchableOpacity,
     ScrollView,
+    Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 function renderReviews(reviews, styles) {
     if (reviews && reviews.length > 0) {
@@ -70,8 +73,10 @@ export default function VendorDetailsSection({
                         pagingEnabled
                         showsHorizontalScrollIndicator={false}
                         style={styles.carousel}
-                        contentContainerStyle={{ alignItems: 'center' }}
                         nestedScrollEnabled={true}
+                        snapToInterval={SCREEN_WIDTH - 32}
+                        decelerationRate="fast"
+                        snapToAlignment="start"
                     >
                         {photos && photos.length > 0 ?
                             photos.map((photo, idx) => {
@@ -195,12 +200,12 @@ const styles = StyleSheet.create({
     },
     carousel: {
         marginTop: 12,
-        height: 230,
+        height: SCREEN_WIDTH - 32,
     },
     photoWrapper: {
+        width: SCREEN_WIDTH - 32, // Full width minus padding
         borderRadius: 12,
         overflow: 'hidden',
-        marginRight: 16,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.25,
@@ -209,10 +214,9 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
     },
     photo: {
-        // Fixed dimensions - images will be displayed with contain mode
-        // This matches the recommended square format (1080x1080) aspect ratio
-        width: 380,
-        height: 380,
+        // Full width single image display
+        width: SCREEN_WIDTH - 32,
+        height: SCREEN_WIDTH - 32,
         borderRadius: 12,
         opacity: 1,
         backgroundColor: '#f0f0f0', // Add background color for loading state
