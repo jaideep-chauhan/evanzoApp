@@ -443,7 +443,24 @@ export default function EventDetailViewEnhanced() {
                             </Text>
                         </View>
                     </View>
-                    <TouchableOpacity style={styles.seeAllButton}>
+                    <TouchableOpacity
+                        style={styles.seeAllButton}
+                        onPress={() => {
+                            const userId = eventData.organizer.user_id ||
+                                         eventFromParams.user_id ||
+                                         eventFromParams._original?.user_id;
+
+                            if (userId) {
+                                navigation.navigate('UserProfile', {
+                                    userId: userId,
+                                    userName: eventData.organizer.name,
+                                    userAvatar: eventData.organizer.avatar
+                                });
+                            } else {
+                                Alert.alert('Error', 'Unable to view user profile');
+                            }
+                        }}
+                    >
                         <Text style={styles.seeAllText}>See all</Text>
                     </TouchableOpacity>
                 </View>

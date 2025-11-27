@@ -35,6 +35,9 @@ import EventDetailViewEnhanced from '../screens/events/EventDetailViewEnhanced';
 import AllReviewsScreen from '../screens/vendors/vendorViewDetails';
 import Review from '../screens/vendors/Review';
 
+// User Profile Screen
+import UserProfile from '../screens/profile/UserProfile';
+
 const Stack = createNativeStackNavigator();
 
 const MainNavigator = () => {
@@ -198,6 +201,9 @@ const MainNavigator = () => {
 
                         {/* Event Detail Screen */}
                         <Stack.Screen name="EventDetailView" component={EventDetailViewEnhanced} />
+
+                        {/* User Profile Screen */}
+                        <Stack.Screen name="UserProfile" component={UserProfile} />
                     </>
                 )}
             </Stack.Navigator>

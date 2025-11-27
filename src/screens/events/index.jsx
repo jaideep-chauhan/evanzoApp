@@ -9,6 +9,7 @@ import {
     TouchableOpacity,
     RefreshControl,
     ActivityIndicator,
+    Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import Tabs from '../vendors/Tabs';
@@ -490,10 +491,59 @@ export default function Events() {
         fetchEvents(newFilters, true, !hasAnyFilter);
     };
 
-    const handleGiveQuote = (event) => {
-        // Navigate to quote submission screen or show modal
+    const handleGiveQuote = async (event) => {
+        // Navigate to chat screen with event organizer
         console.log('Give quote for event:', event.title);
-        // navigation.navigate('GiveQuote', { eventId: event.id });
+        console.log('Event object structure:', JSON.stringify(event, null, 2));
+
+        try {
+            // Get event organizer information
+            // Try multiple paths to get user_id
+            const organizerId = event._original?.user_id ||
+                               event.user_id ||
+                               event.organizer?.id ||
+                               event.organizer?.user_id;
+
+            const organizerName = event.organizer?.name || 'Event Organizer';
+            const organizerAvatar = event.organizer?.avatar || 'https://randomuser.me/api/portraits/lego/1.jpg';
+
+            console.log('Extracted organizer info:', {
+                organizerId,
+                organizerName,
+                organizerAvatar,
+                hasOriginal: !!event._original,
+                originalUserId: event._original?.user_id,
+                eventUserId: event.user_id
+            });
+
+            if (!organizerId) {
+                console.error('❌ No organizer ID found for event:', event);
+                Alert.alert('Error', 'Unable to contact event organizer. Please try again later.');
+                return;
+            }
+
+            console.log('📱 Navigating to chat with organizer:', {
+                recipientId: organizerId,
+                chatName: organizerName,
+                avatar: organizerAvatar
+            });
+
+            // Navigate to ChatScreen - it will create a new chat if one doesn't exist
+            navigation.navigate('ChatScreen', {
+                recipientId: organizerId,
+                chatName: organizerName,
+                avatar: organizerAvatar,
+                isOnline: false, // Will be updated by socket
+                eventContext: {
+                    eventId: event._original?.event_ad_id || event.id,
+                    eventTitle: event.title,
+                    eventBudget: event.budget
+                }
+            });
+        } catch (error) {
+            console.error('Error navigating to chat:', error);
+            Alert.alert('Error', 'Unable to open chat. Please try again.');
+        }
     };
 
     // Removed duplicate loading effect - fetchEvents already handles loading state

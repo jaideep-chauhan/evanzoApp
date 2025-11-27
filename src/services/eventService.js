@@ -269,17 +269,20 @@ class EventService {
             }
         }
         
-        // Create dummy organizer data (since backend doesn't provide it yet)
+        // Create organizer data with user_id included
         const organizer = {
+            id: event.user_id, // Include user_id for chat navigation
+            user_id: event.user_id, // Also include as user_id for compatibility
             name: `User ${event.user_id || 'Unknown'}`,
             avatar: 'https://randomuser.me/api/portraits/lego/1.jpg' // Default avatar
         };
-        
+
         // Determine event category
         const category = event.event_type || event.service_needed || 'General Event';
-        
+
         return {
             id: event.id || event.event_ad_id,
+            user_id: event.user_id, // Include user_id at top level for easy access
             title: event.title || `${event.event_type || 'Event'} - ${event.service_needed || ''}`,
             service_needed: event.service_needed,
             event_type: event.event_type,
@@ -293,7 +296,7 @@ class EventService {
             description: event.description || '',
             attachments: extractedImages.length > 0 ? extractedImages : [], // Return empty array if no images
             images: extractedImages.length > 0 ? extractedImages : [], // For new usage
-            organizer: organizer, // Add organizer data for EventCard
+            organizer: organizer, // Add organizer data for EventCard with user_id
             category: category, // Add category for filtering
             status: event.status || 'active',
             approval_status: event.approval_status || 'pending', // Add approval_status
@@ -303,7 +306,8 @@ class EventService {
             responses_count: event.responses_count || 0,
             boosted: event.boosted || false,
             created_at: event.created_at,
-            updated_at: event.updated_at
+            updated_at: event.updated_at,
+            _original: event // Store original event data for reference
         };
     }
 
