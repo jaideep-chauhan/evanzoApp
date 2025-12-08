@@ -23,21 +23,28 @@ export default function NotificationStatus() {
     const checkNotificationStatus = async () => {
         try {
             setLoading(true);
-            
-            // Check permission status
-            const authStatus = await messaging().hasPermission();
-            const enabled =
-                authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-                authStatus === messaging.AuthorizationStatus.PROVISIONAL;
-            
-            setPermissionStatus(enabled ? 'granted' : 'denied');
-            
-            // Get FCM token if permission is granted
-            if (enabled) {
-                const token = await AsyncStorage.getItem('fcm_token');
-                if (token) {
-                    setFcmToken(token.substring(0, 20) + '...');
+
+            // Check if Firebase is properly initialized
+            try {
+                // Check permission status
+                const authStatus = await messaging().hasPermission();
+                const enabled =
+                    authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+                    authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+
+                setPermissionStatus(enabled ? 'granted' : 'denied');
+
+                // Get FCM token if permission is granted
+                if (enabled) {
+                    const token = await AsyncStorage.getItem('fcm_token');
+                    if (token) {
+                        setFcmToken(token.substring(0, 20) + '...');
+                    }
                 }
+            } catch (firebaseError) {
+                // Handle Firebase initialization error gracefully
+                console.warn('Firebase not initialized:', firebaseError.message);
+                setPermissionStatus('unavailable');
             }
         } catch (error) {
             console.error('Error checking notification status:', error);
@@ -70,6 +77,8 @@ export default function NotificationStatus() {
                 return <Icon name="checkmark-circle" size={20} color="#2ECC71" />;
             case 'denied':
                 return <Icon name="close-circle" size={20} color="#E74C3C" />;
+            case 'unavailable':
+                return <Icon name="warning" size={20} color="#F39C12" />;
             default:
                 return <Icon name="help-circle" size={20} color="#F39C12" />;
         }
@@ -81,6 +90,8 @@ export default function NotificationStatus() {
                 return 'Notifications Enabled';
             case 'denied':
                 return 'Notifications Disabled';
+            case 'unavailable':
+                return 'Firebase Not Configured';
             default:
                 return 'Unknown Status';
         }
@@ -105,16 +116,24 @@ export default function NotificationStatus() {
                 <Text style={styles.tokenText}>Token: {fcmToken}</Text>
             )}
             
+            {permissionStatus === 'unavailable' && (
+                <Text style={styles.warningText}>
+                    Firebase push notifications are not configured. Please contact support if you need this feature.
+                </Text>
+            )}
+
             {permissionStatus === 'denied' && (
                 <TouchableOpacity style={styles.enableButton} onPress={requestPermission}>
                     <Text style={styles.enableButtonText}>Enable Notifications</Text>
                 </TouchableOpacity>
             )}
-            
-            <TouchableOpacity style={styles.refreshButton} onPress={checkNotificationStatus}>
-                <Icon name="refresh" size={16} color="#3498DB" />
-                <Text style={styles.refreshButtonText}>Refresh Status</Text>
-            </TouchableOpacity>
+
+            {permissionStatus !== 'unavailable' && (
+                <TouchableOpacity style={styles.refreshButton} onPress={checkNotificationStatus}>
+                    <Icon name="refresh" size={16} color="#3498DB" />
+                    <Text style={styles.refreshButtonText}>Refresh Status</Text>
+                </TouchableOpacity>
+            )}
         </View>
     );
 }
@@ -173,5 +192,12 @@ const styles = StyleSheet.create({
         color: '#3498DB',
         fontSize: 14,
         fontWeight: '500',
+    },
+    warningText: {
+        fontSize: 13,
+        color: '#E67E22',
+        marginTop: 5,
+        marginBottom: 10,
+        lineHeight: 18,
     },
 });

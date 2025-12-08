@@ -184,7 +184,11 @@ export default function VendorChat({ navigation }) {
                         category={vendor?.type || "Photography"}
                         location={vendor?.location || "Ontario, Canada"}
                         onBackPress={() => navigation && navigation.goBack ? navigation.goBack() : null}
-                        onBellPress={() => console.log('Notifications')}
+                        onBellPress={() => {
+                            if (navigation && navigation.navigate) {
+                                navigation.navigate('Notifications');
+                            }
+                        }}
                         navigation={navigation}
                         vendor={vendor} // Pass the full vendor object
                     />

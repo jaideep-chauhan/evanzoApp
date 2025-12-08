@@ -13,6 +13,7 @@ import {
     Platform,
     StatusBar,
     ImageBackground,
+    KeyboardAvoidingView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
@@ -278,10 +279,14 @@ export default function EventDetailViewEnhanced() {
     );
 
     return (
-        <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <KeyboardAvoidingView
+            style={styles.container}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+            <View style={styles.container}>
+                <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-            <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
                 {/* Blue Header Banner */}
                 <ImageBackground source={bg1} style={styles.banner} resizeMode="cover">
                     <View style={styles.headerIcons}>
@@ -491,6 +496,7 @@ export default function EventDetailViewEnhanced() {
                         multiline
                         maxLength={500}
                         textAlignVertical="top"
+                        editable={!isSubmittingQuote}
                     />
                     <TouchableOpacity
                         style={[styles.sendBtn, isSubmittingQuote && styles.sendBtnDisabled]}
@@ -506,6 +512,7 @@ export default function EventDetailViewEnhanced() {
                 </View>
             </View>
         </View>
+        </KeyboardAvoidingView>
     );
 }
 

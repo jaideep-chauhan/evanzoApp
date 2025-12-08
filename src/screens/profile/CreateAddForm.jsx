@@ -34,8 +34,11 @@ const CreateAddForm = ({ type, onClose }) => {
 
     // Event Ad fields
     const [service, setService] = useState('');
-    const [eventType, setEventType] = useState(null); // Will store category IDs array
-    const [eventTypeNames, setEventTypeNames] = useState([]); // Will store category names for display
+    const [selectedEventType, setSelectedEventType] = useState(''); // Selected event type from dropdown
+    const [customEventType, setCustomEventType] = useState(''); // Custom text when "Other" is selected
+    const [showEventTypeDropdown, setShowEventTypeDropdown] = useState(false);
+    const [eventType, setEventType] = useState(null); // Will store category IDs array (kept for compatibility)
+    const [eventTypeNames, setEventTypeNames] = useState([]); // Will store category names for display (kept for compatibility)
     const [selectedEventCategoryData, setSelectedEventCategoryData] = useState([]); // Full category data with subcategories
     const [eventTags, setEventTags] = useState([]);
     const [availableEventTags, setAvailableEventTags] = useState([]); // Dynamic tags based on selected event category
@@ -211,23 +214,28 @@ const CreateAddForm = ({ type, onClose }) => {
         'Entertainment',
     ];
 
-    // Event type options
+    // Event type options - Updated with complete list
     const eventTypeOptions = [
         'Wedding',
-        'Birthday Party',
-        'Corporate Event',
-        'Conference',
-        'Concert',
-        'Exhibition',
-        'Workshop',
-        'Seminar',
-        'Product Launch',
-        'Anniversary',
-        'Graduation',
-        'Baby Shower',
         'Engagement',
-        'Festival',
-        'Charity Event',
+        'Birthday',
+        'Baby Shower',
+        'Corporate Event',
+        'Product Launch',
+        'Pre-Wedding Shoot',
+        'Anniversary',
+        'Festival Celebration',
+        'Housewarming',
+        'College Fest',
+        'Farewell Party',
+        'Music Concert',
+        'Religious Ceremony',
+        'Workshop or Seminar',
+        'Brand Promotion',
+        'Cultural Event',
+        'Proposal Setup',
+        'Bachelor/Bachelorette',
+        'Other',
     ];
 
     // Event type tags
@@ -374,8 +382,15 @@ const CreateAddForm = ({ type, onClose }) => {
         try {
             if (type === 'event') {
                 // Validate event fields
-                if (!service || !eventType || eventTypeNames.length === 0 || !location || !dateSelected) {
+                if (!service || !selectedEventType || !location || !dateSelected) {
                     setToastState({ visible: true, message: 'Please fill in all required fields', type: 'error' });
+                    setIsLoading(false);
+                    return;
+                }
+
+                // Validate "Other" custom text
+                if (selectedEventType === 'Other' && !customEventType.trim()) {
+                    setToastState({ visible: true, message: 'Please specify the event type', type: 'error' });
                     setIsLoading(false);
                     return;
                 }
@@ -391,10 +406,13 @@ const CreateAddForm = ({ type, onClose }) => {
                 // Create FormData for file upload
                 const formData = new FormData();
                 
+                // Determine final event type value
+                const finalEventType = selectedEventType === 'Other' ? customEventType : selectedEventType;
+
                 // Prepare complete payload for logging
                 const eventPayload = {
                     service_needed: service,
-                    event_type: eventType,
+                    event_type: finalEventType,
                     event_tags: eventTags,
                     location: location,
                     date: date.toISOString().split('T')[0], // Format as YYYY-MM-DD
@@ -408,11 +426,11 @@ const CreateAddForm = ({ type, onClose }) => {
                         name: photo.name || `attachment_${index}.jpg`,
                     }))
                 };
-                
+
                 console.log('=== EVENT AD CREATION PAYLOAD ===');
                 console.log('Complete Event Ad Payload:', JSON.stringify(eventPayload, null, 2));
                 console.log('Service Needed:', service);
-                console.log('Event Type:', eventType);
+                console.log('Event Type:', finalEventType);
                 console.log('Event Tags:', eventTags);
                 console.log('Location:', location);
                 console.log('Date:', date.toISOString().split('T')[0]);
@@ -421,11 +439,10 @@ const CreateAddForm = ({ type, onClose }) => {
                 console.log('Description:', description || 'No description');
                 console.log('Photos Count:', photos.length);
                 console.log('================================');
-                
+
                 // Add text fields
                 formData.append('service_needed', service);
-                // Send event categories as array of IDs
-                formData.append('categories', JSON.stringify(eventType || []));
+                formData.append('event_type', finalEventType);
                 formData.append('event_tags', JSON.stringify(eventTags));
                 formData.append('location', location);
                 formData.append('date', date.toISOString().split('T')[0]); // Format as YYYY-MM-DD
@@ -641,69 +658,49 @@ const CreateAddForm = ({ type, onClose }) => {
                         <View style={styles.fieldGroupPro}>
                             <Text style={styles.labelPro}>Event Type</Text>
                             <TouchableOpacity
-                                style={[
-                                    styles.inputPro,
-                                    styles.dropdownButton,
-                                    !service && { opacity: 0.6 }
-                                ]}
-                                onPress={() => {
-                                    if (service) {
-                                        setShowEventCategoryModal(true);
-                                    } else {
-                                        setToastState({
-                                            visible: true,
-                                            message: 'Please select a service first',
-                                            type: 'error'
-                                        });
-                                    }
-                                }}
+                                style={[styles.inputPro, styles.dropdownButton]}
+                                onPress={() => setShowEventTypeDropdown(true)}
                             >
                                 <Text style={styles.dropdownText}>
-                                    {eventTypeNames.length > 0
-                                        ? (eventTypeNames.length > 2
-                                            ? `${eventTypeNames.length} categories selected`
-                                            : eventTypeNames.join(', '))
-                                        : service
-                                            ? 'Select event type'
-                                            : 'Select a service first'}
+                                    {selectedEventType === 'Other' && customEventType
+                                        ? customEventType
+                                        : selectedEventType || 'Select event type'}
                                 </Text>
                                 <Icon name="chevron-down" size={20} color="#ffffff80" />
                             </TouchableOpacity>
-                            {service && eventCategories.length > 0 && filteredEventCategories.length === 0 && (
-                                <Text style={[styles.helperText, { color: '#ffcc00', marginTop: 8 }]}>
-                                    No event types available for {service}
-                                </Text>
+
+                            {/* Custom Event Type Input - shown when "Other" is selected */}
+                            {selectedEventType === 'Other' && (
+                                <TextInput
+                                    style={[styles.inputPro, { marginTop: 8 }]}
+                                    value={customEventType}
+                                    onChangeText={setCustomEventType}
+                                    placeholder="Enter custom event type..."
+                                    placeholderTextColor="#ffffff80"
+                                />
                             )}
 
                             {/* Event Type Tags */}
-                            {eventTypeNames.length > 0 && (
-                                <>
-                                    {availableEventTags.length > 0 ? (
-                                        <View style={styles.tagsContainer}>
-                                            {availableEventTags.map((tag) => (
-                                                <TouchableOpacity
-                                                    key={tag}
-                                                    style={[
-                                                        styles.tagButton,
-                                                        eventTags.includes(tag) && styles.tagButtonSelected
-                                                    ]}
-                                                    onPress={() => toggleEventTag(tag)}
-                                                >
-                                                    <Text style={[
-                                                        styles.tagText,
-                                                        eventTags.includes(tag) && styles.tagTextSelected
-                                                    ]}>
-                                                        {tag}
-                                                    </Text>
-                                                </TouchableOpacity>
-                                            ))}
-                                        </View>
-                                    ) : (
-                                        <Text style={[styles.helperText, { color: '#999', marginTop: 8 }]}>
-                                            No specific services available for this category
-                                        </Text>
-                                    )}
-                                </>
+                            {selectedEventType && (
+                                <View style={styles.tagsContainer}>
+                                    {eventTypeTagOptions.map((tag) => (
+                                        <TouchableOpacity
+                                            key={tag}
+                                            style={[
+                                                styles.tagButton,
+                                                eventTags.includes(tag) && styles.tagButtonSelected
+                                            ]}
+                                            onPress={() => toggleEventTag(tag)}
+                                        >
+                                            <Text style={[
+                                                styles.tagText,
+                                                eventTags.includes(tag) && styles.tagTextSelected
+                                            ]}>
+                                                {tag}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
                             )}
                         </View>
 
@@ -1247,12 +1244,6 @@ const CreateAddForm = ({ type, onClose }) => {
                                     style={styles.dropdownItem}
                                     onPress={() => {
                                         setService(item);
-                                        // Reset event type and tags when service changes
-                                        setEventType(null);
-                                        setEventTypeNames([]);
-                                        setSelectedEventCategoryData([]);
-                                        setEventTags([]);
-                                        setAvailableEventTags([]);
                                         setShowServiceDropdown(false);
                                     }}
                                 >
@@ -1266,6 +1257,71 @@ const CreateAddForm = ({ type, onClose }) => {
                                             </Text>
                                         </View>
                                         {service === item && (
+                                            <Icon name="checkmark-circle" size={22} color="#2C3D5B" />
+                                        )}
+                                    </View>
+                                </TouchableOpacity>
+                            )}
+                        />
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Event Type Dropdown Modal */}
+            <Modal
+                visible={showEventTypeDropdown}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setShowEventTypeDropdown(false)}
+            >
+                <View style={styles.modalContainer}>
+                    <TouchableOpacity
+                        style={styles.modalBackdrop}
+                        activeOpacity={1}
+                        onPress={() => setShowEventTypeDropdown(false)}
+                    />
+                    <View style={styles.professionalDropdown}>
+                        <View style={styles.dropdownHeader}>
+                            <Text style={styles.dropdownTitle}>Select Event Type</Text>
+                            <TouchableOpacity
+                                onPress={() => setShowEventTypeDropdown(false)}
+                                style={styles.dropdownCloseBtn}
+                            >
+                                <Icon name="close" size={24} color="#2C3D5B" />
+                            </TouchableOpacity>
+                        </View>
+                        <FlatList
+                            data={eventTypeOptions}
+                            keyExtractor={(item) => item}
+                            style={styles.dropdownList}
+                            renderItem={({ item }) => (
+                                <TouchableOpacity
+                                    style={styles.dropdownItem}
+                                    onPress={() => {
+                                        setSelectedEventType(item);
+                                        // Clear custom text if switching away from "Other"
+                                        if (item !== 'Other') {
+                                            setCustomEventType('');
+                                        }
+                                        // Reset tags when event type changes
+                                        setEventTags([]);
+                                        setShowEventTypeDropdown(false);
+                                    }}
+                                >
+                                    <View style={styles.dropdownItemContent}>
+                                        <View style={styles.dropdownItemLeft}>
+                                            <View style={styles.dropdownItemIcon}>
+                                                <Icon
+                                                    name={item === 'Other' ? 'create-outline' : 'calendar-outline'}
+                                                    size={18}
+                                                    color={selectedEventType === item ? '#2C3D5B' : '#666'}
+                                                />
+                                            </View>
+                                            <Text style={[styles.dropdownItemText, selectedEventType === item && styles.dropdownItemTextSelected]}>
+                                                {item}
+                                            </Text>
+                                        </View>
+                                        {selectedEventType === item && (
                                             <Icon name="checkmark-circle" size={22} color="#2C3D5B" />
                                         )}
                                     </View>

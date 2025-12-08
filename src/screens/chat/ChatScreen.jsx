@@ -31,6 +31,7 @@ import FileViewer from 'react-native-file-viewer';
 import RNFS from 'react-native-fs';
 import Contacts from 'react-native-contacts';
 import Video from 'react-native-video';
+// import { Video as VideoCompressor } from 'react-native-compressor';
 import VoiceRecorder from '../../components/VoiceRecorder';
 import AudioPlayer from '../../components/AudioPlayer';
 import ReactionPicker from '../../components/ReactionPicker';
@@ -58,6 +59,9 @@ export default function ChatScreen({ route, navigation }) {
     const [typingUsers, setTypingUsers] = useState(new Set());
     const [showAttachmentModal, setShowAttachmentModal] = useState(false);
     const [uploadingFile, setUploadingFile] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [compressingVideo, setCompressingVideo] = useState(false);
+    const [compressionProgress, setCompressionProgress] = useState(0);
     const [isRecordingVoice, setIsRecordingVoice] = useState(false);
     const [showReactionPicker, setShowReactionPicker] = useState(false);
     const [showMessageOptions, setShowMessageOptions] = useState(false);
@@ -789,38 +793,69 @@ export default function ChatScreen({ route, navigation }) {
                 allowMultiSelection: false,
             });
 
-            console.log('Document picker results:', results);
+            console.log('📂 Document picker raw results:', results);
 
-            if (results && results.length > 0) {
-                const document = results[0];
-                console.log('Sending document:', {
-                    uri: document.uri,
-                    fileCopyUri: document.fileCopyUri,
-                    name: document.name,
-                    size: document.size,
-                    type: document.type
-                });
-
-                // Use fileCopyUri if available (from copyTo), otherwise use uri
-                const finalDocument = {
-                    ...document,
-                    uri: document.fileCopyUri || document.uri
-                };
-
-                await sendMediaMessage(finalDocument, 'file');
+            if (!results || results.length === 0) {
+                console.log('⚠️ No document selected or empty results');
+                return;
             }
+
+            const document = results[0];
+            console.log('📄 Document picked - Full object:', document);
+
+            // Validate required fields
+            if (!document.uri && !document.fileCopyUri) {
+                console.error('❌ No valid URI found for document');
+                Alert.alert('Error', 'Could not access the selected file');
+                return;
+            }
+
+            if (!document.name) {
+                console.error('❌ No file name found');
+                Alert.alert('Error', 'Could not get file information');
+                return;
+            }
+
+            // Prefer fileCopyUri (local cache copy) over uri for better reliability on iOS
+            const fileUri = document.fileCopyUri || document.uri;
+
+            // Clean and decode the URI
+            let cleanUri = fileUri;
+            if (cleanUri.startsWith('file://')) {
+                cleanUri = decodeURIComponent(cleanUri);
+            }
+
+            console.log('📄 File details:', {
+                originalUri: document.uri,
+                fileCopyUri: document.fileCopyUri,
+                cleanUri: cleanUri,
+                name: document.name,
+                size: document.size,
+                type: document.type
+            });
+
+            // Create final document object with clean URI
+            const finalDocument = {
+                uri: cleanUri,
+                name: document.name,
+                type: document.type || 'application/octet-stream',
+                size: document.size
+            };
+
+            console.log('✅ Prepared document for sending:', finalDocument);
+
+            // Always send documents as 'file' type to preserve original quality
+            console.log('📤 Calling sendMediaMessage with file type...');
+            await sendMediaMessage(finalDocument, 'file');
+            console.log('✅ sendMediaMessage completed');
         } catch (err) {
             if (DocumentPicker.isCancel(err)) {
-                console.log('Document picker cancelled by user');
+                console.log('📂 Document picker cancelled by user');
             } else {
-                console.error('Document picker error:', err);
-                // Safely extract error details without accessing .stack directly
-                const errorDetails = {
-                    message: err?.message || 'Unknown error',
-                    code: err?.code || 'UNKNOWN',
-                    name: err?.name || 'Error'
-                };
-                console.error('Error details:', errorDetails);
+                console.error('❌ Document picker error:', err?.message || err);
+                console.error('❌ Error name:', err?.name);
+                console.error('❌ Error code:', err?.code);
+
                 Alert.alert(
                     'Error',
                     'Failed to pick document. Please try again.'
@@ -1095,30 +1130,142 @@ export default function ChatScreen({ route, navigation }) {
 
     const sendMediaMessage = async (file, type) => {
         if (!chatId) return;
-        
+
+        console.log('📤 sendMediaMessage called with:', {
+            type,
+            fileName: file.name || file.fileName,
+            fileType: file.type,
+            fileUri: file.uri,
+            fileCopyUri: file.fileCopyUri
+        });
+
         setUploadingFile(true);
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
-        
-        // Add optimistic message
-        const optimisticMessage = {
-            id: tempId,
-            text: type === 'image' ? '📷 Photo' : type === 'video' ? '🎥 Video' : '📄 Document',
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            isMe: true,
-            messageType: type, // 'image', 'video', or 'file'
-            status: 'sending',
-            attachments: [{
-                type: type,
-                uri: file.uri,
-                name: file.name || 'file',
-                size: file.fileSize || file.size,
-            }],
-            createdAt: new Date().toISOString() // Add for consistent sorting
-        };
-
-        setMessages(prev => [...prev, optimisticMessage]);
 
         try {
+            // Add optimistic message
+            const optimisticMessage = {
+                id: tempId,
+                text: type === 'image' ? '📷 Photo' : type === 'video' ? '🎥 Video' : '📄 Document',
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                isMe: true,
+                messageType: type, // 'image', 'video', or 'file'
+                status: 'sending',
+                attachments: [{
+                    type: type,
+                    uri: file.uri,
+                    name: file.name || 'file',
+                    size: file.fileSize || file.size,
+                }],
+                createdAt: new Date().toISOString() // Add for consistent sorting
+            };
+
+            setMessages(prev => [...prev, optimisticMessage]);
+
+            // Verify file URI exists
+            const fileUri = file.uri || file.fileCopyUri;
+            let actualFilePath = fileUri;
+
+            // Remove file:// prefix if present for RNFS
+            if (actualFilePath.startsWith('file://')) {
+                actualFilePath = actualFilePath.replace('file://', '');
+            }
+
+            // Check if file exists before proceeding
+            console.log('🔍 Checking if file exists:', actualFilePath);
+            try {
+                const fileExists = await RNFS.exists(actualFilePath);
+                console.log('📂 File exists:', fileExists);
+
+                if (!fileExists) {
+                    throw new Error('File not found at path: ' + actualFilePath);
+                }
+
+                // Get file stats to verify it's accessible
+                const fileStats = await RNFS.stat(actualFilePath);
+                const fileSizeInMB = (fileStats.size / (1024 * 1024)).toFixed(2);
+
+                console.log('📊 File stats:', {
+                    size: fileStats.size,
+                    sizeMB: fileSizeInMB,
+                    isFile: fileStats.isFile(),
+                    path: fileStats.path
+                });
+
+                // Check if file is a video (for compression)
+                // TEMPORARILY DISABLED: Video compression requires native module rebuild
+                /*
+                const isVideo = file.type?.startsWith('video/') ||
+                               ['mp4', 'mov', 'avi', 'mkv', 'm4v', 'webm', '3gp'].includes(
+                                   actualFilePath.split('.').pop().toLowerCase()
+                               );
+
+                // WhatsApp-style: Compress large videos automatically
+                const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB max (will compress if video)
+                const COMPRESSION_THRESHOLD = 50 * 1024 * 1024; // Compress videos over 50MB
+
+                if (isVideo && fileStats.size > COMPRESSION_THRESHOLD) {
+                    console.log(`🎥 Video is ${fileSizeInMB}MB, compressing...`);
+                    setCompressingVideo(true);
+
+                    try {
+                        // Compress video WhatsApp-style
+                        const compressedVideoUri = await VideoCompressor.compress(
+                            fileUri,
+                            {
+                                compressionMethod: 'auto', // auto, manual
+                                // WhatsApp uses these approximate settings:
+                                maxSize: 720, // Max resolution 720p
+                                bitrate: 1000000, // 1 Mbps for good quality/size balance
+                            },
+                            (progress) => {
+                                setCompressionProgress(progress);
+                                console.log(`📹 Compression progress: ${progress}%`);
+                            }
+                        );
+
+                        // Get compressed file stats
+                        let compressedPath = compressedVideoUri;
+                        if (compressedPath.startsWith('file://')) {
+                            compressedPath = compressedPath.replace('file://', '');
+                        }
+
+                        const compressedStats = await RNFS.stat(compressedPath);
+                        const compressedSizeMB = (compressedStats.size / (1024 * 1024)).toFixed(2);
+                        const savedMB = (fileSizeInMB - compressedSizeMB).toFixed(2);
+
+                        console.log(`✅ Video compressed: ${fileSizeInMB}MB → ${compressedSizeMB}MB (saved ${savedMB}MB)`);
+
+                        // Update file reference to compressed version
+                        fileUri = compressedVideoUri;
+                        actualFilePath = compressedPath;
+
+                        setCompressingVideo(false);
+                        setCompressionProgress(0);
+                    } catch (compressionError) {
+                        console.error('❌ Video compression failed:', compressionError);
+                        setCompressingVideo(false);
+                        setCompressionProgress(0);
+                        throw new Error(`Failed to compress video: ${compressionError.message}`);
+                    }
+                } else if (fileStats.size > MAX_FILE_SIZE) {
+                    // Non-video files or videos that can't be compressed
+                    throw new Error(`File is too large (${fileSizeInMB}MB). Maximum allowed size is 500MB.`);
+                }
+                */
+
+                // Temporary: Simple file size check without compression
+                const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB for now
+                if (fileStats.size > MAX_FILE_SIZE) {
+                    throw new Error(`File is too large (${fileSizeInMB}MB). Maximum allowed size is 100MB.`);
+                }
+            } catch (checkError) {
+                console.error('❌ File check failed:', checkError);
+                setCompressingVideo(false);
+                setCompressionProgress(0);
+                throw new Error(checkError.message || `Cannot access file`);
+            }
+
             // Send via API
             const formData = new FormData();
 
@@ -1128,24 +1275,36 @@ export default function ChatScreen({ route, navigation }) {
             formData.append('content', '');
             formData.append('message_type', type); // Pass the actual type: 'image', 'video', or 'file'
 
+            // Get file extension from the original file name if available
+            const fileName = file.name || file.fileName || '';
+            const fileExtension = fileName ? fileName.split('.').pop() : '';
+
+            // Generate appropriate filename with extension
+            let defaultName;
+            if (type === 'image') {
+                defaultName = `photo_${Date.now()}.jpg`;
+            } else if (type === 'video') {
+                defaultName = `video_${Date.now()}.mp4`;
+            } else if (fileExtension) {
+                defaultName = `file_${Date.now()}.${fileExtension}`;
+            } else {
+                defaultName = `file_${Date.now()}`;
+            }
+
             // Prepare file object - ensuring we have all required fields
             const fileObject = {
-                uri: file.uri || file.fileCopyUri,
+                uri: fileUri, // Use original URI with file:// prefix for FormData
                 type: file.type || (type === 'image' ? 'image/jpeg' : type === 'video' ? 'video/mp4' : 'application/octet-stream'),
-                name: file.fileName || file.name || (type === 'image' ? `photo_${Date.now()}.jpg` : type === 'video' ? `video_${Date.now()}.mp4` : `document_${Date.now()}`),
+                name: fileName || defaultName,
             };
-            
+
+            console.log('📦 Prepared file object:', fileObject);
+
             // Backend now expects 'file' field name (singular) after route update
             // Add the file last
             formData.append('file', fileObject);
-            
-            console.log('Sending media message with FormData:', {
-                fileObject,
-                messageType: type,
-                fileUri: file.uri,
-                fileType: file.type,
-                fileName: file.fileName || file.name
-            });
+
+            console.log('✅ FormData prepared, sending to API...');
 
             const result = await chatService.sendMediaMessage(chatId, formData);
             
@@ -1173,6 +1332,12 @@ export default function ChatScreen({ route, navigation }) {
             }
         } catch (error) {
             console.error('❌ ChatScreen - Exception in sendMediaMessage:', error);
+            console.error('❌ Error stack:', error.stack);
+            console.error('❌ Error details:', {
+                message: error.message,
+                code: error.code,
+                name: error.name
+            });
 
             // Provide more specific error messages
             let errorMessage = 'Failed to send file';
@@ -1184,6 +1349,8 @@ export default function ChatScreen({ route, navigation }) {
                 errorMessage = 'File is too large. Please try a smaller file.';
             } else if (error.response?.data?.message) {
                 errorMessage = error.response.data.message;
+            } else if (error.message) {
+                errorMessage = `Error: ${error.message}`;
             }
 
             setMessages(prev => prev.filter(msg => msg.id !== tempId));
@@ -1463,12 +1630,60 @@ export default function ChatScreen({ route, navigation }) {
                 url: fileUrl
             });
 
-            // Download file to local cache if it's a remote URL
+            // Check if this is a video file
+            const fileName = attachment.name || '';
+            const fileExtension = fileName.toLowerCase().split('.').pop();
+            const videoExtensions = ['mp4', 'mov', 'avi', 'mkv', 'm4v', 'webm', '3gp'];
+            const isVideo = videoExtensions.includes(fileExtension) ||
+                           attachment.type?.startsWith('video/') ||
+                           attachment.mimetype?.startsWith('video/');
+
+            if (isVideo) {
+                // For video files, open with the system's default video player
+                console.log('🎥 Detected video file, opening with external player');
+
+                // Download file to local cache if it's a remote URL
+                let localFilePath = fileUrl;
+
+                if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+                    const localPath = `${RNFS.CachesDirectoryPath}/${fileName}`;
+                    console.log('📥 Downloading video from:', fileUrl);
+
+                    try {
+                        const downloadResult = await RNFS.downloadFile({
+                            fromUrl: fileUrl,
+                            toFile: localPath,
+                        }).promise;
+
+                        if (downloadResult.statusCode === 200) {
+                            console.log('✅ Video downloaded successfully');
+                            localFilePath = localPath;
+                        } else {
+                            throw new Error(`Download failed with status: ${downloadResult.statusCode}`);
+                        }
+                    } catch (downloadError) {
+                        console.error('❌ Download error:', downloadError);
+                        Alert.alert('Error', 'Failed to download video. Please check your internet connection.');
+                        return;
+                    }
+                }
+
+                // Open video with external player (maintains original quality)
+                await FileViewer.open(localFilePath, {
+                    showOpenWithDialog: true, // Show "Open with" for videos to use preferred player
+                    showAppsSuggestions: true, // Allow user to choose video player
+                    displayName: fileName || 'Video',
+                });
+
+                console.log('✅ Video opened successfully');
+                return;
+            }
+
+            // For non-video files, download if needed
             let localFilePath = fileUrl;
 
             if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
                 // Remote file - download it first
-                const fileName = attachment.name || `file_${Date.now()}`;
                 const localPath = `${RNFS.CachesDirectoryPath}/${fileName}`;
 
                 console.log('📥 Downloading file from:', fileUrl);
@@ -1499,7 +1714,7 @@ export default function ChatScreen({ route, navigation }) {
             await FileViewer.open(localFilePath, {
                 showOpenWithDialog: false, // Don't show "Open with" dialog - keep it in-app
                 showAppsSuggestions: false, // Don't show external app suggestions
-                displayName: attachment.name || 'File', // Display name for the file
+                displayName: fileName || 'File', // Display name for the file
             });
 
             console.log('✅ File opened successfully');
@@ -2259,6 +2474,31 @@ export default function ChatScreen({ route, navigation }) {
                     </KeyboardAvoidingView>
                 </View>
             </Modal>
+
+            {/* Video Compression Progress Overlay - WhatsApp Style */}
+            {compressingVideo && (
+                <View style={styles.compressionOverlay}>
+                    <View style={styles.compressionModal}>
+                        <ActivityIndicator size="large" color={theme.colors.primary} />
+                        <Text style={styles.compressionText}>Compressing video...</Text>
+                        <Text style={styles.compressionProgress}>{compressionProgress.toFixed(0)}%</Text>
+                        <View style={styles.progressBarContainer}>
+                            <View
+                                style={[
+                                    styles.progressBar,
+                                    {
+                                        width: `${compressionProgress}%`,
+                                        backgroundColor: theme.colors.primary
+                                    }
+                                ]}
+                            />
+                        </View>
+                        <Text style={styles.compressionHint}>
+                            This will reduce file size while maintaining good quality
+                        </Text>
+                    </View>
+                </View>
+            )}
         </KeyboardAvoidingView>
     );
 }
@@ -2814,5 +3054,61 @@ const styles = StyleSheet.create({
     },
     quickMessageSendIcon: {
         marginRight: 4,
+    },
+    // Video Compression Overlay Styles
+    compressionOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 9999,
+    },
+    compressionModal: {
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        padding: 30,
+        alignItems: 'center',
+        width: '80%',
+        maxWidth: 320,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+        elevation: 10,
+    },
+    compressionText: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#2C3D5B',
+        marginTop: 16,
+        marginBottom: 8,
+    },
+    compressionProgress: {
+        fontSize: 24,
+        fontWeight: '700',
+        color: '#007AFF',
+        marginBottom: 16,
+    },
+    progressBarContainer: {
+        width: '100%',
+        height: 8,
+        backgroundColor: '#E5E5E5',
+        borderRadius: 4,
+        overflow: 'hidden',
+        marginBottom: 12,
+    },
+    progressBar: {
+        height: '100%',
+        borderRadius: 4,
+    },
+    compressionHint: {
+        fontSize: 13,
+        color: '#8B95A5',
+        textAlign: 'center',
+        marginTop: 8,
     },
 });
