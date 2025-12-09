@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import api, { resetRefreshState } from '../services/api';
 import { setAuthLogout } from '../services/navigationService';
 import socialAuthService from '../services/socialAuthService';
+import socketService from '../services/socketService';
 
 const AuthContext = createContext({});
 
@@ -51,6 +52,15 @@ export const AuthProvider = ({ children }) => {
                 // Test token validity with a lightweight endpoint
                 try {
                     await api.get('/auth/check-auth');
+
+                    // Connect socket if auth is valid
+                    try {
+                        await socketService.connect();
+                        socketService.setOnlineStatus(true);
+                        console.log('✅ Socket connected on app startup');
+                    } catch (socketError) {
+                        console.log('⚠️ Socket connection failed on startup:', socketError.message);
+                    }
                 } catch (testError) {
                     if (testError.response?.status === 401 || testError.shouldLogout) {
                         await logout();
@@ -133,6 +143,15 @@ export const AuthProvider = ({ children }) => {
                 setUser(user);
                 setIsAuthenticated(true);
 
+                // Connect socket after successful login
+                try {
+                    await socketService.connect();
+                    socketService.setOnlineStatus(true);
+                    console.log('✅ Socket connected after login');
+                } catch (socketError) {
+                    console.log('⚠️ Socket connection failed, will retry later:', socketError.message);
+                }
+
                 console.log("✅ Login successful, returning success=true");
                 return { success: true, user };
             } else if (response.data) {
@@ -152,6 +171,14 @@ export const AuthProvider = ({ children }) => {
 
                     setUser(user);
                     setIsAuthenticated(true);
+
+                    // Connect socket after successful login
+                    try {
+                        await socketService.connect();
+                        socketService.setOnlineStatus(true);
+                    } catch (socketError) {
+                        console.log('⚠️ Socket connection failed:', socketError.message);
+                    }
 
                     return { success: true, user };
                 }
@@ -318,6 +345,15 @@ export const AuthProvider = ({ children }) => {
                 // Update state
                 setUser(user);
                 setIsAuthenticated(true);
+
+                // Connect socket after successful registration
+                try {
+                    await socketService.connect();
+                    socketService.setOnlineStatus(true);
+                    console.log('✅ Socket connected after registration');
+                } catch (socketError) {
+                    console.log('⚠️ Socket connection failed:', socketError.message);
+                }
 
                 return { success: true, user };
             } else if (response.data && response.data.success) {
@@ -494,6 +530,15 @@ export const AuthProvider = ({ children }) => {
                 setUser(user);
                 setIsAuthenticated(true);
 
+                // Connect socket after successful Google login
+                try {
+                    await socketService.connect();
+                    socketService.setOnlineStatus(true);
+                    console.log('✅ Socket connected after Google login');
+                } catch (socketError) {
+                    console.log('⚠️ Socket connection failed:', socketError.message);
+                }
+
                 return { success: true, user };
             } else {
                 return {
@@ -529,6 +574,15 @@ export const AuthProvider = ({ children }) => {
                 setUser(user);
                 setIsAuthenticated(true);
 
+                // Connect socket after successful Apple login
+                try {
+                    await socketService.connect();
+                    socketService.setOnlineStatus(true);
+                    console.log('✅ Socket connected after Apple login');
+                } catch (socketError) {
+                    console.log('⚠️ Socket connection failed:', socketError.message);
+                }
+
                 return { success: true, user };
             } else {
                 return {
@@ -546,6 +600,14 @@ export const AuthProvider = ({ children }) => {
 
     const logout = async (navigateToLogin = false) => {
         try {
+            // Disconnect socket first
+            try {
+                socketService.setOnlineStatus(false);
+                socketService.disconnect();
+                console.log('✅ Socket disconnected on logout');
+            } catch (socketError) {
+                console.log('⚠️ Socket disconnect error:', socketError.message);
+            }
 
             // Reset refresh state to prevent any ongoing refresh attempts
             resetRefreshState();

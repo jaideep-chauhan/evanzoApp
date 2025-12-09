@@ -8,14 +8,12 @@ require Pod::Executable.execute_command('node', ['-p',
 platform :ios, min_ios_version_supported
 prepare_react_native_project!
 
+# Use static frameworks - required for Firebase compatibility
+use_frameworks! :linkage => :static
+$RNFirebaseAsStaticFramework = true
+
 # Use modular headers for Swift compatibility
 use_modular_headers!
-
-linkage = ENV['USE_FRAMEWORKS']
-if linkage != nil
-  Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
-  use_frameworks! :linkage => linkage.to_sym
-end
 
 target 'EVNZO' do
   config = use_native_modules!
@@ -47,6 +45,10 @@ target 'EVNZO' do
 
         # Remove the problematic warning flag entirely
         config.build_settings.delete('CLANG_WARN_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES')
+
+        # Disable explicit module builds globally to fix Firebase/Google module visibility issues
+        # This prevents Xcode from using the new parallel module scanning which breaks dependencies
+        config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
 
         # Fix for New Architecture and compilation errors
         # Override compiler flags to completely suppress the warning
