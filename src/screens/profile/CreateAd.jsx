@@ -32,25 +32,21 @@ const CreateAd = ({ onClose, onTabPress }) => {
                     <View style={styles.tabColumnWrap}>
                         <TouchableOpacity
                             style={[styles.tabColumnBtn, styles.activeTab, { backgroundColor: theme.colors.primary }]}
-                            onPress={() => handleTabPress('vendor')}
+                            onPress={() => onTabPress && onTabPress('vendor')}
+                            activeOpacity={0.7}
                         >
                             <Text style={styles.activeTabText}>Vendor</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.tabColumnBtn, styles.inactiveTab, { backgroundColor: theme.colors.primary, opacity: 0.7 }]}
-                            onPress={() => handleTabPress('event')}
+                            onPress={() => onTabPress && onTabPress('event')}
+                            activeOpacity={0.7}
                         >
                             <Text style={styles.inactiveTabText}>Event</Text>
                         </TouchableOpacity>
                     </View>
                 </>
-            ) : (
-                <>
-                    <ScrollView style={styles.modalContent}>
-                        <CreateAddForm type={formType} onClose={closeModal} />
-                    </ScrollView>
-                </>
-            )}
+            ) : null}
         </View>
     );
 };
@@ -107,7 +103,7 @@ const styles = StyleSheet.create({
     },
     centeredOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'transparent',
         justifyContent: 'center',
         alignItems: 'center',
     },

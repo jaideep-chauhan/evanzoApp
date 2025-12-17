@@ -17,8 +17,14 @@ export default function EventAdCard({
     location = 'Ontario, Canada',
     duration = '2 hours',
     date = 'October 30, 2023',
+    time,
+    budget,
+    guests,
+    service_needed,
+    event_type,
     status = 'LIVE',
     statusColor = '#2ECC71',
+    approval_status,  // New prop for approval status
     profile = {
         name: 'Rachel Swan',
         image: img,
@@ -30,6 +36,14 @@ export default function EventAdCard({
     const theme = useTheme();
     const navigation = useNavigation();
     const safeAttachments = Array.isArray(attachments) ? attachments : [];
+    
+    // Debug logging for attachments
+    console.log('🎴 EventAdCard - attachments received:', {
+        title,
+        attachmentsCount: safeAttachments.length,
+        attachments: safeAttachments,
+        firstImage: safeAttachments[0]
+    });
 
     const handleCardPress = () => {
         // Create event object from props
@@ -38,6 +52,11 @@ export default function EventAdCard({
             location,
             duration,
             date,
+            time,
+            budget,
+            guests,
+            service_needed,
+            event_type,
             status,
             statusColor,
             profile,
@@ -50,6 +69,23 @@ export default function EventAdCard({
 
     return (
         <TouchableOpacity style={[styles.card, { padding: 16, marginBottom: 18 }]} onPress={handleCardPress}>
+            {/* Approval Status Banner for pending/rejected ads */}
+            {approval_status && approval_status !== 'approved' && (
+                <View style={[
+                    styles.approvalBanner,
+                    { backgroundColor: approval_status === 'pending' ? '#FFA500' : '#FF4444' }
+                ]}>
+                    <Icon 
+                        name={approval_status === 'pending' ? 'time-outline' : 'close-circle-outline'} 
+                        size={16} 
+                        color="#fff" 
+                    />
+                    <Text style={styles.approvalBannerText}>
+                        {approval_status === 'pending' ? 'Waiting for approval' : 'Rejected - Please review and resubmit'}
+                    </Text>
+                </View>
+            )}
+            
             {/* Title, Status, and More Icon Row */}
             <View style={styles.rowBetween}>
                 <Text style={[styles.title, { color: theme.colors.primary }]} numberOfLines={1} ellipsizeMode="tail">{title}</Text>
@@ -99,9 +135,34 @@ export default function EventAdCard({
                         <Text style={[styles.attachmentTitle, { color: theme.colors.primary }]}>Attachments</Text>
                     </View>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                        {safeAttachments.map((img, index) => (
-                            <Image key={index} source={img} style={styles.attachmentImage} />
-                        ))}
+                        {safeAttachments.map((imageItem, index) => {
+                            // Ensure we have a valid image source
+                            let imageSource;
+                            if (typeof imageItem === 'string') {
+                                // If it's a string URL, ensure it's properly formatted
+                                const imageUrl = imageItem.startsWith('http') ? imageItem : `https://api.evnzo.com${imageItem}`;
+                                imageSource = { uri: imageUrl };
+                                console.log(`🖼️ EventAdCard - Image ${index} URL:`, imageUrl);
+                            } else if (typeof imageItem === 'object' && imageItem.uri) {
+                                // If it's already an object with uri
+                                imageSource = imageItem;
+                            } else {
+                                // Fallback to dummy image
+                                imageSource = img;
+                            }
+                            
+                            return (
+                                <Image 
+                                    key={index} 
+                                    source={imageSource}
+                                    style={styles.attachmentImage}
+                                    defaultSource={img} // Fallback image
+                                    onError={(error) => {
+                                        console.log(`❌ EventAdCard - Image ${index} load error:`, error.nativeEvent);
+                                    }}
+                                />
+                            );
+                        })}
                     </ScrollView>
                 </View>
             )}
@@ -128,6 +189,22 @@ const styles = StyleSheet.create({
         borderColor: '#F1F3F8',
         marginHorizontal: 10,
 
+    },
+    approvalBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 10,
+        marginBottom: 12,
+        marginTop: -8,
+        marginHorizontal: -8,
+    },
+    approvalBannerText: {
+        color: '#fff',
+        fontSize: 13,
+        fontWeight: '600',
+        marginLeft: 6,
     },
     rowBetween: {
         flexDirection: 'row',

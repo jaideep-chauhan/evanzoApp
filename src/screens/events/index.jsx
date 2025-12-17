@@ -3,22 +3,25 @@ import {
     StyleSheet,
     ScrollView,
     View,
+    Animated,
     Text,
     TextInput,
     TouchableOpacity,
-    Animated,
     RefreshControl,
     ActivityIndicator,
+    Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import Tabs from '../vendors/Tabs';
 import EventCard from './EventCard';
 import LocationSearchModal from '../vendors/LocationSearchModal';
 import DateRangePickerModal from '../vendors/DateRangePickerModal';
-import CategorySelectionModal from '../vendors/CategorySelectionModal';
+import CategorySelectionModalEnhanced from '../vendors/CategorySelectionModalEnhanced';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
 import SearchHeader from '../vendors/SearchHeader';
+import eventService from '../../services/eventService';
+import filterService from '../../services/filterService';
 
 export default function Events() {
     const navigation = useNavigation();
@@ -28,14 +31,241 @@ export default function Events() {
     const [selectedDateRange, setSelectedDateRange] = useState(null);
     const [showDateRangeModal, setShowDateRangeModal] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState(null);
+    const [selectedCategoryNames, setSelectedCategoryNames] = useState([]);
     const [showCategoryModal, setShowCategoryModal] = useState(false);
-    const [activeTab, setActiveTab] = useState(2); // Category tab is default
+    const [activeTab, setActiveTab] = useState(null); // No tab active by default
     const scrollY = useRef(new Animated.Value(0)).current;
     const [isScrolled, setIsScrolled] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [events, setEvents] = useState([]);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [currentFilters, setCurrentFilters] = useState({});
+    const [pagination, setPagination] = useState({ page: 1, limit: 10, totalPages: 1, totalResults: 0 });
+    const [isFetchingEvents, setIsFetchingEvents] = useState(false);
+    const [networkError, setNetworkError] = useState(false);
 
-    const events = [
+    // Fetch events using new filtering service
+    // IMPORTANT: Only approved event ads should be visible in the public events tab
+    // - Backend filters for approval_status='approved'
+    // - Frontend adds an additional safety layer to ensure only approved ads are shown
+    // - User's own ads (in Profile -> My Ads) can show all statuses (pending, approved, rejected)
+    const fetchEvents = async (filters = {}, resetResults = false, clearAllFilters = false) => {
+        if (isFetchingEvents) {
+            console.log('Already fetching events, skipping...');
+            return;
+        }
+
+        try {
+            setIsFetchingEvents(true);
+            setNetworkError(false);
+            
+            if (resetResults) {
+                setIsLoading(true);
+            }
+
+            // If clearing all filters, use empty filters, otherwise combine with current
+            const searchFilters = clearAllFilters ? {
+                page: 1,
+                limit: 10
+            } : {
+                ...currentFilters,
+                ...filters,
+                page: resetResults ? 1 : (filters.page || currentFilters.page || 1),
+                limit: 10
+            };
+
+            // If no filters applied, get all events
+            let response;
+            // Check if only pagination params are present (no actual filters)
+            const hasFilters = Object.keys(searchFilters).some(key => 
+                key !== 'page' && key !== 'limit' && searchFilters[key]
+            );
+            
+            if (!hasFilters) {
+                console.log('📋 No filters applied, fetching all events');
+                response = await eventService.getPublicEventAds();
+                if (response.success && response.data) {
+                    // Filter to only show approved event ads
+                    const approvedEvents = response.data.filter(event =>
+                        event.approval_status === 'approved'
+                    );
+                    console.log(`✅ Filtered ${response.data.length} ads to ${approvedEvents.length} approved ads`);
+
+                    const formattedEvents = approvedEvents.map(event =>
+                        eventService.formatEventForDisplay(event)
+                    );
+                    response = {
+                        success: true,
+                        data: formattedEvents,
+                        pagination: { page: 1, limit: 10, totalPages: 1, totalResults: formattedEvents.length }
+                    };
+                }
+            } else {
+                // Try to use search endpoint if available, otherwise filter client-side
+                try {
+                    // Try using the search endpoint first
+                    response = await eventService.searchEventAds({
+                        keyword: searchFilters.keyword,
+                        location: searchFilters.location,
+                        eventType: searchFilters.category,
+                        dateFrom: searchFilters.dateFrom,
+                        dateTo: searchFilters.dateTo,
+                        page: searchFilters.page,
+                        limit: searchFilters.limit
+                    });
+
+                    if (response.success && response.data) {
+                        // Filter to only show approved event ads
+                        const approvedEvents = response.data.filter(event =>
+                            event.approval_status === 'approved'
+                        );
+                        console.log(`✅ Filtered ${response.data.length} search results to ${approvedEvents.length} approved ads`);
+
+                        response = {
+                            success: true,
+                            data: approvedEvents.map(event => eventService.formatEventForDisplay(event)),
+                            pagination: response.pagination || { page: 1, limit: 10, totalPages: 1, totalResults: approvedEvents.length }
+                        };
+                    }
+                } catch (searchError) {
+                    // If search endpoint fails, fall back to client-side filtering
+                    console.log('📱 Search endpoint not available, using client-side filtering');
+                    
+                    const allEventsResponse = await eventService.getPublicEventAds();
+                    if (allEventsResponse.success && allEventsResponse.data) {
+                        // Filter to only show approved event ads first
+                        let filteredEvents = allEventsResponse.data.filter(event =>
+                            event.approval_status === 'approved'
+                        );
+                        console.log(`✅ Client-side: Filtered ${allEventsResponse.data.length} ads to ${filteredEvents.length} approved ads`);
+                        
+                        // Apply client-side filtering - search across multiple fields
+                        if (searchFilters.keyword) {
+                            const keyword = searchFilters.keyword.toLowerCase();
+                            filteredEvents = filteredEvents.filter(event =>
+                                event.title?.toLowerCase().includes(keyword) ||
+                                event.description?.toLowerCase().includes(keyword) ||
+                                event.location?.toLowerCase().includes(keyword) ||
+                                event.category?.toLowerCase().includes(keyword) ||
+                                event.event_type?.toLowerCase().includes(keyword)
+                            );
+                            console.log(`🔍 Event keyword search for "${searchFilters.keyword}" found ${filteredEvents.length} results`);
+                        }
+                        
+                        if (searchFilters.location) {
+                            filteredEvents = filteredEvents.filter(event =>
+                                event.location?.includes(searchFilters.location)
+                            );
+                        }
+                        
+                        if (searchFilters.category) {
+                            const categories = searchFilters.category.split(',');
+                            console.log('🔍 Filtering events by categories:', categories);
+                            
+                            filteredEvents = filteredEvents.filter(event => {
+                                const eventCategory = event.category?.toLowerCase() || event.event_type?.toLowerCase();
+                                const matches = categories.some(cat => eventCategory === cat.toLowerCase());
+                                return matches;
+                            });
+                            
+                            console.log('🔍 Events after category filter:', filteredEvents.length);
+                        }
+                        
+                        // Apply date range filtering
+                        if (searchFilters.dateFrom && searchFilters.dateTo) {
+                            const startDate = new Date(searchFilters.dateFrom);
+                            const endDate = new Date(searchFilters.dateTo);
+                            endDate.setHours(23, 59, 59, 999); // Include the entire end date
+                            
+                            console.log('📅 Filtering events by date range:', {
+                                from: startDate.toLocaleDateString(),
+                                to: endDate.toLocaleDateString()
+                            });
+                            
+                            filteredEvents = filteredEvents.filter(event => {
+                                if (!event.date) return false;
+                                
+                                try {
+                                    const eventDate = new Date(event.date);
+                                    const isInRange = eventDate >= startDate && eventDate <= endDate;
+                                    
+                                    if (!isInRange) {
+                                        console.log(`❌ Event "${event.title}" date ${eventDate.toLocaleDateString()} is outside range`);
+                                    }
+                                    
+                                    return isInRange;
+                                } catch (e) {
+                                    console.error(`Error parsing date for event "${event.title}":`, e);
+                                    return false;
+                                }
+                            });
+                            
+                            console.log('📅 Events after date filter:', filteredEvents.length);
+                        }
+                        
+                        response = {
+                            success: true,
+                            data: filteredEvents.map(event => eventService.formatEventForDisplay(event)),
+                            pagination: { page: 1, limit: 10, totalPages: 1, totalResults: filteredEvents.length }
+                        };
+                    } else {
+                        response = allEventsResponse;
+                    }
+                }
+            }
+            
+            if (response.success) {
+                if (resetResults) {
+                    setEvents(response.data || []);
+                } else {
+                    // For pagination, append results and remove duplicates based on event_ad_id
+                    setEvents(prev => {
+                        const newData = response.data || [];
+                        const existingIds = new Set(prev.map(e => e._original?.event_ad_id || e.id));
+                        const uniqueNewData = newData.filter(e => !existingIds.has(e._original?.event_ad_id || e.id));
+                        return [...prev, ...uniqueNewData];
+                    });
+                }
+                setPagination(response.pagination || { page: 1, limit: 10, totalPages: 1, totalResults: 0 });
+                setCurrentFilters(searchFilters);
+            } else {
+                if (resetResults) {
+                    setEvents([]);
+                }
+                setNetworkError(true);
+            }
+        } catch (error) {
+            console.error('Error fetching events:', error);
+            setNetworkError(true);
+            if (resetResults) {
+                setEvents([]);
+            }
+        } finally {
+            setIsLoading(false);
+            setIsFetchingEvents(false);
+        }
+    };
+
+    // Fetch events on component mount
+    useEffect(() => {
+        let isMounted = true;
+
+        // Initial fetch with a small delay to prevent race conditions
+        const initialFetchTimeout = setTimeout(() => {
+            if (isMounted && !isFetchingEvents) {
+                console.log('🚀 Initial event fetch on mount');
+                fetchEvents({}, true, false); // Reset results on mount
+            }
+        }, 100);
+
+        return () => {
+            isMounted = false;
+            clearTimeout(initialFetchTimeout);
+        };
+    }, []); // Empty dependency array ensures this runs only once on mount
+
+    const dummyEvents = [
         {
             id: 1,
             title: 'Corporate Event',
@@ -148,25 +378,7 @@ export default function Events() {
         },
     ];
 
-    // Filter events based on selected location and category
-    const filteredEvents = useMemo(() => {
-        let filtered = events;
-
-        // Filter by location
-        if (selectedLocation && selectedLocation !== 'Current Location') {
-            filtered = filtered.filter(event => event.location === selectedLocation);
-        }
-
-        // Filter by category
-        if (selectedCategory) {
-            filtered = filtered.filter(event =>
-                event.category.toLowerCase().includes(selectedCategory.toLowerCase()) ||
-                selectedCategory.toLowerCase().includes(event.category.toLowerCase())
-            );
-        }
-
-        return filtered;
-    }, [selectedLocation, selectedCategory]);
+    // Use events directly as filtering is now handled by the API
 
     const handleTabPress = (tabLabel, tabIndex) => {
         console.log('Selected tab:', tabLabel);
@@ -183,50 +395,185 @@ export default function Events() {
 
     const handleLocationSelect = (location) => {
         setSelectedLocation(location);
+        setShowLocationModal(false);
+
+        // Set active tab only if a location is selected
+        if (location) {
+            setActiveTab(0); // Location is index 0
+        } else {
+            setActiveTab(null);
+        }
+
+        // Apply location filter
+        const newFilters = { ...currentFilters };
+        if (location) {
+            newFilters.location = location;
+        } else {
+            delete newFilters.location;
+        }
+
+        // Check if we're clearing all filters
+        const hasAnyFilter = Object.keys(newFilters).some(key =>
+            key !== 'page' && key !== 'limit' && newFilters[key]
+        );
+
+        fetchEvents(newFilters, true, !hasAnyFilter);
     };
 
     const handleDateRangeSelect = (dateRange) => {
         setSelectedDateRange(dateRange);
+        setShowDateRangeModal(false);
+
+        // Set active tab only if a date range is selected
+        if (dateRange && dateRange.startDate && dateRange.endDate) {
+            setActiveTab(1); // Date is index 1
+        } else {
+            setActiveTab(null);
+        }
+
+        // Apply date range filter
+        const newFilters = { ...currentFilters };
+        if (dateRange && dateRange.startDate && dateRange.endDate) {
+            newFilters.dateFrom = dateRange.startDate.toISOString().split('T')[0];
+            newFilters.dateTo = dateRange.endDate.toISOString().split('T')[0];
+        } else {
+            delete newFilters.dateFrom;
+            delete newFilters.dateTo;
+        }
+
+        // Check if we're clearing all filters
+        const hasAnyFilter = Object.keys(newFilters).some(key =>
+            key !== 'page' && key !== 'limit' && newFilters[key]
+        );
+
+        fetchEvents(newFilters, true, !hasAnyFilter);
     };
 
-    const handleCategorySelect = (category) => {
-        setSelectedCategory(category);
+    const handleCategorySelect = (categoryIds, categoryData) => {
+        console.log('📱 Event category selected:', {
+            categoryIds,
+            categoryData,
+            isArray: Array.isArray(categoryIds)
+        });
+
+        setSelectedCategory(categoryIds);
+        setShowCategoryModal(false);
+
+        // Store category names for display
+        if (categoryData) {
+            setSelectedCategoryNames(categoryData.map(cat => cat.name));
+        } else {
+            setSelectedCategoryNames([]);
+        }
+
+        // Set active tab only if a category is selected
+        if (categoryIds && categoryIds.length > 0) {
+            setActiveTab(2); // Category is index 2
+        } else {
+            setActiveTab(null);
+        }
+
+        // Apply category filter
+        const newFilters = { ...currentFilters };
+        if (categoryIds && categoryIds.length > 0) {
+            newFilters.categories = Array.isArray(categoryIds) ? categoryIds : [categoryIds];
+        } else {
+            delete newFilters.categories;
+        }
+
+        console.log('🎯 Event filters to apply:', newFilters);
+
+        // Check if we're clearing all filters
+        const hasAnyFilter = Object.keys(newFilters).some(key =>
+            key !== 'page' && key !== 'limit' && newFilters[key]
+        );
+
+        fetchEvents(newFilters, true, !hasAnyFilter);
     };
 
-    const handleGiveQuote = (event) => {
-        // Navigate to quote submission screen or show modal
+    const handleGiveQuote = async (event) => {
+        // Navigate to chat screen with event organizer
         console.log('Give quote for event:', event.title);
-        // navigation.navigate('GiveQuote', { eventId: event.id });
+        console.log('Event object structure:', JSON.stringify(event, null, 2));
+
+        try {
+            // Get event organizer information
+            // Try multiple paths to get user_id
+            const organizerId = event._original?.user_id ||
+                               event.user_id ||
+                               event.organizer?.id ||
+                               event.organizer?.user_id;
+
+            const organizerName = event.organizer?.name || 'Event Organizer';
+            const organizerAvatar = event.organizer?.avatar || 'https://randomuser.me/api/portraits/lego/1.jpg';
+
+            console.log('Extracted organizer info:', {
+                organizerId,
+                organizerName,
+                organizerAvatar,
+                hasOriginal: !!event._original,
+                originalUserId: event._original?.user_id,
+                eventUserId: event.user_id
+            });
+
+            if (!organizerId) {
+                console.error('❌ No organizer ID found for event:', event);
+                Alert.alert('Error', 'Unable to contact event organizer. Please try again later.');
+                return;
+            }
+
+            console.log('📱 Navigating to chat with organizer:', {
+                recipientId: organizerId,
+                chatName: organizerName,
+                avatar: organizerAvatar
+            });
+
+            // Navigate to ChatScreen - it will create a new chat if one doesn't exist
+            navigation.navigate('ChatScreen', {
+                recipientId: organizerId,
+                chatName: organizerName,
+                avatar: organizerAvatar,
+                isOnline: false, // Will be updated by socket
+                eventContext: {
+                    eventId: event._original?.event_ad_id || event.id,
+                    eventTitle: event.title,
+                    eventBudget: event.budget
+                }
+            });
+        } catch (error) {
+            console.error('Error navigating to chat:', error);
+            Alert.alert('Error', 'Unable to open chat. Please try again.');
+        }
     };
 
-    // Initial loading effect
-    useEffect(() => {
-        // Simulate initial data loading
-        setTimeout(() => {
-            setIsLoading(false);
-        }, 1500); // Simulate 1.5 second initial load
-    }, []);
+    // Removed duplicate loading effect - fetchEvents already handles loading state
 
-    const onRefresh = React.useCallback(() => {
+    const onRefresh = React.useCallback(async () => {
+        // Don't refresh if already fetching
+        if (isFetchingEvents) {
+            console.log('🔄 Already fetching, skipping refresh');
+            return;
+        }
+
+        console.log('🔄 Event refresh triggered');
         setRefreshing(true);
-        
-        // Simulate fetching new data
-        setTimeout(() => {
-            // Here you would typically:
-            // 1. Fetch new events from your API
-            // 2. Update the events state with new data
-            // 3. Reset any filters if needed
-            
-            console.log('Refreshing events...');
-            
-            // For now, just reset filters as an example
-            setSelectedLocation(null);
-            setSelectedCategory(null);
-            setSelectedDateRange(null);
-            
+
+        try {
+            // Check if we have any active filters
+            const hasFilters = Object.keys(currentFilters).some(key =>
+                key !== 'page' && key !== 'limit' && currentFilters[key]
+            );
+
+            // Fetch fresh data with existing filters
+            await fetchEvents(currentFilters, true, !hasFilters);
+
+            console.log('Events refreshed successfully');
+        } catch (error) {
+            console.error('Error refreshing events:', error);
+        } finally {
             setRefreshing(false);
-        }, 2000); // Simulate 2 second refresh
-    }, []);
+        }
+    }, [isFetchingEvents, currentFilters]);
 
     return (
         <View style={[styles.safe, { backgroundColor: '#fff' }]}>
@@ -260,7 +607,19 @@ export default function Events() {
                     }
                 )}
             >
-                <SearchHeader />
+                <SearchHeader 
+                    searchValue={searchQuery}
+                    onSearchChange={(text) => {
+                        setSearchQuery(text);
+                        // Debounced search
+                        filterService.debouncedSearch(
+                            (filters) => fetchEvents(filters, true),
+                            { ...currentFilters, keyword: text },
+                            500,
+                            'event-header-search'
+                        );
+                    }}
+                />
                 <View style={{ marginBottom: 10 }}>
                     <Tabs
                         tabs={['Location', 'Date', 'Category']}
@@ -277,69 +636,90 @@ export default function Events() {
                     </View>
                 ) : (
                     <>
-                {/* Location Filter Indicator */}
-                {selectedLocation && (
-                    <View style={[styles.locationIndicator, { borderColor: theme.colors.primary + '33' }]}>
-                        <Text style={[styles.locationIndicatorText, { color: theme.colors.primary }]}>
-                            Showing events in: {selectedLocation}
-                        </Text>
-                        <Text style={styles.eventCount}>
-                            ({filteredEvents.length} event{filteredEvents.length !== 1 ? 's' : ''} found)
-                        </Text>
-                    </View>
-                )}
-
-                {/* Date Range Filter Indicator */}
-                {selectedDateRange && (
-                    <View style={styles.dateIndicator}>
-                        <Text style={styles.dateIndicatorText}>
-                            Date Range: {selectedDateRange.startDate.toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric'
-                            })} - {selectedDateRange.endDate.toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric'
-                            })}
-                        </Text>
-                        <Text style={styles.eventCount}>
-                            Filter applied for availability
-                        </Text>
-                    </View>
-                )}
-
-                {/* Category Filter Indicator */}
-                {selectedCategory && (
-                    <View style={styles.categoryIndicator}>
-                        <Text style={styles.categoryIndicatorText}>
-                            Category: {selectedCategory}
-                        </Text>
-                        <Text style={styles.eventCount}>
-                            ({filteredEvents.length} event{filteredEvents.length !== 1 ? 's' : ''} found)
-                        </Text>
+                {/* Filter status */}
+                {(selectedLocation || selectedCategoryNames.length > 0 || selectedDateRange || searchQuery) && (
+                    <View style={[styles.filterIndicator, { backgroundColor: '#f0f4ff', borderColor: theme.colors.primary + '33' }]}>
+                        {(selectedLocation || selectedCategoryNames.length > 0 || selectedDateRange || searchQuery) && (
+                            <View style={styles.activeFilters}>
+                                {searchQuery && (
+                                    <View style={[styles.filterChip, { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary + '30' }]}>
+                                        <Text style={[styles.filterChipText, { color: theme.colors.primary }]}>Search: {searchQuery}</Text>
+                                    </View>
+                                )}
+                                {selectedLocation && (
+                                    <View style={[styles.filterChip, { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary + '30' }]}>
+                                        <Text style={[styles.filterChipText, { color: theme.colors.primary }]}>{selectedLocation}</Text>
+                                    </View>
+                                )}
+                                {selectedDateRange && (
+                                    <View style={[styles.filterChip, { backgroundColor: '#22c55e15', borderColor: '#22c55e30' }]}>
+                                        <Text style={[styles.filterChipText, { color: '#059669' }]}>
+                                            {selectedDateRange.startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {selectedDateRange.endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                        </Text>
+                                    </View>
+                                )}
+                                {selectedCategoryNames.length > 0 && (
+                                    <View style={[styles.filterChip, { backgroundColor: '#e91e6315', borderColor: '#e91e6330' }]}>
+                                        <Text style={[styles.filterChipText, { color: '#e91e63' }]}>
+                                            {selectedCategoryNames.length > 2
+                                                ? `${selectedCategoryNames.length} categories`
+                                                : selectedCategoryNames.join(', ')
+                                            }
+                                        </Text>
+                                    </View>
+                                )}
+                            </View>
+                        )}
                     </View>
                 )}
 
                 {/* No events message */}
-                {filteredEvents.length === 0 ? (
+                {events.length === 0 ? (
                     <View style={styles.noEventsContainer}>
                         <Text style={styles.noEventsText}>
-                            No events found in {selectedLocation}
+                            {networkError ? 'Unable to load events' :
+                             ((searchQuery || selectedLocation || selectedCategoryNames.length > 0 || selectedDateRange) ? 'No events match your filters' : 'No events found')}
                         </Text>
                         <Text style={styles.noEventsSubtext}>
-                            Try selecting a different location or clear the filter
+                            {networkError ? 'Check your internet connection' :
+                             ((searchQuery || selectedLocation || selectedCategoryNames.length > 0 || selectedDateRange) ? 'Try adjusting your filters or clear them to see all events' : 'Pull down to refresh')}
                         </Text>
+                        {networkError && (
+                            <TouchableOpacity
+                                style={[styles.retryButton, { backgroundColor: theme.colors.primary, marginTop: 16 }]}
+                                onPress={() => fetchEvents({}, true)}
+                                disabled={isFetchingEvents}
+                            >
+                                <Text style={styles.retryButtonText}>
+                                    {isFetchingEvents ? 'Retrying...' : 'Retry'}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+                        {!networkError && (searchQuery || selectedLocation || selectedCategoryNames.length > 0 || selectedDateRange) && (
+                            <TouchableOpacity
+                                style={[styles.clearFiltersButton, { backgroundColor: theme.colors.primary, marginTop: 16 }]}
+                                onPress={() => {
+                                    setSelectedLocation(null);
+                                    setSelectedCategory(null);
+                                    setSelectedCategoryNames([]);
+                                    setSelectedDateRange(null);
+                                    setActiveTab(null); // Clear active tab
+                                    setSearchQuery('');
+                                    setCurrentFilters({});
+                                    fetchEvents({}, true, true); // Pass true for clearAllFilters
+                                }}
+                            >
+                                <Text style={styles.clearFiltersButtonText}>Clear All Filters</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 ) : (
-                    filteredEvents.map((event, idx) => (
-                        <View key={idx}   >
-                            <EventCard
-                                key={event.id}
-                                event={event}
-                                onGiveQuote={() => handleGiveQuote(event)}
-                            />
-                        </View>
+                    events.map((event, idx) => (
+                        <EventCard
+                            key={`event-${event._original?.event_ad_id || event.id}-${idx}`}
+                            event={event}
+                            onGiveQuote={() => handleGiveQuote(event)}
+                        />
                     ))
                 )}
                     </>
@@ -372,8 +752,27 @@ export default function Events() {
                             <Icon name="search-outline" size={20} color={theme.colors.primary} style={styles.stickySearchIcon} />
                             <TextInput
                                 style={styles.stickyInput}
-                                placeholder="Search events..."
+                                placeholder="Search by title, location, category..."
                                 placeholderTextColor={theme.colors.primary + '80'}
+                                value={searchQuery}
+                                onChangeText={(text) => {
+                                    setSearchQuery(text);
+                                    // Debounced search
+                                    filterService.debouncedSearch(
+                                        (filters) => fetchEvents(filters, true),
+                                        { ...currentFilters, keyword: text },
+                                        500,
+                                        'event-search'
+                                    );
+                                }}
+                                returnKeyType="search"
+                                onSubmitEditing={() => {
+                                    const filters = { ...currentFilters, keyword: searchQuery };
+                                    if (!searchQuery.trim()) {
+                                        delete filters.keyword;
+                                    }
+                                    fetchEvents(filters, true);
+                                }}
                             />
                         </View>
                         <TouchableOpacity
@@ -392,6 +791,7 @@ export default function Events() {
                 onClose={() => setShowLocationModal(false)}
                 onLocationSelect={handleLocationSelect}
                 currentLocation={selectedLocation}
+                screenType="events"
             />
 
             {/* Date Range Picker Modal */}
@@ -403,7 +803,7 @@ export default function Events() {
             />
 
             {/* Category Selection Modal */}
-            <CategorySelectionModal
+            <CategorySelectionModalEnhanced
                 visible={showCategoryModal}
                 onClose={() => setShowCategoryModal(false)}
                 onCategorySelect={handleCategorySelect}
@@ -470,6 +870,60 @@ const styles = StyleSheet.create({
     eventCount: {
         fontSize: 12,
         color: '#666',
+    },
+    filterIndicator: {
+        marginTop: 12,
+        marginBottom: 4,
+        padding: 12,
+        borderRadius: 8,
+        borderWidth: 1,
+        marginHorizontal: 16,
+        shadowColor: '#2C3D5B',
+        shadowOpacity: 0.06,
+        shadowOffset: { width: 0, height: 2 },
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    filterIndicatorText: {
+        fontSize: 14,
+        fontWeight: '600',
+        marginBottom: 2,
+    },
+    activeFilters: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        marginTop: 8,
+        gap: 6,
+    },
+    filterChip: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        borderWidth: 1,
+    },
+    filterChipText: {
+        fontSize: 12,
+        fontWeight: '500',
+    },
+    retryButton: {
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 8,
+    },
+    retryButtonText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    clearFiltersButton: {
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        borderRadius: 8,
+    },
+    clearFiltersButtonText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
     },
     noEventsContainer: {
         alignItems: 'center',

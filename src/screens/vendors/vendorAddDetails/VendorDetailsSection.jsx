@@ -7,8 +7,11 @@ import {
     TextInput,
     TouchableOpacity,
     ScrollView,
+    Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 function renderReviews(reviews, styles) {
     if (reviews && reviews.length > 0) {
@@ -35,9 +38,10 @@ function renderReviews(reviews, styles) {
         return <Text style={{ color: '#888', fontSize: 13 }}>No reviews yet.</Text>;
     }
 }
-import img from '../../../assets/images/evanzoLogo.png'; // Adjust the path as needed
+import defaultImg from '../../../assets/images/dummy.png'; // Default fallback image
 import OfferGrid from './OfferCard';
 import ProfileCardCarousel from './ProfileCardCarousel';
+import { getImageSource } from '../../../utils/imageUtils';
 
 
 export default function VendorDetailsSection({
@@ -46,8 +50,15 @@ export default function VendorDetailsSection({
     description = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do ds ds ds d sdsjhhs hdsi dsiucds ud hdsic dsiguc cudicgdsuc sguicds csbui chduicgdsuicds gcudis cdusicgdisucgdsug cdsgchddchd",
     reviews = [],
     hideMessageSection = false,
+    offers = [],
+    vendorId,
 }) {
+    console.log('VendorDetailsSection - Received offers:', offers);
+    console.log('VendorDetailsSection - Received photos:', photos);
+    console.log('VendorDetailsSection - Photos length:', photos?.length);
+
     const [descExpanded, setDescExpanded] = useState(false);
+    const [imageDimensions, setImageDimensions] = useState({});
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
             <View>
@@ -56,18 +67,56 @@ export default function VendorDetailsSection({
                     <View style={styles.rowBetween}>
                         <Text style={styles.sectionTitle}>About</Text>
                     </View>
+                    
                     <ScrollView
                         horizontal
                         pagingEnabled
                         showsHorizontalScrollIndicator={false}
                         style={styles.carousel}
-                        contentContainerStyle={{ alignItems: 'center' }}
+                        nestedScrollEnabled={true}
+                        snapToInterval={SCREEN_WIDTH - 32}
+                        decelerationRate="fast"
+                        snapToAlignment="start"
                     >
-                        {photos.map((photo, idx) => (
-                            <View key={idx} style={styles.photoWrapper}>
-                                <Image source={photo} style={styles.photo} />
-                            </View>
-                        ))}
+                        {photos && photos.length > 0 ?
+                            photos.map((photo, idx) => {
+                                console.log(`Rendering photo ${idx}:`, photo);
+                                const imageSource = getImageSource(photo, defaultImg);
+                                console.log(`Image source for photo ${idx}:`, imageSource);
+
+                                return (
+                                    <View key={idx} style={styles.photoWrapper}>
+                                        <Image
+                                            source={imageSource}
+                                            style={styles.photo}
+                                            onError={(error) => {
+                                                console.log('Error loading image:', photo, error.nativeEvent?.error);
+                                            }}
+                                            onLoad={() => {
+                                                console.log('Successfully loaded image:', photo);
+                                            }}
+                                            resizeMode="contain"
+                                        />
+                                    </View>
+                                );
+                            })
+                        :
+                            // Always show at least one image
+                            [0, 1, 2].map((idx) => (
+                                <View key={idx} style={styles.photoWrapper}>
+                                    <Image
+                                        source={defaultImg}
+                                        style={styles.photo}
+                                        resizeMode="contain"
+                                    />
+                                    {idx === 1 && (
+                                        <View style={styles.noImageOverlay}>
+                                            <Text style={styles.noImageText}>Sample Images</Text>
+                                        </View>
+                                    )}
+                                </View>
+                            ))
+                        }
                     </ScrollView>
                     {/* Description below images */}
                     <View style={styles.descContainer}>
@@ -91,9 +140,9 @@ export default function VendorDetailsSection({
                     </View>
                 </View>
 
-                <OfferGrid />
+                <OfferGrid offers={offers} />
 
-                <ProfileCardCarousel />
+                <ProfileCardCarousel vendorId={vendorId} />
 
                 {/* Message Input - Only show if not hidden */}
                 {!hideMessageSection && (
@@ -151,11 +200,12 @@ const styles = StyleSheet.create({
     },
     carousel: {
         marginTop: 12,
+        height: SCREEN_WIDTH - 32,
     },
     photoWrapper: {
+        width: SCREEN_WIDTH - 32, // Full width minus padding
         borderRadius: 12,
         overflow: 'hidden',
-        marginRight: 16,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.25,
@@ -164,10 +214,12 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
     },
     photo: {
-        width: 380,
-        height: 230,
+        // Full width single image display
+        width: SCREEN_WIDTH - 32,
+        height: SCREEN_WIDTH - 32,
         borderRadius: 12,
         opacity: 1,
+        backgroundColor: '#f0f0f0', // Add background color for loading state
     },
     descContainer: {
         marginTop: 14,
@@ -269,5 +321,22 @@ const styles = StyleSheet.create({
     eyeText: {
         fontSize: 12,
         color: '#aaa',
+    },
+    noImageOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.3)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: 12,
+    },
+    noImageText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
+        textAlign: 'center',
     },
 });

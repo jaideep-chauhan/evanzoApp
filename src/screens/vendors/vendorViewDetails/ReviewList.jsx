@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -6,10 +6,16 @@ import {
     FlatList,
     Image,
     TouchableOpacity,
+    ActivityIndicator,
+    RefreshControl,
+    Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import VendorCard from '../VendorCard';
+import vendorDetailsService from '../../../services/vendorDetailsService';
+import { useRoute } from '@react-navigation/native';
+import { getImageSource } from '../../../utils/imageUtils';
 import img from '../../../assets/images/dummy.png';
 
 
@@ -130,7 +136,74 @@ const vendors = [
 ];
 
 export default function ReviewList({ navigation }) {
+    const route = useRoute();
     const [activeTab, setActiveTab] = useState('REVIEWS');
+    const [reviews, setReviews] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
+    const [reviewStats, setReviewStats] = useState({
+        totalReviews: 0,
+        averageRating: 0
+    });
+    
+    // Get vendor ID from route params
+    const vendorId = route.params?.vendorId;
+    const vendorName = route.params?.vendorName || 'Vendor';
+    
+    console.log('ReviewList - vendorId:', vendorId, 'vendorName:', vendorName);
+
+    // Fetch reviews when component mounts
+    useEffect(() => {
+        if (vendorId) {
+            fetchReviews();
+        }
+    }, [vendorId]);
+
+    const fetchReviews = async (isRefresh = false) => {
+        if (!vendorId) {
+            console.warn('No vendor ID provided');
+            return;
+        }
+
+        try {
+            if (isRefresh) {
+                setRefreshing(true);
+            } else {
+                setIsLoading(true);
+            }
+
+            console.log('Fetching reviews for vendor:', vendorId);
+            const response = await vendorDetailsService.getVendorReviews(vendorId, 1, 50);
+            
+            console.log('Reviews response:', response);
+
+            if (response.success && response.data) {
+                const reviewsData = response.data.reviews || response.data;
+                setReviews(Array.isArray(reviewsData) ? reviewsData : []);
+                
+                // Set review stats
+                setReviewStats({
+                    totalReviews: response.data.totalReviews || reviewsData.length || 0,
+                    averageRating: response.data.averageRating || 0
+                });
+            } else {
+                console.warn('Failed to fetch reviews:', response.message);
+                // Keep using dummy reviews as fallback for now
+                setReviews(dummyReviews);
+            }
+        } catch (error) {
+            console.error('Error fetching reviews:', error);
+            // Use dummy reviews as fallback
+            setReviews(dummyReviews);
+        } finally {
+            setIsLoading(false);
+            setRefreshing(false);
+        }
+    };
+
+    const onRefresh = () => {
+        fetchReviews(true);
+    };
 
     const renderTabContent = () => {
         switch (activeTab) {
@@ -160,24 +233,81 @@ export default function ReviewList({ navigation }) {
                 );
             case 'REVIEWS':
                 return (
+                    <FlatList
+                        style={{ flex: 1 }}
+                        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}
+                        data={reviews}
+                        keyExtractor={(item, index) => item.id?.toString() || index.toString()}
+                        refreshControl={
+                            <RefreshControl
+                                refreshing={refreshing}
+                                onRefresh={onRefresh}
+                                colors={['#2C3D5B']}
+                                tintColor="#2C3D5B"
+                            />
+                        }
+                        ListHeaderComponent={() => (
+                            <View>
+                                {/* Review Stats */}
+                                {reviewStats.totalReviews > 0 && (
+                                    <View style={styles.statsContainer}>
+                                        <View style={styles.statItem}>
+                                            <Text style={styles.statNumber}>
+                                                {(reviewStats.averageRating || 0).toFixed(1)}
+                                            </Text>
+                                            <Text style={styles.statLabel}>Average Rating</Text>
+                                            <View style={styles.starsRow}>
+                                                {[...Array(5)].map((_, index) => (
+                                                    <FontAwesome
+                                                        key={index}
+                                                        name={index < Math.round(reviewStats.averageRating || 0) ? 'star' : 'star-o'}
+                                                        size={12}
+                                                        color="#FFB800"
+                                                        style={{ marginRight: 2 }}
+                                                    />
+                                                ))}
+                                            </View>
+                                        </View>
+                                        <View style={styles.statItem}>
+                                            <Text style={styles.statNumber}>{reviewStats.totalReviews || 0}</Text>
+                                            <Text style={styles.statLabel}>Total Reviews</Text>
+                                        </View>
+                                    </View>
+                                )}
 
-                    <View style={{ paddingHorizontal: 20 }}>
-                        {/* Write Review */}
-                        <TouchableOpacity style={styles.writeReview} onPress={() => navigation.navigate('Review')}>
-                            <Text style={styles.writeText}>Write a review</Text>
-                            <Icon name="chevron-right" size={16} color="#000" />
-                        </TouchableOpacity>
+                                {/* Write Review */}
+                                <TouchableOpacity 
+                                    style={styles.writeReview} 
+                                    onPress={() => navigation.navigate('Review', { 
+                                        vendorId, 
+                                        vendorName,
+                                        onReviewSubmitted: fetchReviews
+                                    })}
+                                >
+                                    <Text style={styles.writeText}>Write a review</Text>
+                                    <Icon name="chevron-right" size={16} color="#000" />
+                                </TouchableOpacity>
 
-                        {/* Review List */}
-                        {dummyReviews.map((review) => (
-                            <View key={review.id} style={styles.card}>
+                                {/* Loading State */}
+                                {isLoading && (
+                                    <View style={styles.loadingContainer}>
+                                        <ActivityIndicator size="large" color="#2C3D5B" />
+                                        <Text style={styles.loadingText}>Loading reviews...</Text>
+                                    </View>
+                                )}
+                            </View>
+                        )}
+                        renderItem={({ item: review }) => (
+                            <View style={styles.card}>
                                 <View style={styles.top}>
-                                    <Text style={styles.title}>{review.title}</Text>
+                                    <Text style={styles.title}>
+                                        {review.title || review.review_title || `Review by ${review.user_name || review.name || 'Anonymous'}`}
+                                    </Text>
                                     <View style={styles.stars}>
                                         {[...Array(5)].map((_, index) => (
                                             <FontAwesome
                                                 key={index}
-                                                name={index < review.rating ? 'star' : 'star-o'}
+                                                name={index < (review.rating || 0) ? 'star' : 'star-o'}
                                                 size={12}
                                                 color="#2C3D5B"
                                                 style={{ marginRight: 2 }}
@@ -186,21 +316,73 @@ export default function ReviewList({ navigation }) {
                                     </View>
                                 </View>
 
-                                <Text style={styles.description}>{review.description}</Text>
+                                <Text style={styles.description}>
+                                    {review.description || review.review_text || review.comment || 'No comment provided'}
+                                </Text>
+
+                                {/* Review Images */}
+                                {review.media_attachments && review.media_attachments.length > 0 && (
+                                    <View style={styles.reviewImages}>
+                                        {review.media_attachments.slice(0, 3).map((media, index) => (
+                                            <Image
+                                                key={index}
+                                                source={getImageSource(media.file_url || media.url, img)}
+                                                style={styles.reviewImage}
+                                                resizeMode="cover"
+                                            />
+                                        ))}
+                                        {review.media_attachments.length > 3 && (
+                                            <View style={styles.moreImagesOverlay}>
+                                                <Text style={styles.moreImagesText}>+{review.media_attachments.length - 3}</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                )}
 
                                 <View style={styles.footer}>
                                     <View style={styles.userInfo}>
-                                        <Image source={{ uri: review.avatar }} style={styles.avatar} />
-                                        <Text style={styles.userName}>{review.name}</Text>
+                                        <Image 
+                                            source={getImageSource(review.user_avatar || review.avatar, img)}
+                                            style={styles.avatar} 
+                                        />
+                                        <View>
+                                            <Text style={styles.userName}>
+                                                {review.user_name || review.name || 'Anonymous User'}
+                                            </Text>
+                                            <Text style={styles.reviewDate}>
+                                                {review.created_at ? new Date(review.created_at).toLocaleDateString() : ''}
+                                            </Text>
+                                        </View>
                                     </View>
-                                    <View style={styles.commentInfo}>
-                                        <Icon name="message-circle" size={14} color='rgba(28, 28, 28, 0.4)' />
-                                        <Text style={styles.commentCount}>{review.comments}</Text>
-                                    </View>
+                                    {review.helpful_count > 0 && (
+                                        <View style={styles.helpfulInfo}>
+                                            <Icon name="thumbs-up" size={12} color='rgba(28, 28, 28, 0.4)' />
+                                            <Text style={styles.helpfulCount}>{review.helpful_count}</Text>
+                                        </View>
+                                    )}
                                 </View>
                             </View>
-                        ))}
-                    </View>
+                        )}
+                        ListEmptyComponent={() => (
+                            !isLoading && (
+                                <View style={styles.emptyContainer}>
+                                    <Icon name="message-circle" size={48} color="#ccc" />
+                                    <Text style={styles.emptyTitle}>No Reviews Yet</Text>
+                                    <Text style={styles.emptySubtitle}>Be the first to review {vendorName}</Text>
+                                    <TouchableOpacity 
+                                        style={styles.emptyButton}
+                                        onPress={() => navigation.navigate('Review', { 
+                                            vendorId, 
+                                            vendorName,
+                                            onReviewSubmitted: fetchReviews
+                                        })}
+                                    >
+                                        <Text style={styles.emptyButtonText}>Write First Review</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            )
+                        )}
+                    />
                 );
             case 'CHAT':
                 return (
@@ -421,5 +603,112 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#666',
         fontStyle: 'italic',
+    },
+    statsContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        backgroundColor: '#f8f9fa',
+        padding: 16,
+        borderRadius: 12,
+        marginBottom: 16,
+    },
+    statItem: {
+        alignItems: 'center',
+        flex: 1,
+    },
+    statNumber: {
+        fontSize: 24,
+        fontWeight: '700',
+        color: '#2C3D5B',
+        marginBottom: 4,
+    },
+    statLabel: {
+        fontSize: 12,
+        color: '#666',
+        marginBottom: 4,
+    },
+    starsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    loadingContainer: {
+        alignItems: 'center',
+        paddingVertical: 40,
+    },
+    loadingText: {
+        marginTop: 12,
+        fontSize: 14,
+        color: '#666',
+    },
+    reviewImages: {
+        flexDirection: 'row',
+        marginVertical: 8,
+        position: 'relative',
+    },
+    reviewImage: {
+        width: 60,
+        height: 60,
+        borderRadius: 8,
+        marginRight: 8,
+        backgroundColor: '#f0f0f0',
+    },
+    moreImagesOverlay: {
+        position: 'absolute',
+        right: 8,
+        top: 0,
+        width: 60,
+        height: 60,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        borderRadius: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    moreImagesText: {
+        color: 'white',
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    reviewDate: {
+        fontSize: 10,
+        color: '#999',
+        marginTop: 2,
+    },
+    helpfulInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    helpfulCount: {
+        fontSize: 12,
+        color: 'rgba(28, 28, 28, 0.4)',
+    },
+    emptyContainer: {
+        alignItems: 'center',
+        paddingVertical: 60,
+        paddingHorizontal: 40,
+    },
+    emptyTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#333',
+        marginTop: 16,
+        marginBottom: 8,
+    },
+    emptySubtitle: {
+        fontSize: 14,
+        color: '#666',
+        textAlign: 'center',
+        marginBottom: 24,
+    },
+    emptyButton: {
+        backgroundColor: '#2C3D5B',
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 25,
+    },
+    emptyButtonText: {
+        color: 'white',
+        fontSize: 14,
+        fontWeight: '600',
     },
 });

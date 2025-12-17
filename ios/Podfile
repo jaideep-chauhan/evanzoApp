@@ -8,11 +8,12 @@ require Pod::Executable.execute_command('node', ['-p',
 platform :ios, min_ios_version_supported
 prepare_react_native_project!
 
-linkage = ENV['USE_FRAMEWORKS']
-if linkage != nil
-  Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
-  use_frameworks! :linkage => linkage.to_sym
-end
+# Use static frameworks - required for Firebase compatibility
+use_frameworks! :linkage => :static
+$RNFirebaseAsStaticFramework = true
+
+# Use modular headers for Swift compatibility
+use_modular_headers!
 
 target 'EVNZO' do
   config = use_native_modules!
@@ -31,5 +32,82 @@ target 'EVNZO' do
       :mac_catalyst_enabled => false,
       # :ccache_enabled => true
     )
+    
+    # Fix build issues with iOS 17 SDK and warnings
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        # Suppress all warnings for Pods
+        config.build_settings['GCC_WARN_INHIBIT_ALL_WARNINGS'] = 'YES'
+        config.build_settings['SWIFT_SUPPRESS_WARNINGS'] = 'YES'
+        config.build_settings['WARNING_CFLAGS'] = '-w'
+        config.build_settings['CLANG_WARN_DOCUMENTATION_COMMENTS'] = 'NO'
+        config.build_settings['CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER'] = 'NO'
+
+        # Remove the problematic warning flag entirely
+        config.build_settings.delete('CLANG_WARN_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES')
+
+        # Disable explicit module builds globally to fix Firebase/Google module visibility issues
+        # This prevents Xcode from using the new parallel module scanning which breaks dependencies
+        config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
+
+        # Fix for New Architecture and compilation errors
+        # Override compiler flags to completely suppress the warning
+        other_cflags = config.build_settings['OTHER_CFLAGS'] || ''
+        other_cflags = other_cflags.gsub(/-Werror=non-modular-include-in-framework-module/, '-Wno-error=non-modular-include-in-framework-module')
+        other_cflags = other_cflags.gsub(/-Wnon-modular-include-in-framework-module/, '-Wno-non-modular-include-in-framework-module')
+        config.build_settings['OTHER_CFLAGS'] = "#{other_cflags} -w -Wno-error=non-modular-include-in-framework-module -Wno-non-modular-include-in-framework-module"
+
+        other_cplusplusflags = config.build_settings['OTHER_CPLUSPLUSFLAGS'] || ''
+        other_cplusplusflags = other_cplusplusflags.gsub(/-Werror=non-modular-include-in-framework-module/, '-Wno-error=non-modular-include-in-framework-module')
+        other_cplusplusflags = other_cplusplusflags.gsub(/-Wnon-modular-include-in-framework-module/, '-Wno-non-modular-include-in-framework-module')
+        config.build_settings['OTHER_CPLUSPLUSFLAGS'] = "#{other_cplusplusflags} -w -Wno-error=non-modular-include-in-framework-module -Wno-non-modular-include-in-framework-module"
+
+        config.build_settings['OTHER_SWIFT_FLAGS'] = '$(inherited) -suppress-warnings'
+
+        # Remove -Werror flags that make warnings into errors
+        config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
+
+        # Ensure C++ standard is set
+        config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++20'
+
+        # Additional GoogleSignIn specific fix
+        if target.name == 'GoogleSignIn'
+          config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']
+          config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << 'SUPPRESS_ALL_WARNINGS=1'
+        end
+      end
+    end
+    
+    # Fix RCTThirdPartyComponentsProvider nil value crash
+    # This runs after pod install to fix the generated file
+    installer.pods_project.targets.each do |target|
+      if target.name == 'EVNZO'
+        phase_name = '[CP] Fix Third Party Components Provider'
+        unless target.build_phases.any? { |phase| phase.display_name == phase_name }
+          phase = target.new_shell_script_build_phase(phase_name)
+          phase.shell_script = <<-SCRIPT
+            echo "Fixing RCTThirdPartyComponentsProvider..."
+            if [ -f "${SRCROOT}/scripts/fix_third_party_provider.rb" ]; then
+              ruby "${SRCROOT}/scripts/fix_third_party_provider.rb"
+            fi
+          SCRIPT
+        end
+      end
+    end
+    
+    # Also run the fix immediately after pod install
+    ruby_script_path = File.join(__dir__, 'scripts', 'fix_third_party_provider.rb')
+    if File.exist?(ruby_script_path)
+      require_relative ruby_script_path
+      fix_third_party_components_provider()
+    end
+
+    # Fix ReactCommon module redefinition - create empty React-RuntimeApple.modulemap
+    react_runtime_modulemap = File.join(__dir__, 'Pods/Headers/Public/ReactCommon/React-RuntimeApple.modulemap')
+    if File.exist?(react_runtime_modulemap)
+      # Replace with empty module to avoid conflict
+      File.write(react_runtime_modulemap, "// Intentionally empty to avoid ReactCommon module redefinition\n")
+      Pod::UI.puts "Fixed React-RuntimeApple.modulemap to be empty".green
+    end
   end
 end

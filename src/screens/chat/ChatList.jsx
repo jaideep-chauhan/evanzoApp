@@ -1,93 +1,384 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
     FlatList,
     TouchableOpacity,
     StyleSheet,
-    SafeAreaView,
     Image,
     TextInput,
+    StatusBar,
+    ActivityIndicator,
+    RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../../ThemeContext';
-
-// Mock chat data - replace with real data from your backend
-const mockChats = [
-    {
-        id: '1',
-        name: 'Sarah Johnson',
-        lastMessage: 'Hey! Are you available for the wedding event?',
-        timestamp: '10:30 AM',
-        unreadCount: 2,
-        avatar: 'https://randomuser.me/api/portraits/women/1.jpg',
-        isOnline: true,
-    },
-    {
-        id: '2',
-        name: 'Mike Photography',
-        lastMessage: 'I can provide photography services for your event',
-        timestamp: 'Yesterday',
-        unreadCount: 0,
-        avatar: 'https://randomuser.me/api/portraits/men/1.jpg',
-        isOnline: false,
-    },
-    {
-        id: '3',
-        name: 'Elite Catering',
-        lastMessage: 'What type of cuisine are you looking for?',
-        timestamp: 'Monday',
-        unreadCount: 1,
-        avatar: 'https://randomuser.me/api/portraits/women/2.jpg',
-        isOnline: true,
-    },
-    {
-        id: '4',
-        name: 'DJ Alex',
-        lastMessage: 'I have availability for your date',
-        timestamp: 'Sunday',
-        unreadCount: 0,
-        avatar: 'https://randomuser.me/api/portraits/men/2.jpg',
-        isOnline: false,
-    },
-    {
-        id: '5',
-        name: 'Floral Designs',
-        lastMessage: 'I sent you some samples, please check',
-        timestamp: 'Saturday',
-        unreadCount: 3,
-        avatar: 'https://randomuser.me/api/portraits/women/3.jpg',
-        isOnline: true,
-    },
-];
+import chatService from '../../services/chatService';
+import socketService from '../../services/socketService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function ChatList({ navigation }) {
+    const [chats, setChats] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [filteredChats, setFilteredChats] = useState(mockChats);
+    const [userId, setUserId] = useState(null);
+    const [error, setError] = useState(null);
     const theme = useTheme();
 
-    const handleSearch = (query) => {
-        setSearchQuery(query);
-        if (query.trim() === '') {
-            setFilteredChats(mockChats);
-        } else {
-            const filtered = mockChats.filter(chat =>
-                chat.name.toLowerCase().includes(query.toLowerCase()) ||
-                chat.lastMessage.toLowerCase().includes(query.toLowerCase())
-            );
-            setFilteredChats(filtered);
+    useEffect(() => {
+        loadUserAndChats();
+
+        // Refresh chats when screen comes into focus
+        const unsubscribe = navigation.addListener('focus', async () => {
+            console.log('📱 ChatList screen focused, refreshing...');
+
+            // Get userId from storage if not in state
+            let currentUserId = userId;
+            if (!currentUserId) {
+                currentUserId = await AsyncStorage.getItem('userId');
+                console.log('📱 Retrieved userId from storage:', currentUserId);
+            }
+
+            if (currentUserId) {
+                // Reload chats to get fresh unread counts from server
+                console.log('📱 Calling loadChats with userId:', currentUserId);
+                await loadChats(currentUserId);
+            } else {
+                console.error('❌ No userId available for refresh');
+            }
+        });
+
+        return () => {
+            unsubscribe();
+            socketService.off('chat-updated');
+            socketService.off('new-message');
+            socketService.off('chat-read');
+        };
+    }, [navigation, userId]); // Add userId to dependency array
+    
+    // Set up socket listeners when userId is available
+    useEffect(() => {
+        if (userId) {
+            setupSocketListeners();
+        }
+    }, [userId]);
+
+    const setupSocketListeners = () => {
+        // Listen for new messages to update last message
+        socketService.on('new-message', (data) => {
+            console.log('📩 New message received in ChatList:', data.message.chat_id);
+            updateChatLastMessage(data.message.chat_id, data.message);
+        });
+
+        // Listen for chat updates
+        socketService.on('chat-updated', (data) => {
+            console.log('🔄 Chat updated, reloading list');
+            loadChats(userId);
+        });
+
+        // Listen for chat read events to reset unread count
+        socketService.on('chat-read', (data) => {
+            console.log('✅ ChatList - chat-read event received:', {
+                chatId: data.chatId,
+                readBy: data.readBy,
+                currentUserId: userId,
+                match: String(data.readBy) === String(userId)
+            });
+
+            if (String(data.readBy) === String(userId)) {
+                // Current user marked chat as read, reset unread count
+                console.log('✅ Resetting unread count for chat:', data.chatId);
+                setChats(prevChats => {
+                    const updated = prevChats.map(chat =>
+                        String(chat.id) === String(data.chatId)
+                            ? { ...chat, unreadCount: 0 }
+                            : chat
+                    );
+                    console.log('Updated chats:', updated.find(c => String(c.id) === String(data.chatId)));
+                    return updated;
+                });
+            }
+        });
+    };
+
+    const updateChatLastMessage = (chatId, message) => {
+        setChats(prevChats => {
+            // Check if chat exists in the list
+            const chatExists = prevChats.some(chat => chat.id === chatId);
+
+            if (chatExists) {
+                // Update existing chat
+                const updatedChats = prevChats.map(chat => {
+                    if (chat.id === chatId) {
+                        // Format last message based on message type
+                        let lastMessage = message.content;
+                        if (message.message_type === 'image') {
+                            lastMessage = '📷 Photo';
+                        } else if (message.message_type === 'document') {
+                            lastMessage = '📄 Document';
+                        } else if (message.message_type === 'video') {
+                            lastMessage = '🎥 Video';
+                        } else if (!lastMessage || lastMessage.trim() === '') {
+                            lastMessage = '📎 Attachment';
+                        }
+
+                        // Increment unread count only if message is from another user
+                        const isFromOtherUser = String(message.sender_id) !== String(userId);
+
+                        return {
+                            ...chat,
+                            lastMessage: lastMessage,
+                            time: formatTime(message.created_at),
+                            timestamp: message.created_at, // Update raw timestamp for sorting
+                            unreadCount: isFromOtherUser ? (chat.unreadCount || 0) + 1 : chat.unreadCount
+                        };
+                    }
+                    return chat;
+                });
+
+                // Re-sort chats by timestamp (most recent first)
+                updatedChats.sort((a, b) => {
+                    const timeA = a.timestamp ? parseInt(a.timestamp) : 0;
+                    const timeB = b.timestamp ? parseInt(b.timestamp) : 0;
+                    return timeB - timeA;
+                });
+
+                return updatedChats;
+            } else {
+                // Chat doesn't exist, reload the chat list to get the new chat
+                console.log('🔄 New chat detected, reloading chat list...');
+                loadChats(userId);
+                return prevChats;
+            }
+        });
+    };
+
+    const loadUserAndChats = async () => {
+        try {
+            const storedUserId = await AsyncStorage.getItem('userId');
+            setUserId(storedUserId);
+
+            // Try to connect to socket but don't block on it
+            if (!socketService.isSocketConnected()) {
+                socketService.connect().catch(err => {
+                    console.error('Socket connection failed, but continuing with chat list:', err);
+                });
+            }
+
+            // Pass userId to loadChats to ensure it's available
+            await loadChats(storedUserId);
+        } catch (error) {
+            console.error('Error loading chats:', error);
+            // Ensure loading state is reset even if there's an error
+            setLoading(false);
+            setRefreshing(false);
         }
     };
 
-    const renderChatItem = ({ item }) => (
+    const loadChats = async (currentUserId = null) => {
+        try {
+            console.log('📥 Loading chats...');
+            setLoading(true);
+            setError(null);
+            const result = await chatService.getChats();
+            console.log('📥 Chat service result:', {
+                success: result.success,
+                hasData: !!result.data,
+                hasResults: !!result.data?.results,
+                resultsCount: result.data?.results?.length || 0,
+                fullResult: JSON.stringify(result, null, 2)
+            });
+
+            // Use passed userId or state userId
+            const userIdToUse = currentUserId || userId;
+
+            if (!userIdToUse) {
+                console.error('❌ User ID not available for loading chats');
+                setError('User not authenticated. Please log in again.');
+                setLoading(false);
+                setRefreshing(false);
+                return;
+            }
+
+            if (result.success && result.data.results) {
+                // Format chats for display
+                const formattedChats = await Promise.all(result.data.results.map(async (chat) => {
+                    console.log('🔍 Processing chat:', {
+                        chatId: chat.chat_id,
+                        type: chat.type,
+                        participantsCount: chat.participants?.length,
+                        participants: chat.participants?.map(p => ({
+                            user_id: p.user_id,
+                            hasUser: !!p.user,
+                            userFields: p.user ? Object.keys(p.user) : [],
+                            fullData: p
+                        }))
+                    });
+
+                    // Get participant info if it's a direct chat
+                    let participantInfo = {};
+                    if (chat.type === 'direct' && chat.participants && chat.participants.length > 0) {
+                        // Find the OTHER participant (not the current user)
+                        // Handle both string and number comparisons
+                        const otherParticipant = chat.participants.find(p => {
+                            const participantId = String(p.user_id || p.id);
+                            const currentId = String(userIdToUse);
+                            console.log('🔍 Comparing participants:', { participantId, currentId, isMatch: participantId !== currentId });
+                            return participantId !== currentId;
+                        });
+
+                        console.log('🔍 Other participant found:', {
+                            found: !!otherParticipant,
+                            hasUser: !!otherParticipant?.user,
+                            userData: otherParticipant?.user,
+                            participantData: otherParticipant
+                        });
+
+                        if (otherParticipant?.user) {
+                            // User data is populated from the backend
+                            participantInfo = {
+                                name: otherParticipant.user.full_name || otherParticipant.user.name || 'Unknown User',
+                                avatar: otherParticipant.user.profile_pic || otherParticipant.user.avatar
+                            };
+                            console.log('✅ Using user data:', participantInfo);
+                        } else if (otherParticipant) {
+                            // Fallback if user data is not populated
+                            participantInfo = {
+                                name: otherParticipant.full_name || otherParticipant.name || 'Unknown User',
+                                avatar: otherParticipant.profile_pic || otherParticipant.avatar
+                            };
+                            console.log('⚠️ Using fallback data:', participantInfo);
+                        }
+                        
+                        // If still no name found and we have participants, ensure we're not showing current user
+                        if (!participantInfo.name || participantInfo.name === 'Unknown User') {
+                            // Try to get name from chat metadata
+                            if (chat.metadata?.recipient_name) {
+                                participantInfo.name = chat.metadata.recipient_name;
+                            }
+                        }
+                    }
+
+                    // Format last message based on message type
+                    let lastMessage = chat.last_message || 'No messages yet';
+                    if (chat.last_message_type === 'image') {
+                        lastMessage = '📷 Photo';
+                    } else if (chat.last_message_type === 'document') {
+                        lastMessage = '📄 Document';
+                    } else if (chat.last_message_type === 'video') {
+                        lastMessage = '🎥 Video';
+                    } else if (!chat.last_message || chat.last_message.trim() === '') {
+                        // If there's a message but no content, it's likely an attachment
+                        if (chat.last_message_time) {
+                            lastMessage = '📎 Attachment';
+                        } else {
+                            lastMessage = 'No messages yet';
+                        }
+                    }
+
+                    return {
+                        id: chat.chat_id,
+                        name: participantInfo.name || chat.name || 'Unknown User',
+                        lastMessage: lastMessage,
+                        time: formatTime(chat.last_message_time),
+                        timestamp: chat.last_message_time, // Keep raw timestamp for sorting
+                        avatar: participantInfo.avatar || chat.avatar || generateAvatar(participantInfo.name || chat.name),
+                        unreadCount: chat.unread_count || 0,
+                        isOnline: false, // This will be updated via socket
+                        type: chat.type,
+                        participants: chat.participants || [],
+                        recipientId: chat.participants?.find(p => String(p.user_id) !== String(userIdToUse))?.user_id
+                    };
+                }));
+                
+                // Remove any duplicate chats (same chat_id)
+                const uniqueChats = formattedChats.reduce((acc, chat) => {
+                    const exists = acc.find(c => c.id === chat.id);
+                    if (!exists) {
+                        acc.push(chat);
+                    } else {
+                        console.log('⚠️ Duplicate chat found and removed:', chat.id);
+                    }
+                    return acc;
+                }, []);
+                
+                // Sort by last message timestamp (most recent first)
+                uniqueChats.sort((a, b) => {
+                    const timeA = a.timestamp ? parseInt(a.timestamp) : 0;
+                    const timeB = b.timestamp ? parseInt(b.timestamp) : 0;
+                    return timeB - timeA; // Descending order (newest first)
+                });
+
+                console.log('✅ Formatted', uniqueChats.length, 'chats (removed', formattedChats.length - uniqueChats.length, 'duplicates)');
+                setChats(uniqueChats);
+            } else {
+                // API call failed or returned no results
+                console.error('❌ Failed to load chats:', result.message || 'No results returned');
+                setError(result.message || 'Failed to load conversations');
+                setChats([]);
+            }
+        } catch (error) {
+            console.error('❌ Error loading chats:', error);
+            setError('Unable to load conversations. Please try again.');
+            setChats([]);
+        } finally {
+            console.log('✅ Loading complete, setting loading to false');
+            setLoading(false);
+            setRefreshing(false);
+        }
+    };
+
+    const generateAvatar = (name) => {
+        const encodedName = encodeURIComponent(name || 'User');
+        const colors = ['5E72E4', '11CDEF', '2DCE89', 'FB6340', 'F5365C'];
+        const randomColor = colors[Math.floor(Math.random() * colors.length)];
+        return `https://ui-avatars.com/api/?name=${encodedName}&background=${randomColor}&color=fff&bold=true`;
+    };
+
+    const formatTime = (timestamp) => {
+        if (!timestamp) return '';
+        
+        const date = new Date(parseInt(timestamp));
+        const now = new Date();
+        const diffMs = now - date;
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+        if (diffDays === 0) {
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        } else if (diffDays === 1) {
+            return 'Yesterday';
+        } else if (diffDays < 7) {
+            return date.toLocaleDateString([], { weekday: 'short' });
+        } else {
+            return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        }
+    };
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        loadChats(userId);
+    };
+
+    const navigateToChat = (chat) => {
+        navigation.navigate('ChatScreen', {
+            chatId: chat.id,
+            chatName: chat.name,
+            avatar: chat.avatar,
+            isOnline: chat.isOnline,
+            recipientId: chat.recipientId,
+        });
+    };
+
+    const filteredChats = chats.filter(chat =>
+        chat.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    const renderChat = ({ item }) => (
         <TouchableOpacity
             style={styles.chatItem}
-            onPress={() => navigation.navigate('ChatScreen', {
-                chatId: item.id,
-                chatName: item.name,
-                avatar: item.avatar,
-                isOnline: item.isOnline
-            })}
+            onPress={() => navigateToChat(item)}
+            activeOpacity={0.7}
         >
             <View style={styles.avatarContainer}>
                 <Image source={{ uri: item.avatar }} style={styles.avatar} />
@@ -96,16 +387,21 @@ export default function ChatList({ navigation }) {
 
             <View style={styles.chatContent}>
                 <View style={styles.chatHeader}>
-                    <Text style={[styles.chatName, { color: theme.colors.primary }]}>{item.name}</Text>
-                    <Text style={styles.timestamp}>{item.timestamp}</Text>
+                    <Text style={[styles.chatName, { color: theme.colors.text }]} numberOfLines={1}>
+                        {item.name}
+                    </Text>
+                    <Text style={[styles.chatTime, { color: theme.colors.secondary }]}>
+                        {item.time}
+                    </Text>
                 </View>
+
                 <View style={styles.messageRow}>
-                    <Text style={styles.lastMessage} numberOfLines={1}>
+                    <Text style={[styles.lastMessage, { color: theme.colors.secondary }]} numberOfLines={1}>
                         {item.lastMessage}
                     </Text>
                     {item.unreadCount > 0 && (
                         <View style={[styles.unreadBadge, { backgroundColor: theme.colors.primary }]}>
-                            <Text style={styles.unreadText}>
+                            <Text style={styles.unreadCount}>
                                 {item.unreadCount > 99 ? '99+' : item.unreadCount}
                             </Text>
                         </View>
@@ -115,57 +411,92 @@ export default function ChatList({ navigation }) {
         </TouchableOpacity>
     );
 
+    console.log('🎨 Render - loading:', loading, 'chats count:', chats.length);
+
+    if (loading) {
+        return (
+            <View style={[styles.container, styles.centerContent]}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+                <Text style={[styles.loadingText, { color: theme.colors.secondary }]}>
+                    Loading conversations...
+                </Text>
+            </View>
+        );
+    }
+
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: '#f6f8fa' }]}>
-            <View style={styles.androidPad} />
+        <View style={styles.container}>
+            <StatusBar barStyle="light-content" backgroundColor={theme.colors.primary} />
+            
             {/* Header */}
-            <View style={[styles.header]}>
-                <TouchableOpacity
-                    style={styles.backButton}
-                    onPress={() => navigation.goBack()}
-                >
-                    <Icon name="arrow-back" size={24} color="#2C3D5B" />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Chats</Text>
-                {/* <TouchableOpacity style={styles.headerAction}>
-                    <Icon name="add" size={24} color="#2C3D5B" />
-                </TouchableOpacity> */}
+            <View style={[styles.header, { backgroundColor: theme.colors.primary }]}>
+                <View style={styles.headerLeft}>
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                        <Icon name="arrow-back" size={24} color="#fff" />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Messages</Text>
+                </View>
             </View>
 
             {/* Search Bar */}
             <View style={styles.searchContainer}>
-                <View style={styles.searchBar}>
-                    <Icon name="search-outline" size={20} color="#8B95A5" style={styles.searchIcon} />
-                    <TextInput
-                        style={[styles.searchInput, { color: theme.colors.primary }]}
-                        placeholder="Search chats..."
-                        placeholderTextColor="#8B95A5"
-                        value={searchQuery}
-                        onChangeText={handleSearch}
-                    />
-                    {searchQuery.length > 0 && (
-                        <TouchableOpacity onPress={() => handleSearch('')}>
-                            <Icon name="close-circle" size={20} color="#8B95A5" />
-                        </TouchableOpacity>
-                    )}
-                </View>
+                <Icon name="search" size={20} color="#8B95A5" />
+                <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search conversations..."
+                    placeholderTextColor="#8B95A5"
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                />
+                {searchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearchQuery('')}>
+                        <Icon name="close-circle" size={20} color="#8B95A5" />
+                    </TouchableOpacity>
+                )}
             </View>
 
             {/* Chat List */}
             <FlatList
                 data={filteredChats}
-                renderItem={renderChatItem}
-                keyExtractor={(item) => item.id}
-                style={styles.chatList}
+                renderItem={renderChat}
+                keyExtractor={(item) => item.id.toString()}
+                contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.listContainer}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        colors={[theme.colors.primary]}
+                        tintColor={theme.colors.primary}
+                    />
+                }
+                ListEmptyComponent={
+                    <View style={styles.emptyContainer}>
+                        {error ? (
+                            <>
+                                <Icon name="alert-circle-outline" size={64} color="#FF6B6B" />
+                                <Text style={styles.emptyText}>Unable to Load Chats</Text>
+                                <Text style={styles.emptySubtext}>{error}</Text>
+                                <TouchableOpacity
+                                    style={[styles.startChatButton, { backgroundColor: theme.colors.primary }]}
+                                    onPress={() => loadChats(userId)}
+                                >
+                                    <Text style={styles.startChatText}>Retry</Text>
+                                </TouchableOpacity>
+                            </>
+                        ) : (
+                            <>
+                                <Icon name="chatbubbles-outline" size={64} color="#C4C4C4" />
+                                <Text style={styles.emptyText}>No conversations yet</Text>
+                                <Text style={styles.emptySubtext}>
+                                    Start chatting with vendors to see your messages here
+                                </Text>
+                            </>
+                        )}
+                    </View>
+                }
             />
-
-            {/* Floating Action Button */}
-            {/* <TouchableOpacity style={[styles.fab, { backgroundColor: theme.colors.primary }]}>
-                <Icon name="chatbubble" size={24} color="#fff" />
-            </TouchableOpacity> */}
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -174,84 +505,84 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#f6f8fa',
     },
-    androidPad: {
-        height: 18,
+    centerContent: {
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loadingText: {
+        marginTop: 10,
+        fontSize: 16,
     },
     header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
+        paddingTop: StatusBar.currentHeight || 44,
+        paddingBottom: 15,
         paddingHorizontal: 20,
-        paddingVertical: 16,
-        backgroundColor: '#f6f8fa',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         elevation: 4,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E5E7EB',
-        position: 'relative',
+    },
+    headerLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
     },
     backButton: {
+        marginRight: 15,
         padding: 5,
-        position: 'absolute',
-        left: 20,
-        zIndex: 1,
     },
     headerTitle: {
-        fontSize: 30,
-        fontWeight: '600',
-        color: '#2C3D5B',
-        textAlign: 'center',
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#fff',
     },
     headerAction: {
-        padding: 5,
+        padding: 8,
     },
     searchContainer: {
-        paddingHorizontal: 20,
-        paddingVertical: 15,
-        backgroundColor: '#f6f8fa',
-    },
-    searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#fff',
-        borderRadius: 25,
+        marginHorizontal: 20,
+        marginVertical: 15,
         paddingHorizontal: 15,
         paddingVertical: 12,
-        elevation: 2,
+        borderRadius: 12,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-    },
-    searchIcon: {
-        marginRight: 10,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
     },
     searchInput: {
         flex: 1,
+        marginLeft: 10,
         fontSize: 16,
         color: '#2C3D5B',
     },
-    chatList: {
-        flex: 1,
-    },
-    listContainer: {
-        paddingBottom: 100,
+    listContent: {
+        paddingBottom: 20,
     },
     chatItem: {
         flexDirection: 'row',
-        alignItems: 'center',
         backgroundColor: '#fff',
-        paddingHorizontal: 20,
-        paddingVertical: 15,
-        borderBottomWidth: 1,
-        borderBottomColor: '#e3e8f0',
+        marginHorizontal: 20,
+        marginVertical: 5,
+        padding: 15,
+        borderRadius: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.03,
+        shadowRadius: 3,
+        elevation: 1,
     },
     avatarContainer: {
         position: 'relative',
-        marginRight: 15,
+        marginRight: 12,
     },
     avatar: {
         width: 50,
@@ -263,32 +594,31 @@ const styles = StyleSheet.create({
         position: 'absolute',
         bottom: 2,
         right: 2,
-        width: 14,
-        height: 14,
-        borderRadius: 7,
+        width: 12,
+        height: 12,
+        borderRadius: 6,
         backgroundColor: '#4CAF50',
         borderWidth: 2,
         borderColor: '#fff',
     },
     chatContent: {
         flex: 1,
+        justifyContent: 'center',
     },
     chatHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 5,
+        marginBottom: 4,
     },
     chatName: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#2C3D5B',
         flex: 1,
+        marginRight: 10,
     },
-    timestamp: {
+    chatTime: {
         fontSize: 12,
-        color: '#8B95A5',
-        marginLeft: 10,
     },
     messageRow: {
         flexDirection: 'row',
@@ -297,38 +627,51 @@ const styles = StyleSheet.create({
     },
     lastMessage: {
         fontSize: 14,
-        color: '#8B95A5',
         flex: 1,
         marginRight: 10,
     },
     unreadBadge: {
-        backgroundColor: '#2C3D5B',
-        borderRadius: 12,
-        minWidth: 24,
-        height: 24,
+        minWidth: 20,
+        height: 20,
+        borderRadius: 10,
         justifyContent: 'center',
         alignItems: 'center',
-        paddingHorizontal: 8,
+        paddingHorizontal: 6,
     },
-    unreadText: {
+    unreadCount: {
         color: '#fff',
-        fontSize: 12,
-        fontWeight: '600',
+        fontSize: 11,
+        fontWeight: 'bold',
     },
-    fab: {
-        position: 'absolute',
-        bottom: 30,
-        right: 30,
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        backgroundColor: '#2C3D5B',
+    emptyContainer: {
+        flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        elevation: 8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
+        paddingTop: 100,
+        paddingHorizontal: 40,
+    },
+    emptyText: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#666',
+        marginTop: 20,
+        marginBottom: 8,
+    },
+    emptySubtext: {
+        fontSize: 14,
+        color: '#999',
+        textAlign: 'center',
+        lineHeight: 20,
+    },
+    startChatButton: {
+        marginTop: 20,
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        borderRadius: 24,
+    },
+    startChatText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
     },
 });

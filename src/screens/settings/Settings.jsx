@@ -6,12 +6,18 @@ import {
     SafeAreaView,
     TouchableOpacity,
     ScrollView,
+    Alert,
+    ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { useAuth } from '../../context/AuthContext';
+import notificationService from '../../services/notificationService';
 
 export default function Settings() {
     const navigation = useNavigation();
+    const { logout, user } = useAuth();
+    const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
     const settingsSections = [
         {
@@ -30,6 +36,14 @@ export default function Settings() {
             ]
         },
         {
+            title: 'Testing',
+            items: [
+                { name: 'Test Chat Notification', action: 'test_chat_notification', icon: 'chatbubble-outline' },
+                { name: 'Test Approval Notification', action: 'test_approval_notification', icon: 'checkmark-circle-outline' },
+                { name: 'Test Rejection Notification', action: 'test_rejection_notification', icon: 'close-circle-outline' },
+            ]
+        },
+        {
             title: 'Actions',
             items: [
                 { name: 'Report Problem', screen: 'ReportProblem', icon: 'alert-circle-outline' },
@@ -40,11 +54,115 @@ export default function Settings() {
 
     const handleItemPress = (item) => {
         if (item.action === 'logout') {
-            // Handle logout logic
-            navigation.navigate('Login');
+            handleLogout();
+        } else if (item.action === 'test_chat_notification') {
+            testChatNotification();
+        } else if (item.action === 'test_approval_notification') {
+            testApprovalNotification();
+        } else if (item.action === 'test_rejection_notification') {
+            testRejectionNotification();
         } else if (item.screen) {
             navigation.navigate(item.screen);
         }
+    };
+
+    const testChatNotification = async () => {
+        try {
+            await notificationService.displayNotification({
+                data: {
+                    type: 'chat_message',
+                    chat_id: 'test_chat_123',
+                    sender_name: 'Test User',
+                    sender_id: 'test_user_456',
+                    message: 'This is a test chat message notification!',
+                },
+                notification: {
+                    title: 'Test User',
+                    body: 'This is a test chat message notification!',
+                }
+            });
+            Alert.alert('Success', 'Test chat notification sent!');
+        } catch (error) {
+            Alert.alert('Error', 'Failed to send test notification');
+            console.error('Test notification error:', error);
+        }
+    };
+
+    const testApprovalNotification = async () => {
+        try {
+            await notificationService.displayNotification({
+                data: {
+                    type: 'admin_notification',
+                    action: 'ad_approved',
+                    ad_type: 'vendor',
+                    ad_id: 'test_ad_123',
+                },
+                notification: {
+                    title: '✅ Ad Approved!',
+                    body: 'Your vendor ad "Test Photography Service" has been approved and is now live.',
+                }
+            });
+            Alert.alert('Success', 'Test approval notification sent!');
+        } catch (error) {
+            Alert.alert('Error', 'Failed to send test notification');
+            console.error('Test notification error:', error);
+        }
+    };
+
+    const testRejectionNotification = async () => {
+        try {
+            await notificationService.displayNotification({
+                data: {
+                    type: 'admin_notification',
+                    action: 'ad_rejected',
+                    ad_type: 'event',
+                    ad_id: 'test_ad_456',
+                    rejection_reason: 'Missing required information',
+                },
+                notification: {
+                    title: '❌ Ad Rejected',
+                    body: 'Your event ad "Test Birthday Party" has been rejected. Reason: Missing required information',
+                }
+            });
+            Alert.alert('Success', 'Test rejection notification sent!');
+        } catch (error) {
+            Alert.alert('Error', 'Failed to send test notification');
+            console.error('Test notification error:', error);
+        }
+    };
+
+    const handleLogout = () => {
+        Alert.alert(
+            'Logout',
+            'Are you sure you want to logout?',
+            [
+                {
+                    text: 'Cancel',
+                    style: 'cancel',
+                },
+                {
+                    text: 'Logout',
+                    style: 'destructive',
+                    onPress: async () => {
+                        setIsLoggingOut(true);
+                        try {
+                            await logout();
+                            // Navigate to login screen and reset navigation stack
+                            navigation.reset({
+                                index: 0,
+                                routes: [{ name: 'Login' }],
+                            });
+                        } catch (error) {
+                            console.error('Logout error:', error);
+                            Alert.alert('Error', 'Failed to logout. Please try again.');
+                        } finally {
+                            setIsLoggingOut(false);
+                        }
+                    },
+                },
+            ],
+            { cancelable: true }
+        );
     };
 
     const renderSection = (section) => (
@@ -78,6 +196,14 @@ export default function Settings() {
             <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
                 {settingsSections.map(renderSection)}
             </ScrollView>
+            
+            {/* Loading Overlay */}
+            {isLoggingOut && (
+                <View style={styles.loadingOverlay}>
+                    <ActivityIndicator size="large" color="#fff" />
+                    <Text style={styles.loadingText}>Logging out...</Text>
+                </View>
+            )}
         </SafeAreaView>
     );
 }
@@ -179,6 +305,18 @@ const styles = StyleSheet.create({
     arrow: {
         color: '#B0B8C1',
         fontSize: 16,
+        fontWeight: '600',
+    },
+    loadingOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loadingText: {
+        color: '#fff',
+        fontSize: 16,
+        marginTop: 12,
         fontWeight: '600',
     },
 });

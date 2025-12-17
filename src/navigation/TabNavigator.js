@@ -5,17 +5,19 @@ import LinearGradient from 'react-native-linear-gradient';
 import {
     UserGroupIcon,
     CalendarDaysIcon,
-    UserIcon
+    UserIcon,
+    ChatBubbleLeftRightIcon
 } from 'react-native-heroicons/outline';
 import {
     UserGroupIcon as UserGroupIconSolid,
     CalendarDaysIcon as CalendarDaysIconSolid,
     UserIcon as UserIconSolid,
-    // ClipboardCheckIcon as ClipboardCheckIconSolid
+    ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid
 } from 'react-native-heroicons/solid';
 import Vendor from '../screens/vendors';
 import Events from '../screens/events';
 import Profile from '../screens/profile/index';
+import ChatList from '../screens/chat/ChatList';
 import { useTheme } from '../ThemeContext';
 
 
@@ -66,6 +68,10 @@ function CustomTabBar({ state, descriptors, navigation }) {
                                 return isFocused ?
                                     <CalendarDaysIconSolid {...iconProps} /> :
                                     <CalendarDaysIcon {...iconProps} />;
+                            case 'Messages':
+                                return isFocused ?
+                                    <ChatBubbleLeftRightIconSolid {...iconProps} /> :
+                                    <ChatBubbleLeftRightIcon {...iconProps} />;
                             case 'Profile':
                                 return isFocused ?
                                     <UserIconSolid {...iconProps} /> :
@@ -143,7 +149,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         backgroundColor: '#F4F4F4',
         borderRadius: 40,
-        marginHorizontal: 50,
+        marginHorizontal: 20,
         marginBottom: 20,
         position: 'relative',
         elevation: 0,
@@ -204,8 +210,8 @@ const TabNavigator = () => {
             >
                 <Tab.Screen name="Vendors" component={Vendor} />
                 <Tab.Screen name="Events" component={Events} />
+                <Tab.Screen name="Messages" component={ChatList} />
                 <Tab.Screen name="Profile" component={Profile} />
-
             </Tab.Navigator>
         </View>
     );

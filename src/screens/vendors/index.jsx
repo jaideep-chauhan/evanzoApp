@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Animated, RefreshControl, ActivityIndicator } from 'react-native';
+import { Animated, ActivityIndicator, Alert } from 'react-native';
 import {
     StyleSheet,
     SafeAreaView,
@@ -9,18 +9,23 @@ import {
     TextInput,
     TouchableOpacity,
     Modal,
+    RefreshControl,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import SearchHeader from './SearchHeader';
 import Tabs from './Tabs';
 import VendorCard from './VendorCard';
 import LocationSearchModal from './LocationSearchModal';
-import CategorySelectionModal from './CategorySelectionModal';
+import CategorySelectionModalEnhanced from './CategorySelectionModalEnhanced';
 import PreSavedMessage from '../profile/PreSavedMessage';
-import img from '../../assets/images/dummy.png';
+import img from '../../assets/images/dummy.png'; // Fallback image
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
 import CatererCard from './CatererCard';
 import Icon from 'react-native-vector-icons/Ionicons';
+import vendorService from '../../services/vendorService';
+import filterService from '../../services/filterService';
+import chatService from '../../services/chatService';
 
 export default function Vendor() {
     const navigation = useNavigation();
@@ -28,6 +33,7 @@ export default function Vendor() {
     const [selectedLocation, setSelectedLocation] = useState(null);
     const [showLocationModal, setShowLocationModal] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState(null);
+    const [selectedCategoryNames, setSelectedCategoryNames] = useState([]);
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [showPreSaveModal, setShowPreSaveModal] = useState(false);
     const [focusedCardIndex, setFocusedCardIndex] = useState(0);
@@ -36,115 +42,216 @@ export default function Vendor() {
     const [activeTab, setActiveTab] = useState(null); // No tab active by default
     const [refreshing, setRefreshing] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [vendors, setVendors] = useState([]);
+    const [isFetchingVendors, setIsFetchingVendors] = useState(false);
+    const [networkError, setNetworkError] = useState(false);
+    const fetchTimeoutRef = useRef(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [currentFilters, setCurrentFilters] = useState({});
+    const [pagination, setPagination] = useState({ page: 1, limit: 10, totalPages: 1, totalResults: 0 });
+    const [checkingChat, setCheckingChat] = useState(null); // Track which vendor's chat is being checked
+    const chatCacheRef = useRef(new Map()); // Cache existing chat lookups
 
-    const vendors = [
-        {
-            initials: '4S',
-            name: '4x90 Studio',
-            type: 'Photography',
-            rating: 5,
-            description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do',
-            images: [img, img, img],
-            extraCount: 10,
-            location: 'Toronto, ON',
-        },
-        {
-            initials: 'AB',
-            name: 'Alpha Bakers',
-            type: 'Bakery',
-            rating: 4.5,
-            description: 'Freshly baked goods for every occasion.',
-            images: [img, img, img],
-            extraCount: 5,
-            location: 'Vancouver, BC',
-        },
-        {
-            initials: 'DJ',
-            name: 'DJ Max',
-            type: 'Music',
-            rating: 4.8,
-            description: 'Professional DJ services for weddings and parties.',
-            images: [img, img, img],
-            extraCount: 7,
-            location: 'Toronto, ON',
-        },
-        {
-            initials: 'FL',
-            name: 'Floral Lane',
-            type: 'Florist',
-            rating: 4.7,
-            description: 'Beautiful flower arrangements and bouquets.',
-            images: [img, img, img],
-            extraCount: 3,
-            location: 'Montreal, QC',
-        },
-        {
-            initials: 'CT',
-            name: 'Catering Time',
-            type: 'Catering',
-            rating: 4.9,
-            description: 'Delicious food and excellent service for your events.',
-            images: [img, img, img],
-            extraCount: 8,
-            location: 'Calgary, AB',
-        },
-        {
-            initials: 'EV',
-            name: 'Eventify',
-            type: 'Event Planner',
-            rating: 5,
-            description: 'Making your events memorable and stress-free.',
-            images: [img, img, img],
-            extraCount: 12,
-            location: 'Toronto, ON',
-        },
-        {
-            initials: 'PH',
-            name: 'PhotoHub',
-            type: 'Photography',
-            rating: 4.6,
-            description: 'Capturing moments that last a lifetime.',
-            images: [img, img, img],
-            extraCount: 6,
-            location: 'Vancouver, BC',
-        },
-        {
-            initials: 'DS',
-            name: 'Decor Studio',
-            type: 'Decor',
-            rating: 4.4,
-            description: 'Creative decor solutions for all occasions.',
-            images: [img, img, img],
-            extraCount: 4,
-            location: 'Ottawa, ON',
-        },
-    ];
-
-    // Filter vendors based on selected location and category
-    const filteredVendors = useMemo(() => {
-        let filtered = vendors;
-
-        // Filter by location
-        if (selectedLocation && selectedLocation !== 'Current Location') {
-            filtered = filtered.filter(vendor => vendor.location === selectedLocation);
+    // Fetch vendors using new filtering service
+    // IMPORTANT: Only approved vendor ads should be visible in the public vendors tab
+    // - Backend filters for approval_status='approved'
+    // - Frontend adds an additional safety layer to ensure only approved ads are shown
+    // - User's own ads (in Profile -> My Ads) can show all statuses (pending, approved, rejected)
+    const fetchVendors = async (filters = {}, resetResults = false, clearAllFilters = false) => {
+        if (isFetchingVendors) {
+            console.log('Already fetching vendors, skipping...');
+            return;
         }
 
-        // Filter by category
-        if (selectedCategory) {
-            filtered = filtered.filter(vendor =>
-                vendor.type.toLowerCase().includes(selectedCategory.toLowerCase()) ||
-                selectedCategory.toLowerCase().includes(vendor.type.toLowerCase())
+        if (fetchTimeoutRef.current) {
+            clearTimeout(fetchTimeoutRef.current);
+        }
+
+        try {
+            setIsFetchingVendors(true);
+            setNetworkError(false);
+
+            if (resetResults) {
+                setIsLoading(true);
+            }
+
+            // If clearing all filters, use empty filters, otherwise combine with current
+            const searchFilters = clearAllFilters ? {
+                page: 1,
+                limit: 10
+            } : {
+                ...currentFilters,
+                ...filters,
+                page: resetResults ? 1 : (filters.page || currentFilters.page || 1),
+                limit: 10
+            };
+
+            console.log('🔎 fetchVendors called with:', {
+                filters,
+                currentFilters,
+                searchFilters,
+                resetResults,
+                clearAllFilters,
+                filterCount: Object.keys(searchFilters).length
+            });
+
+            // If no filters applied, get all vendors
+            let response;
+            // Check if only pagination params are present (no actual filters)
+            const hasFilters = Object.keys(searchFilters).some(key =>
+                key !== 'page' && key !== 'limit' && searchFilters[key]
             );
-        }
 
-        return filtered;
-    }, [selectedLocation, selectedCategory]);
+            if (!hasFilters) {
+                console.log('📋 No filters applied, fetching all vendors');
+                response = await vendorService.getPublicVendorAds();
+                console.log('📋 getPublicVendorAds response:', {
+                    success: response?.success,
+                    dataLength: response?.data?.length,
+                    firstItem: response?.data?.[0]
+                });
+
+                if (response.success && response.data) {
+                    // Filter to only show approved vendor ads
+                    const approvedVendors = response.data.filter(vendor =>
+                        vendor.approval_status === 'approved'
+                    );
+                    console.log(`✅ Filtered ${response.data.length} ads to ${approvedVendors.length} approved ads`);
+
+                    const formattedVendors = approvedVendors.map(vendor =>
+                        vendorService.formatVendorForDisplay(vendor)
+                    );
+                    response = {
+                        success: true,
+                        data: formattedVendors,
+                        pagination: { page: 1, limit: 10, totalPages: 1, totalResults: formattedVendors.length }
+                    };
+                }
+            } else {
+                console.log('🔍 Filters applied, searching vendors');
+                response = await filterService.searchVendors(searchFilters);
+                console.log('🔍 searchVendors response:', {
+                    success: response?.success,
+                    dataLength: response?.data?.length,
+                    firstItem: response?.data?.[0]
+                });
+
+                if (response.success && response.data) {
+                    // Filter to only show approved vendor ads
+                    const approvedVendors = response.data.filter(vendor =>
+                        vendor.approval_status === 'approved'
+                    );
+                    console.log(`✅ Filtered ${response.data.length} ads to ${approvedVendors.length} approved ads`);
+
+                    response.data = approvedVendors.map(vendor =>
+                        vendorService.formatVendorForDisplay(vendor)
+                    );
+                }
+            }
+
+            console.log('📊 Response processing:', {
+                success: response?.success,
+                dataLength: response?.data?.length,
+                resetResults
+            });
+
+            if (response.success) {
+                if (resetResults) {
+                    console.log('✨ Setting vendors state to:', response.data?.length, 'items');
+                    setVendors(response.data || []);
+                } else {
+                    // For pagination, append results and remove duplicates based on vendor_ad_id
+                    setVendors(prev => {
+                        const newData = response.data || [];
+                        const existingIds = new Set(prev.map(v => v._original?.vendor_ad_id || v.id));
+                        const uniqueNewData = newData.filter(v => !existingIds.has(v._original?.vendor_ad_id || v.id));
+                        console.log('📝 Appending vendors:', {
+                            previousCount: prev.length,
+                            newCount: uniqueNewData.length,
+                            totalCount: prev.length + uniqueNewData.length
+                        });
+                        return [...prev, ...uniqueNewData];
+                    });
+                }
+                setPagination(response.pagination || { page: 1, limit: 10, totalPages: 1, totalResults: 0 });
+                setCurrentFilters(searchFilters);
+                console.log('✅ fetchVendors completed successfully');
+            } else {
+                console.log('❌ Response not successful, setting network error');
+                if (resetResults) {
+                    setVendors([]);
+                }
+                setNetworkError(true);
+            }
+        } catch (error) {
+            console.error('Error fetching vendors:', error);
+            setNetworkError(true);
+            if (resetResults) {
+                setVendors([]);
+            }
+        } finally {
+            setIsLoading(false);
+            setIsFetchingVendors(false);
+        }
+    };
+
+    // Fetch vendors on component mount
+    useEffect(() => {
+        let isMounted = true;
+
+        // Initial fetch with a small delay to prevent race conditions
+        const initialFetchTimeout = setTimeout(() => {
+            if (isMounted && !isFetchingVendors) {
+                console.log('🚀 Initial vendor fetch on mount');
+                fetchVendors({}, true); // Always reset results on mount
+            }
+        }, 100);
+
+        // Failsafe: Stop loading after 15 seconds if still loading
+        const failsafeTimeout = setTimeout(() => {
+            if (isMounted && isLoading) {
+                console.log('⏰ Failsafe timeout reached');
+                setIsLoading(false);
+                setIsFetchingVendors(false);
+                setNetworkError(true);
+            }
+        }, 15000);
+
+        return () => {
+            isMounted = false;
+            clearTimeout(initialFetchTimeout);
+            clearTimeout(failsafeTimeout);
+            if (fetchTimeoutRef.current) {
+                clearTimeout(fetchTimeoutRef.current);
+            }
+        };
+    }, []); // Empty dependency array ensures this runs only once on mount
+
+    // Note: Removed useFocusEffect that was causing continuous API calls 
+    // when no vendors found. Initial fetch on mount is sufficient.
+
+
+    // Note: Filtering is disabled for now to ensure vendors always show
+    // Can be re-enabled later if needed
+    // const filteredVendors = useMemo(() => {
+    //     let filtered = vendors;
+    //     if (selectedLocation && selectedLocation !== 'Current Location') {
+    //         filtered = filtered.filter(vendor => vendor.location === selectedLocation);
+    //     }
+    //     if (selectedCategory) {
+    //         filtered = filtered.filter(vendor =>
+    //             vendor.type.toLowerCase().includes(selectedCategory.toLowerCase()) ||
+    //             selectedCategory.toLowerCase().includes(vendor.type.toLowerCase())
+    //         );
+    //     }
+    //     return filtered;
+    // }, [selectedLocation, selectedCategory]);
 
     const handleTabPress = (tabLabel, tabIndex) => {
-        setActiveTab(tabIndex);
+        // Don't set active tab here - it will be set when filter is actually applied
         if (tabLabel === 'Location') {
             setShowLocationModal(true);
-        } else if (tabLabel === 'Pre Save') {
+        } else if (tabLabel === 'Quick Message') {
             setShowPreSaveModal(true);
         } else if (tabLabel === 'Category') {
             setShowCategoryModal(true);
@@ -153,10 +260,61 @@ export default function Vendor() {
 
     const handleLocationSelect = (location) => {
         setSelectedLocation(location);
+        setShowLocationModal(false);
+
+        // Set active tab only if a location is selected
+        if (location) {
+            setActiveTab(0); // Location is index 0
+        } else {
+            setActiveTab(null);
+        }
+
+        // Apply location filter
+        const newFilters = { ...currentFilters, location };
+        if (!location) {
+            delete newFilters.location;
+        }
+        fetchVendors(newFilters, true);
     };
 
-    const handleCategorySelect = (category) => {
-        setSelectedCategory(category);
+    const handleCategorySelect = (categoryIds, categoryData) => {
+        console.log('🔍 handleCategorySelect called with:', {
+            categoryIds,
+            categoryData,
+            isArray: Array.isArray(categoryIds)
+        });
+
+        setSelectedCategory(categoryIds);
+        setShowCategoryModal(false);
+
+        // Store category names for display
+        if (categoryData) {
+            setSelectedCategoryNames(categoryData.map(cat => cat.name));
+        } else {
+            setSelectedCategoryNames([]);
+        }
+
+        // Set active tab only if a category is selected
+        if (categoryIds && categoryIds.length > 0) {
+            setActiveTab(2); // Category is index 2
+        } else {
+            setActiveTab(null);
+        }
+
+        // Apply category filter
+        const newFilters = { ...currentFilters };
+        if (categoryIds && categoryIds.length > 0) {
+            newFilters.categories = Array.isArray(categoryIds) ? categoryIds : [categoryIds];
+        } else {
+            delete newFilters.categories;
+        }
+
+        console.log('📊 Filters being applied:', {
+            newFilters,
+            categoriesInFilter: newFilters.categories
+        });
+
+        fetchVendors(newFilters, true);
     };
 
     // Create smooth interpolations for sticky header with better ranges
@@ -172,34 +330,38 @@ export default function Vendor() {
         extrapolate: 'clamp',
     });
 
-    // Initial loading effect
-    useEffect(() => {
-        // Simulate initial data loading
-        setTimeout(() => {
-            setIsLoading(false);
-        }, 1500); // Simulate 1.5 second initial load
-    }, []);
+    const onRefresh = React.useCallback(async () => {
+        // Don't refresh if already fetching
+        if (isFetchingVendors) {
+            console.log('🔄 Already fetching, skipping refresh');
+            return;
+        }
 
-    const onRefresh = React.useCallback(() => {
+        console.log('🔄 Refresh triggered with currentFilters:', currentFilters);
         setRefreshing(true);
-        
-        // Simulate fetching new data
-        setTimeout(() => {
-            // Here you would typically:
-            // 1. Fetch new vendors from your API
-            // 2. Update the vendors state with new data
-            // 3. Reset any filters if needed
-            
-            console.log('Refreshing vendors...');
-            
-            // For now, just reset filters as an example
-            setSelectedLocation(null);
-            setSelectedCategory(null);
-            setActiveTab(null);
-            
+        setNetworkError(false); // Clear network error on refresh
+
+        try {
+            // Check if we have any actual filters (excluding page/limit)
+            const hasActualFilters = Object.keys(currentFilters).some(key =>
+                key !== 'page' && key !== 'limit' && currentFilters[key]
+            );
+
+            if (!hasActualFilters) {
+                // No filters, fetch all vendors fresh
+                console.log('🔄 No filters, fetching all vendors');
+                await fetchVendors({}, true, true);
+            } else {
+                // Has filters, fetch with existing filters
+                console.log('🔄 Has filters, fetching with existing filters');
+                await fetchVendors(currentFilters, true);
+            }
+        } catch (error) {
+            console.error('Error refreshing vendors:', error);
+        } finally {
             setRefreshing(false);
-        }, 2000); // Simulate 2 second refresh
-    }, []);
+        }
+    }, [isFetchingVendors, currentFilters]);
 
     return (
         <View style={[styles.safe]}>
@@ -232,7 +394,19 @@ export default function Vendor() {
                 )}
             >
                 <View style={styles.headerWrapper} >
-                    <SearchHeader />
+                    <SearchHeader
+                        searchValue={searchQuery}
+                        onSearchChange={(text) => {
+                            setSearchQuery(text);
+                            // Debounced search
+                            filterService.debouncedSearch(
+                                (filters) => fetchVendors(filters, true),
+                                { ...currentFilters, keyword: text },
+                                500,
+                                'vendor-header-search'
+                            );
+                        }}
+                    />
                     <Tabs
                         tabs={['Location', 'Quick Message', 'Category']}
                         onTabPress={handleTabPress}
@@ -240,75 +414,203 @@ export default function Vendor() {
                     />
                 </View>
 
-                {/* <CatererCard /> */}
-
                 {/* Loading Spinner below tabs */}
                 {isLoading ? (
                     <View style={styles.loaderContainer}>
                         <ActivityIndicator size="large" color={theme.colors.primary} />
-                        <Text style={[styles.loadingText, { color: theme.colors.primary }]}>Loading vendors...</Text>
+                        <Text style={[styles.loadingText, { color: theme.colors.primary }]}>
+                            {networkError ? 'Network issue detected. Retrying...' : 'Loading vendors...'}
+                        </Text>
+                        {networkError && (
+                            <TouchableOpacity
+                                style={[styles.retryButton, { backgroundColor: theme.colors.primary }]}
+                                onPress={() => {
+                                    console.log('Manual retry triggered');
+                                    fetchVendors(true);
+                                }}
+                                disabled={isFetchingVendors}
+                            >
+                                <Text style={styles.retryButtonText}>
+                                    {isFetchingVendors ? 'Retrying...' : 'Retry Now'}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 ) : (
                     <>
-                {/* Location Filter Indicator */}
-                {selectedLocation && (
-                    <View style={[styles.filterIndicator, { backgroundColor: '#f0f4ff', borderColor: theme.colors.primary + '33' }]}>
-                        <Text style={[styles.filterIndicatorText, { color: theme.colors.primary }]}>
-                            Showing vendors in: {selectedLocation}
-                        </Text>
-                        <Text style={styles.vendorCount}>
-                            ({filteredVendors.length} vendor{filteredVendors.length !== 1 ? 's' : ''} found)
-                        </Text>
-                    </View>
-                )}
+                        {/* Filter status */}
+                        {(selectedLocation || selectedCategoryNames.length > 0 || searchQuery) && (
+                            <View style={[styles.filterIndicator, { backgroundColor: '#f0f4ff', borderColor: theme.colors.primary + '33' }]}>
+                                {(selectedLocation || selectedCategoryNames.length > 0 || searchQuery) && (
+                                    <View style={styles.activeFilters}>
+                                        {searchQuery && (
+                                            <View style={[styles.filterChip, { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary + '30' }]}>
+                                                <Text style={[styles.filterChipText, { color: theme.colors.primary }]}>Search: {searchQuery}</Text>
+                                            </View>
+                                        )}
+                                        {selectedLocation && (
+                                            <View style={[styles.filterChip, { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary + '30' }]}>
+                                                <Text style={[styles.filterChipText, { color: theme.colors.primary }]}>{selectedLocation}</Text>
+                                            </View>
+                                        )}
+                                        {selectedCategoryNames && selectedCategoryNames.length > 0 && (
+                                            <View style={[styles.filterChip, { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary + '30' }]}>
+                                                <Text style={[styles.filterChipText, { color: theme.colors.primary }]}>
+                                                    {selectedCategoryNames.length > 2
+                                                        ? `${selectedCategoryNames.length} categories`
+                                                        : selectedCategoryNames.join(', ')
+                                                    }
+                                                </Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                )}
+                            </View>
+                        )}
 
-                {/* Date Range Filter Indicator */}
-                {/* Removed date range filter indicator since we're not using date filter anymore */}
+                        {/* No vendors message */}
+                        {vendors.length === 0 ? (
+                            <View style={styles.noVendorsContainer}>
+                                <Text style={styles.noVendorsText}>
+                                    {networkError ? 'Unable to load vendors' :
+                                        ((searchQuery || selectedLocation || selectedCategoryNames.length > 0) ? 'No vendors match your filters' : 'No vendors found')}
+                                </Text>
+                                <Text style={styles.noVendorsSubtext}>
+                                    {networkError ? 'Check your internet connection' :
+                                        ((searchQuery || selectedLocation || selectedCategoryNames.length > 0) ? 'Try adjusting your filters or clear them to see all vendors' : 'Pull down to refresh')}
+                                </Text>
+                                {networkError && (
+                                    <TouchableOpacity
+                                        style={[styles.retryButton, { backgroundColor: theme.colors.primary, marginTop: 16 }]}
+                                        onPress={() => fetchVendors({}, true)}
+                                        disabled={isFetchingVendors}
+                                    >
+                                        <Text style={styles.retryButtonText}>
+                                            {isFetchingVendors ? 'Retrying...' : 'Retry'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+                                {!networkError && (searchQuery || selectedLocation || selectedCategoryNames.length > 0) && (
+                                    <TouchableOpacity
+                                        style={[styles.clearFiltersButton, { backgroundColor: theme.colors.primary, marginTop: 16 }]}
+                                        onPress={() => {
+                                            console.log('🧹 Clear All Filters button clicked');
+                                            setSelectedLocation(null);
+                                            setSelectedCategory(null);
+                                            setSelectedCategoryNames([]);
+                                            setSearchQuery('');
+                                            setActiveTab(null); // Clear active tab when clearing all filters
+                                            setCurrentFilters({});
+                                            setNetworkError(false); // Explicitly clear network error
+                                            fetchVendors({}, true, true); // Pass true for clearAllFilters
+                                        }}
+                                    >
+                                        <Text style={styles.clearFiltersButtonText}>Clear All Filters</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        ) : (
+                            // Use vendors directly instead of filteredVendors
+                            vendors.map((vendor, idx) => (
+                                <VendorCard
+                                    key={`vendor-${vendor._original?.vendor_ad_id || vendor.id}-${idx}`}
+                                    vendorId={vendor._original?.vendor_ad_id || vendor.id}
+                                    fullVendorData={vendor} // Pass the complete vendor object
+                                    initials={vendor.initials}
+                                    name={vendor.name}
+                                    type={vendor.type}
+                                    rating={vendor.rating}
+                                    description={vendor.description}
+                                    images={vendor.images}
+                                    extraCount={vendor.extraCount}
+                                    location={vendor.location}
+                                    offers={vendor.offers || []} // Add offers prop
+                                    isFocused={idx === focusedCardIndex}
+                                    isCheckingChat={checkingChat === `vendor_${vendor._original?.user_id}`}
+                                    onChatPress={async () => {
+                                        // Get current user ID
+                                        const currentUserData = await AsyncStorage.getItem('userData');
+                                        const currentUser = currentUserData ? JSON.parse(currentUserData) : null;
+                                        const currentUserId = currentUser?.user_id || currentUser?.id;
+                                        const vendorUserId = vendor._original?.user_id;
+                                        const vendorKey = `vendor_${vendorUserId}`;
 
-                {/* Category Filter Indicator */}
-                {selectedCategory && (
-                    <View style={[styles.filterIndicator, { backgroundColor: '#fff0f5', borderColor: theme.colors.error + '33' }]}>
-                        <Text style={[styles.filterIndicatorText, { color: theme.colors.error }]}>
-                            Category: {selectedCategory}
-                        </Text>
-                        <Text style={styles.vendorCount}>
-                            ({filteredVendors.length} vendor{filteredVendors.length !== 1 ? 's' : ''} found)
-                        </Text>
-                    </View>
-                )}
+                                        console.log('Chat button pressed:', {
+                                            currentUserId,
+                                            vendorUserId,
+                                            vendorName: vendor.name
+                                        });
 
-                {/* No vendors message */}
-                {filteredVendors.length === 0 ? (
-                    <View style={styles.noVendorsContainer}>
-                        <Text style={styles.noVendorsText}>
-                            No vendors found{selectedLocation ? ` in ${selectedLocation}` : ''}
-                        </Text>
-                        <Text style={styles.noVendorsSubtext}>
-                            Try selecting a different location or clear the filter
-                        </Text>
-                    </View>
-                ) : (
-                    filteredVendors.map((vendor, idx) => (
-                        <VendorCard
-                            key={idx}
-                            initials={vendor.initials}
-                            name={vendor.name}
-                            type={vendor.type}
-                            rating={vendor.rating}
-                            description={vendor.description}
-                            images={vendor.images}
-                            extraCount={vendor.extraCount}
-                            location={vendor.location}
-                            isFocused={idx === focusedCardIndex}
-                            onChatPress={() => navigation.navigate('ChatScreen', {
-                                chatId: `vendor_${idx}`,
-                                chatName: vendor.name,
-                                avatar: 'https://randomuser.me/api/portraits/men/1.jpg',
-                                isOnline: Math.random() > 0.5,
-                            })}
-                        />
-                    ))
-                )}
+                                        // Check if trying to chat with self
+                                        if (String(vendorUserId) === String(currentUserId)) {
+                                            Alert.alert(
+                                                'Cannot Start Chat',
+                                                'You cannot start a chat with your own vendor listing.',
+                                                [{ text: 'OK' }]
+                                            );
+                                            return;
+                                        }
+
+                                        // Show loading state
+                                        setCheckingChat(vendorKey);
+
+                                        try {
+                                            let existingChatResult;
+                                            
+                                            // Check cache first
+                                            if (chatCacheRef.current.has(vendorUserId)) {
+                                                console.log('📦 Using cached chat info for vendor:', vendorUserId);
+                                                existingChatResult = chatCacheRef.current.get(vendorUserId);
+                                            } else {
+                                                // Not in cache, fetch from server
+                                                console.log('🔍 Checking for existing chat with vendor:', vendorUserId);
+                                                existingChatResult = await chatService.findDirectChat(vendorUserId);
+                                                
+                                                // Cache the result for future use
+                                                chatCacheRef.current.set(vendorUserId, existingChatResult);
+                                            }
+                                            
+                                            // Hide loading state
+                                            setCheckingChat(null);
+                                            
+                                            if (existingChatResult.exists) {
+                                                // Navigate to existing chat
+                                                console.log('📱 Navigating to existing chat:', existingChatResult.chatId);
+                                                navigation.navigate('ChatScreen', {
+                                                    chatId: existingChatResult.chatId,
+                                                    chatName: vendor.name,
+                                                    avatar: 'https://randomuser.me/api/portraits/men/1.jpg',
+                                                    isOnline: false,
+                                                });
+                                            } else {
+                                                // No existing chat, navigate with recipientId to create new
+                                                console.log('📱 No existing chat, will create new one');
+                                                navigation.navigate('ChatScreen', {
+                                                    recipientId: vendorUserId,
+                                                    chatName: vendor.name,
+                                                    avatar: 'https://randomuser.me/api/portraits/men/1.jpg',
+                                                    isOnline: false,
+                                                });
+                                                
+                                                // Clear cache for this vendor as a new chat will be created
+                                                chatCacheRef.current.delete(vendorUserId);
+                                            }
+                                        } catch (error) {
+                                            console.error('Error checking for existing chat:', error);
+                                            setCheckingChat(null);
+                                            
+                                            // Fallback: navigate directly with recipientId
+                                            navigation.navigate('ChatScreen', {
+                                                recipientId: vendorUserId,
+                                                chatName: vendor.name,
+                                                avatar: 'https://randomuser.me/api/portraits/men/1.jpg',
+                                                isOnline: false,
+                                            });
+                                        }
+                                    }}
+                                />
+                            ))
+                        )}
                     </>
                 )}
             </Animated.ScrollView>
@@ -326,23 +628,42 @@ export default function Vendor() {
                 ]}
                 pointerEvents="box-none"
             >
-                    <View style={styles.stickyContent}>
-                        <View style={[styles.stickySearchBar, { backgroundColor: theme.colors.primary + '10' }]}>
-                            <Icon name="search-outline" size={20} color={theme.colors.primary} style={styles.stickySearchIcon} />
-                            <TextInput
-                                style={styles.stickyInput}
-                                placeholder="Search..."
-                                placeholderTextColor={theme.colors.primary + '80'}
-                            />
-                        </View>
-                        <TouchableOpacity
-                            style={[styles.stickyChatIcon, { backgroundColor: theme.colors.primary }]}
-                            onPress={() => navigation.navigate('ChatList')}
-                        >
-                            <Icon name="chatbubble-ellipses-outline" size={24} color="#fff" />
-                        </TouchableOpacity>
+                <View style={styles.stickyContent}>
+                    <View style={[styles.stickySearchBar, { backgroundColor: theme.colors.primary + '10' }]}>
+                        <Icon name="search-outline" size={20} color={theme.colors.primary} style={styles.stickySearchIcon} />
+                        <TextInput
+                            style={styles.stickyInput}
+                            placeholder="Search by name, location, category..."
+                            placeholderTextColor={theme.colors.primary + '80'}
+                            value={searchQuery}
+                            onChangeText={(text) => {
+                                setSearchQuery(text);
+                                // Debounced search
+                                filterService.debouncedSearch(
+                                    (filters) => fetchVendors(filters, true),
+                                    { ...currentFilters, keyword: text },
+                                    500,
+                                    'vendor-search'
+                                );
+                            }}
+                            returnKeyType="search"
+                            onSubmitEditing={() => {
+                                const filters = { ...currentFilters, keyword: searchQuery };
+                                if (!searchQuery.trim()) {
+                                    delete filters.keyword;
+                                }
+                                fetchVendors(filters, true);
+                            }}
+                        />
                     </View>
-                </Animated.View>
+                    <TouchableOpacity
+                        style={[styles.stickyChatIcon, { backgroundColor: theme.colors.primary }]}
+                        onPress={() => navigation.navigate('ChatList')}
+                    >
+                        <Icon name="chatbubble-ellipses-outline" size={24} color="#fff" />
+                    </TouchableOpacity>
+                </View>
+            </Animated.View>
 
             {/* Location Search Modal */}
             <LocationSearchModal
@@ -361,19 +682,27 @@ export default function Vendor() {
             >
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
-                        <PreSavedMessage />
-                        <TouchableOpacity
-                            style={styles.closeBtn}
-                            onPress={() => setShowPreSaveModal(false)}
-                        >
-                            <Icon name="close" size={24} color={theme.colors.primary} />
-                        </TouchableOpacity>
+                        <View style={styles.modalHeader}>
+                            <Text style={[styles.modalTitle, { color: theme.colors.primary }]}>Quick Message Template</Text>
+                            <TouchableOpacity
+                                style={styles.closeBtn}
+                                onPress={() => setShowPreSaveModal(false)}
+                            >
+                                <Icon name="close" size={24} color={theme.colors.primary} />
+                            </TouchableOpacity>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <PreSavedMessage
+                                visible={showPreSaveModal}
+                                onClose={() => setShowPreSaveModal(false)}
+                            />
+                        </View>
                     </View>
                 </View>
             </Modal>
 
             {/* Category Selection Modal */}
-            <CategorySelectionModal
+            <CategorySelectionModalEnhanced
                 visible={showCategoryModal}
                 onClose={() => setShowCategoryModal(false)}
                 onCategorySelect={handleCategorySelect}
@@ -390,7 +719,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
     },
     contentContainer: {
-        paddingBottom: 24,
+        paddingBottom: 100, // Increased padding to ensure last card is fully visible
     },
     headerWrapper: {
         marginBottom: 8,
@@ -412,6 +741,22 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         marginBottom: 2,
+    },
+    activeFilters: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        marginTop: 8,
+        gap: 6,
+    },
+    filterChip: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        borderWidth: 1,
+    },
+    filterChipText: {
+        fontSize: 12,
+        fontWeight: '500',
     },
     vendorCount: {
         fontSize: 12,
@@ -454,9 +799,30 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '500',
     },
+    retryButton: {
+        marginTop: 20,
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 8,
+    },
+    retryButtonText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    clearFiltersButton: {
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        borderRadius: 8,
+    },
+    clearFiltersButtonText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
+    },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
         justifyContent: 'center',
         alignItems: 'center',
         padding: 20,
@@ -464,22 +830,33 @@ const styles = StyleSheet.create({
     modalContent: {
         backgroundColor: '#fff',
         borderRadius: 12,
-        padding: 20,
-        width: '100%',
+        width: '90%',
         maxWidth: 600,
+        height: '80%',
         position: 'relative',
         shadowColor: '#000',
         shadowOpacity: 0.1,
         shadowRadius: 6,
         shadowOffset: { width: 0, height: 2 },
         elevation: 5,
+        overflow: 'hidden',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 20,
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#e0e0e0',
+        backgroundColor: '#fff',
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: '600',
     },
     closeBtn: {
-        position: 'absolute',
-        top: 0,
-        right: 0,
-        zIndex: 1,
-        padding: 5,
+        padding: 8,
     },
     stickyHeader: {
         position: 'absolute',

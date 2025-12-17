@@ -2,15 +2,20 @@ import React, { useEffect, useState } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { NavigationContainer } from '@react-navigation/native';
 import { Image, AppState } from 'react-native';
+import { useAuth } from '../context/AuthContext';
+import { navigationRef, setAuthLogout } from '../services/navigationService';
 // Screens
 import SplashScreen from '../screens/SplashScreen';
 import LoginScreen from '../screens/auth/Login';
 import Register from '../screens/auth/Register';
 import OTPVerify from '../screens/auth/OTPVerify';
+import ForgotPassword from '../screens/auth/ForgotPassword';
+import ResetPassword from '../screens/auth/ResetPassword';
 import TabNavigator from './TabNavigator';
 import TaskDetail from '../screens/tasks/TaskDetail';
 import VendorChat from '../screens/vendors/vendorAddDetails';
 import { ChatList, ChatScreen } from '../screens/chat';
+import SavedVendors from '../screens/profile/SavedVendors';
 import theme from '../theme';
 
 // Settings Screens
@@ -26,24 +31,30 @@ import TermsOfUse from '../screens/settings/TermsOfUse';
 import PrivacyPolicy from '../screens/settings/PrivacyPolicy';
 
 // Event Detail Screen
-import EventDetailView from '../screens/events/EventDetailView';
+import EventDetailViewEnhanced from '../screens/events/EventDetailViewEnhanced';
 import AllReviewsScreen from '../screens/vendors/vendorViewDetails';
 import Review from '../screens/vendors/Review';
+
+// User Profile Screen
+import UserProfile from '../screens/profile/UserProfile';
 
 const Stack = createNativeStackNavigator();
 
 const MainNavigator = () => {
+    const { isLoading: authLoading, isAuthenticated, logout } = useAuth();
     const [isReady, setIsReady] = useState(false);
     const [splashTimerDone, setSplashTimerDone] = useState(false);
     const [appState, setAppState] = useState(AppState.currentState);
 
+    // Set the logout function for navigation service
+    useEffect(() => {
+        setAuthLogout(logout);
+    }, [logout]);
+
+
     // Handle app state changes
     useEffect(() => {
         const handleAppStateChange = (nextAppState) => {
-            if (appState.match(/inactive|background/) && nextAppState === 'active') {
-                // App has come to the foreground
-                console.log('App has come to the foreground');
-            }
             setAppState(nextAppState);
         };
 
@@ -86,7 +97,6 @@ const MainNavigator = () => {
                     setIsReady(true);
                 }
             } catch (error) {
-                console.log('Error preloading images:', error);
                 // Still set ready after error to avoid infinite loading
                 if (isMounted) {
                     setIsReady(true);
@@ -106,7 +116,6 @@ const MainNavigator = () => {
         // Maximum loading time to prevent infinite loading
         maxLoadTimer = setTimeout(() => {
             if (isMounted && (!isReady || !splashTimerDone)) {
-                console.log('Force ending splash screen due to timeout');
                 setIsReady(true);
                 setSplashTimerDone(true);
             }
@@ -124,62 +133,79 @@ const MainNavigator = () => {
     }, []);
 
     // Show splash screen until both conditions are met
-    if (!isReady || !splashTimerDone) {
+    if (!isReady || !splashTimerDone || authLoading) {
         return <SplashScreen />;
     }
 
     return (
-        <NavigationContainer>
+        <NavigationContainer ref={navigationRef}>
             <Stack.Navigator 
                 screenOptions={{ 
                     headerShown: false,
                     animation: 'fade',
                     animationDuration: 300
                 }}
+                initialRouteName={isAuthenticated ? "Main" : "Login"}
             >
-                {/* Auth Screens */}
-                <Stack.Screen 
-                    name="Login" 
-                    component={LoginScreen}
-                    options={{
-                        animation: 'fade',
-                        animationDuration: 500
-                    }}
-                />
-                <Stack.Screen name="Register" component={Register} />
-                <Stack.Screen name="OTPVerify" component={OTPVerify} />
+                {!isAuthenticated ? (
+                    // Auth Stack - Only shown when not authenticated
+                    <>
+                        <Stack.Screen
+                            name="Login"
+                            component={LoginScreen}
+                            options={{
+                                animation: 'fade',
+                                animationDuration: 500
+                            }}
+                        />
+                        <Stack.Screen name="Register" component={Register} />
+                        <Stack.Screen name="ForgotPassword" component={ForgotPassword} />
+                        <Stack.Screen name="ResetPassword" component={ResetPassword} />
+                        <Stack.Screen name="OTPVerify" component={OTPVerify} />
+                    </>
+                ) : (
+                    // Protected Stack - Only shown when authenticated
+                    <>
+                        {/* Main App Screens */}
+                        <Stack.Screen name="Main" component={TabNavigator} />
+                        <Stack.Screen name="TaskDetail" component={TaskDetail} />
 
-                {/* Main App Screens */}
-                <Stack.Screen name="Main" component={TabNavigator} />
-                <Stack.Screen name="TaskDetail" component={TaskDetail} />
-
-                {/* Chat Screens */}
-                <Stack.Screen name="Chat" component={VendorChat} />
-                <Stack.Screen name="ChatList" component={ChatList} />
-                <Stack.Screen name="ChatScreen" component={ChatScreen} />
+                        {/* Chat Screens */}
+                        <Stack.Screen name="Chat" component={VendorChat} />
+                        <Stack.Screen name="ChatList" component={ChatList} />
+                        <Stack.Screen name="ChatScreen" component={ChatScreen} />
 
 
-                {/* Vendor View Details */}
-                <Stack.Screen name="AllReviews" component={AllReviewsScreen} />
-                <Stack.Screen name="Review" component={Review} />
+                        {/* Vendor View Details */}
+                        <Stack.Screen name="AllReviews" component={AllReviewsScreen} />
+                        <Stack.Screen name="Review" component={Review} />
 
-                {/* Vendor Add Detail Screen */}
-                <Stack.Screen name="VendorAddDetail" component={VendorChat} />
+                        {/* Vendor Add Detail Screen */}
+                        <Stack.Screen name="VendorAddDetail" component={VendorChat} />
+                        <Stack.Screen name="VendorChat" component={VendorChat} />
+                        
+                        {/* Profile Screens */}
+                        <Stack.Screen name="SavedVendors" component={SavedVendors} />
 
-                {/* Settings Screens */}
-                <Stack.Screen name="Settings" component={Settings} />
-                <Stack.Screen name="Security" component={Security} />
-                <Stack.Screen name="Notifications" component={Notifications} />
-                <Stack.Screen name="Privacy" component={Privacy} />
-                <Stack.Screen name="HelpSupport" component={HelpSupport} />
-                <Stack.Screen name="TermsPolicies" component={TermsPolicies} />
-                <Stack.Screen name="ReportProblem" component={ReportProblem} />
-                <Stack.Screen name="ChangePassword" component={ChangePassword} />
-                <Stack.Screen name="TermsOfUse" component={TermsOfUse} />
-                <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicy} />
+                        {/* Settings Screens */}
+                        <Stack.Screen name="Settings" component={Settings} />
+                        <Stack.Screen name="Security" component={Security} />
+                        <Stack.Screen name="Notifications" component={Notifications} />
+                        <Stack.Screen name="Privacy" component={Privacy} />
+                        <Stack.Screen name="HelpSupport" component={HelpSupport} />
+                        <Stack.Screen name="TermsPolicies" component={TermsPolicies} />
+                        <Stack.Screen name="ReportProblem" component={ReportProblem} />
+                        <Stack.Screen name="ChangePassword" component={ChangePassword} />
+                        <Stack.Screen name="TermsOfUse" component={TermsOfUse} />
+                        <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicy} />
 
-                {/* Event Detail Screen */}
-                <Stack.Screen name="EventDetailView" component={EventDetailView} />
+                        {/* Event Detail Screen */}
+                        <Stack.Screen name="EventDetailView" component={EventDetailViewEnhanced} />
+
+                        {/* User Profile Screen */}
+                        <Stack.Screen name="UserProfile" component={UserProfile} />
+                    </>
+                )}
             </Stack.Navigator>
         </NavigationContainer>
     );

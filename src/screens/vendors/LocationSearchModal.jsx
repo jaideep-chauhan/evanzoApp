@@ -14,6 +14,7 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../../ThemeContext';
 import { searchLocations, getCurrentLocation, reverseGeocode } from '../../utils/locationService';
+import categoryService from '../../services/categoryService';
 
 const POPULAR_LOCATIONS = [
     'Toronto, ON',
@@ -28,13 +29,42 @@ const POPULAR_LOCATIONS = [
     'Kitchener, ON',
 ];
 
-export default function LocationSearchModal({ visible, onClose, onLocationSelect, currentLocation }) {
+export default function LocationSearchModal({ visible, onClose, onLocationSelect, currentLocation, screenType = 'vendors' }) {
     const theme = useTheme();
     const [searchText, setSearchText] = useState('');
     const [filteredLocations, setFilteredLocations] = useState(POPULAR_LOCATIONS);
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
     const [showApiResults, setShowApiResults] = useState(false);
+    const [backendLocations, setBackendLocations] = useState([]);
+
+    // Fetch locations when modal becomes visible
+    useEffect(() => {
+        if (visible) {
+            fetchBackendLocations();
+        }
+    }, [visible, screenType]);
+
+    const fetchBackendLocations = async () => {
+        try {
+            let response;
+            if (screenType === 'vendors') {
+                response = await categoryService.getVendorLocations();
+            } else {
+                response = await categoryService.getEventLocations();
+            }
+            
+            if (response.success) {
+                setBackendLocations(response.data);
+                setFilteredLocations(response.data);
+            } else {
+                setFilteredLocations(POPULAR_LOCATIONS);
+            }
+        } catch (error) {
+            console.error('Error fetching locations:', error);
+            setFilteredLocations(POPULAR_LOCATIONS);
+        }
+    };
 
     // Debounce function to limit API calls
     const debounce = (func, delay) => {
@@ -303,7 +333,7 @@ const styles = StyleSheet.create({
     },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'transparent',
         justifyContent: 'flex-end',
     },
     container: {

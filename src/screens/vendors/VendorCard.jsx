@@ -7,11 +7,13 @@ import {
     TouchableOpacity,
     Animated,
     Dimensions,
+    ActivityIndicator,
 } from 'react-native';
 import { StarIcon, CurrencyDollarIcon, TagIcon } from 'react-native-heroicons/solid';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
 import theme from '../../theme';
+import img from '../../assets/images/dummy.png'; // Fallback image
 
 const { width } = Dimensions.get('window');
 
@@ -24,15 +26,60 @@ export default function VendorCard({
     images,
     extraCount,
     location,
+    offers = [],
     onChatPress,
     isChat = true,
-    isFocused = false
+    isFocused = false,
+    vendorId,
+    fullVendorData, // Full vendor object with all data
+    approval_status, // Approval status for the ad
+    isCheckingChat = false, // Loading state for chat button
 }) {
     const navigation = useNavigation();
     const theme = useTheme();
 
     // Carousel logic for infinite auto-scroll
-    const extendedImages = [images[images.length - 1], ...images, images[0]];
+    // Use fallback image if no images available
+    console.log('🎯 VendorCard - received images:', { 
+        images, 
+        imagesLength: images ? images.length : 0, 
+        imagesType: typeof images,
+        vendorId: vendorId || 'unknown',
+        name,
+        firstImage: images && images.length > 0 ? images[0] : null,
+        imageDetails: images ? images.map((img, idx) => ({
+            index: idx,
+            type: typeof img,
+            value: img,
+            isValidUrl: typeof img === 'string' && img.startsWith('http')
+        })) : []
+    });
+    
+    const safeImages = images && images.length > 0 ? images : [img, img, img];
+    
+    // Convert image URLs to proper format for React Native Image component
+    const formattedImages = safeImages.map(image => {
+        // Handle null or undefined
+        if (!image) {
+            return img;
+        }
+        // If it's already an object with uri, use it as is
+        if (typeof image === 'object' && image.uri) {
+            return image;
+        }
+        // If it's a string URL, convert to {uri: url} format
+        if (typeof image === 'string' && image.startsWith('http')) {
+            return { uri: image };
+        }
+        // If it's a local image (number from require), use it directly
+        if (typeof image === 'number') {
+            return image;
+        }
+        // Default fallback
+        return img;
+    });
+    
+    const extendedImages = [formattedImages[formattedImages.length - 1], ...formattedImages, formattedImages[0]];
     const scrollRef = useRef(null);
     const currentIndex = useRef(1);
     const intervalRef = useRef(null);
@@ -85,18 +132,66 @@ export default function VendorCard({
     };
 
     const handleCardPress = () => {
-        navigation.navigate('VendorAddDetail', { vendor: { initials, name, type, rating, description, images, extraCount, location } });
+        // Pass the full vendor data if available, otherwise construct from props
+        const vendorData = fullVendorData || { 
+            id: vendorId,
+            vendor_ad_id: vendorId,
+            initials, 
+            name, 
+            type, 
+            rating, 
+            description, 
+            images, 
+            extraCount, 
+            location,
+            offers 
+        };
+        
+        console.log('VendorCard handleCardPress - vendorId:', vendorId);
+        console.log('VendorCard handleCardPress - fullVendorData:', fullVendorData);
+        console.log('VendorCard handleCardPress - vendorData being passed:', vendorData);
+        
+        navigation.navigate('VendorAddDetail', { 
+            vendor: vendorData
+        });
     };
 
     const handleSeeMorePress = () => {
+        // Pass the full vendor data if available, otherwise construct from props
+        const vendorData = fullVendorData || { 
+            id: vendorId,
+            vendor_ad_id: vendorId,
+            initials, 
+            name, 
+            type, 
+            rating, 
+            description, 
+            images, 
+            extraCount, 
+            location,
+            offers 
+        };
+        
         navigation.navigate('VendorAddDetail', {
-            vendor: { initials, name, type, rating, description, images, extraCount, location },
+            vendor: vendorData,
             scrollToOffer: true
         });
     };
 
     return (
         <TouchableOpacity onPress={handleCardPress} style={styles.cardWrapper}>
+            {/* Approval Status Banner for pending/rejected ads */}
+            {approval_status && approval_status !== 'approved' && (
+                <View style={[
+                    styles.approvalBanner,
+                    { backgroundColor: approval_status === 'pending' ? '#FFA500' : '#FF4444' }
+                ]}>
+                    <Text style={styles.approvalBannerText}>
+                        {approval_status === 'pending' ? '⏳ Waiting for approval' : '❌ Rejected - Please review and resubmit'}
+                    </Text>
+                </View>
+            )}
+            
             {/* Header OUTSIDE the card */}
             <View style={styles.header}>
                 <View style={[styles.avatarShadow, { shadowColor: theme.colors.primary }]}>
@@ -123,32 +218,38 @@ export default function VendorCard({
 
             {/* Card */}
             <View style={styles.card}>
-                {/* Offer Section */}
-                <View style={styles.offerSection}>
-                    <View style={styles.offerTable}>
-                        {/* Header Row */}
-                        <View style={styles.offerHeaderRow}>
-                            <Text style={styles.offerHeaderEmpty}></Text>
-                            <Text style={[styles.offerHeaderText, { color: theme.colors.textSecondary }]}>Amount spent</Text>
-                            <Text style={[styles.offerHeaderText, { color: theme.colors.textSecondary }]}>Discount</Text>
-                        </View>
-                        {/* Values Row */}
-                        <View style={styles.offerValueRow}>
-                            <Text style={styles.offerLabel}>Offer:</Text>
-                            <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
-                                <CurrencyDollarIcon size={12} color={theme.colors.primary} />
-                                <Text style={styles.offerValue}>150</Text>
+                {/* Offer Section - Only show if there's at least one offer with non-zero values */}
+                {offers && offers.length > 0 && offers.some(offer => (offer.amount && offer.amount !== 0) || (offer.discount && offer.discount !== 0)) && (
+                    <View style={styles.offerSection}>
+                        <View style={styles.offerTable}>
+                            {/* Header Row */}
+                            <View style={styles.offerHeaderRow}>
+                                <Text style={styles.offerHeaderEmpty}></Text>
+                                <Text style={[styles.offerHeaderText, { color: theme.colors.textSecondary }]}>Amount spent</Text>
+                                <Text style={[styles.offerHeaderText, { color: theme.colors.textSecondary }]}>Discount</Text>
                             </View>
-                            <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
-                                <TagIcon size={12} color={theme.colors.primary} />
-                                <Text style={styles.offerValue}>10%</Text>
+                            {/* Values Row - Show first offer or default values */}
+                            <View style={styles.offerValueRow}>
+                                <Text style={styles.offerLabel}>Offer:</Text>
+                                <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
+                                    <CurrencyDollarIcon size={12} color={theme.colors.primary} />
+                                    <Text style={styles.offerValue}>
+                                        {offers[0].amount || '0'}
+                                    </Text>
+                                </View>
+                                <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
+                                    <TagIcon size={12} color={theme.colors.primary} />
+                                    <Text style={styles.offerValue}>
+                                        {offers[0].discount ? `${offers[0].discount}%` : '0%'}
+                                    </Text>
+                                </View>
                             </View>
                         </View>
+                        <TouchableOpacity style={styles.seeMoreBox} onPress={handleSeeMorePress}>
+                            <Text style={[styles.seeMore, { color: theme.colors.primary }]}>SEE MORE</Text>
+                        </TouchableOpacity>
                     </View>
-                    <TouchableOpacity style={styles.seeMoreBox} onPress={handleSeeMorePress}>
-                        <Text style={[styles.seeMore, { color: theme.colors.primary }]}>SEE MORE</Text>
-                    </TouchableOpacity>
-                </View>
+                )}
 
                 {/* Images Grid */}
                 <View style={styles.imageGrid}>
@@ -176,9 +277,9 @@ export default function VendorCard({
                         </Animated.ScrollView>
                     </View>
                     <View style={styles.smallImages}>
-                        <Image source={images[1]} style={styles.smallImage} />
+                        <Image source={formattedImages[1] || img} style={styles.smallImage} />
                         <View style={styles.overlayWrapper}>
-                            <Image source={images[2]} style={styles.smallImage} />
+                            <Image source={formattedImages[2] || img} style={styles.smallImage} />
                             {extraCount > 0 && (
                                 <View style={[styles.overlay, { backgroundColor: theme.colors.primary + '99' }]}>
                                     <Text style={styles.overlayText}>{`+${extraCount}`}</Text>
@@ -192,8 +293,16 @@ export default function VendorCard({
                 <View style={styles.rowContent}>
                     <Text style={styles.description} numberOfLines={2}>{description}</Text>
                     {isChat && (
-                        <TouchableOpacity style={[styles.chatBtn, { backgroundColor: theme.colors.primary, shadowColor: theme.colors.primary }]} onPress={onChatPress}>
-                            <Text style={styles.chatText}>Chat</Text>
+                        <TouchableOpacity 
+                            style={[styles.chatBtn, { backgroundColor: theme.colors.primary, shadowColor: theme.colors.primary }]} 
+                            onPress={isCheckingChat ? null : onChatPress}
+                            disabled={isCheckingChat}
+                        >
+                            {isCheckingChat ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                                <Text style={styles.chatText}>Chat</Text>
+                            )}
                         </TouchableOpacity>
                     )}
                 </View>
@@ -208,6 +317,18 @@ const styles = StyleSheet.create({
         marginBottom: 18,
         backgroundColor: '#fff',
         marginTop: 12,
+    },
+    approvalBanner: {
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 10,
+        marginBottom: 8,
+        alignItems: 'center',
+    },
+    approvalBannerText: {
+        color: '#fff',
+        fontSize: 13,
+        fontWeight: '600',
     },
     header: {
         flexDirection: 'row',
@@ -396,6 +517,12 @@ const styles = StyleSheet.create({
     },
     offerTable: {
         flexDirection: 'column',
+    },
+    noOffersText: {
+        fontSize: 12,
+        fontStyle: 'italic',
+        textAlign: 'center',
+        padding: 8,
     },
     offerHeaderRow: {
         flexDirection: 'row',
