@@ -6,6 +6,7 @@ import {
     TouchableOpacity,
     Modal,
     ImageBackground,
+    Image,
     Platform,
     StatusBar,
     ActivityIndicator,
@@ -14,6 +15,7 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import VendorCard from '../vendors/VendorCard';
 import EventAdCard from './EventAdCard';
+import { icons } from '../../assets/icons';
 import PreSavedMessage from './PreSavedMessage';
 import ChangeProfile from './ChangeProfile';
 import CreateAd from './CreateAd';
@@ -133,7 +135,10 @@ export default function VendorAdDashboard({ navigation }) {
                                     <Icon name="create-outline" size={20} color={theme.colors.primary} />
                                 </TouchableOpacity>
                             </View>
-                            <Text style={[styles.location, { color: theme.colors.primary }]}>{user?.location || 'Add Location'}</Text>
+                            <View style={styles.locationRow}>
+                                <Image source={icons.location} style={styles.locationPin} />
+                                <Text style={[styles.location, { color: theme.colors.primary }]}>{user?.location || 'Add Location'}</Text>
+                            </View>
                         </View>
                     </View>
 
@@ -504,6 +509,18 @@ const styles = StyleSheet.create({
     editBtn: {
         marginLeft: 6,
         padding: 4,
+    },
+    locationRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 1,
+        gap: 4,
+    },
+    locationPin: {
+        width: 14,
+        height: 14,
+        resizeMode: 'contain',
     },
     location: {
         fontSize: 14,

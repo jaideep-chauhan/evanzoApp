@@ -10,6 +10,7 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
+import { icons } from '../../assets/icons';
 
 export default function EventCard({ event, onGiveQuote }) {
     const navigation = useNavigation();
@@ -35,15 +36,15 @@ export default function EventCard({ event, onGiveQuote }) {
             {/* Meta Row: Location, Time, Date (all in one row) */}
             <View style={styles.metaRow}>
                 <View style={styles.metaItem}>
-                    <Icon name="location-outline" size={16} color={theme.colors.primary} />
+                    <Image source={icons.location} style={styles.metaIcon} />
                     <Text style={[styles.metaText, { color: theme.colors.primary }]} numberOfLines={1} ellipsizeMode="tail">{event.location}</Text>
                 </View>
                 <View style={styles.metaItem}>
-                    <Icon name="time-outline" size={16} color={theme.colors.primary} />
+                    <Image source={icons.clock} style={styles.metaIcon} />
                     <Text style={[styles.metaText, { color: theme.colors.primary }]} numberOfLines={1} ellipsizeMode="tail">{event.duration}</Text>
                 </View>
                 <View style={styles.metaItem}>
-                    <Icon name="calendar-outline" size={16} color={theme.colors.primary} />
+                    <Image source={icons.calendar} style={styles.metaIcon} />
                     <Text style={[styles.metaText, { color: theme.colors.primary }]} numberOfLines={1} ellipsizeMode="tail">{event.date}</Text>
                 </View>
             </View>
@@ -151,6 +152,11 @@ const styles = StyleSheet.create({
         fontSize: 11,
         marginLeft: 6,
         fontWeight: '600',
+    },
+    metaIcon: {
+        width: 16,
+        height: 16,
+        resizeMode: 'contain',
     },
     profileRow: {
         flexDirection: 'row',

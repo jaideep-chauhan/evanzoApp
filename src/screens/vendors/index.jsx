@@ -75,14 +75,26 @@ export default function Vendor() {
                 setIsLoading(true);
             }
 
-            // If clearing all filters, use empty filters, otherwise combine with current
+            // resetResults = true means the caller (a filter handler, a search
+            // change, etc.) is supplying the FULL intended filter set, so we
+            // must not merge with the stale `currentFilters` — otherwise a
+            // cleared filter (e.g. handleLocationSelect(null) deleting the
+            // `location` key) gets re-applied from current state and the list
+            // keeps showing "No vendors found" with the old filter still active.
+            //
+            // resetResults = false is pagination: keep the current filters and
+            // just advance the page.
             const searchFilters = clearAllFilters ? {
+                page: 1,
+                limit: 10
+            } : resetResults ? {
+                ...filters,
                 page: 1,
                 limit: 10
             } : {
                 ...currentFilters,
                 ...filters,
-                page: resetResults ? 1 : (filters.page || currentFilters.page || 1),
+                page: filters.page || currentFilters.page || 1,
                 limit: 10
             };
 
@@ -371,6 +383,11 @@ export default function Vendor() {
                 contentContainerStyle={[styles.contentContainer, { backgroundColor: undefined }]}
                 showsVerticalScrollIndicator={false}
                 scrollEventThrottle={16}
+                // Keep chips/buttons tappable while the keyboard is up and
+                // dismiss the keyboard when the user starts scrolling the list,
+                // so the search experience doesn't feel like a separate page.
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
                 refreshControl={
                     <RefreshControl
                         refreshing={refreshing}
@@ -396,6 +413,7 @@ export default function Vendor() {
                 <View style={styles.headerWrapper} >
                     <SearchHeader
                         searchValue={searchQuery}
+                        searchType="vendors"
                         onSearchChange={(text) => {
                             setSearchQuery(text);
                             // Debounced search
@@ -405,6 +423,9 @@ export default function Vendor() {
                                 500,
                                 'vendor-header-search'
                             );
+                        }}
+                        onCategorySelect={(cat) => {
+                            handleCategorySelect([cat.category_id || cat.id], [cat]);
                         }}
                     />
                     <Tabs
@@ -446,11 +467,30 @@ export default function Vendor() {
                                         {searchQuery && (
                                             <View style={[styles.filterChip, { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary + '30' }]}>
                                                 <Text style={[styles.filterChipText, { color: theme.colors.primary }]}>Search: {searchQuery}</Text>
+                                                <TouchableOpacity
+                                                    onPress={() => {
+                                                        setSearchQuery('');
+                                                        const newFilters = { ...currentFilters };
+                                                        delete newFilters.keyword;
+                                                        fetchVendors(newFilters, true);
+                                                    }}
+                                                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                                                    style={styles.filterChipClear}
+                                                >
+                                                    <Icon name="close" size={14} color={theme.colors.primary} />
+                                                </TouchableOpacity>
                                             </View>
                                         )}
                                         {selectedLocation && (
                                             <View style={[styles.filterChip, { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary + '30' }]}>
                                                 <Text style={[styles.filterChipText, { color: theme.colors.primary }]}>{selectedLocation}</Text>
+                                                <TouchableOpacity
+                                                    onPress={() => handleLocationSelect(null)}
+                                                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                                                    style={styles.filterChipClear}
+                                                >
+                                                    <Icon name="close" size={14} color={theme.colors.primary} />
+                                                </TouchableOpacity>
                                             </View>
                                         )}
                                         {selectedCategoryNames && selectedCategoryNames.length > 0 && (
@@ -461,6 +501,13 @@ export default function Vendor() {
                                                         : selectedCategoryNames.join(', ')
                                                     }
                                                 </Text>
+                                                <TouchableOpacity
+                                                    onPress={() => handleCategorySelect([], [])}
+                                                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                                                    style={styles.filterChipClear}
+                                                >
+                                                    <Icon name="close" size={14} color={theme.colors.primary} />
+                                                </TouchableOpacity>
                                             </View>
                                         )}
                                     </View>
@@ -749,7 +796,10 @@ const styles = StyleSheet.create({
         gap: 6,
     },
     filterChip: {
-        paddingHorizontal: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingLeft: 8,
+        paddingRight: 4,
         paddingVertical: 4,
         borderRadius: 12,
         borderWidth: 1,
@@ -757,6 +807,10 @@ const styles = StyleSheet.create({
     filterChipText: {
         fontSize: 12,
         fontWeight: '500',
+    },
+    filterChipClear: {
+        marginLeft: 6,
+        padding: 2,
     },
     vendorCount: {
         fontSize: 12,

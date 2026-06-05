@@ -16,6 +16,7 @@ import {
     KeyboardAvoidingView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { icons } from '../../assets/icons';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import img from '../../assets/images/dummy.png';
 import bg1 from '../../assets/images/smallHeader.jpg';
@@ -329,7 +330,7 @@ export default function EventDetailViewEnhanced() {
                     {/* Location and Budget */}
                     <View style={styles.metaInfo}>
                         <View style={styles.locationContainer}>
-                            <Icon name="location" size={14} color="#64748B" />
+                            <Image source={icons.location} style={styles.locationIconImg} />
                             <Text style={styles.locationText}>{eventData.location}</Text>
                         </View>
                         <View style={styles.budgetContainer}>
@@ -590,6 +591,11 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
+    },
+    locationIconImg: {
+        width: 14,
+        height: 14,
+        resizeMode: 'contain',
     },
     locationText: {
         fontSize: 13,

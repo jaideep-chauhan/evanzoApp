@@ -1,5 +1,6 @@
-import api from './api';
-import { Share } from 'react-native';
+import api, { API_BASE_URL } from './api';
+import { Share, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import savedVendorsStorage from './savedVendorsStorage';
 
 class VendorDetailsService {
@@ -41,24 +42,74 @@ class VendorDetailsService {
         }
     }
 
-    // Submit a review for vendor
+    // Submit a review for vendor.
+    // When media files are attached, the request goes out as multipart so the
+    // backend's multer middleware can persist them under /uploads/vendor-reviews.
+    // Axios's XHR multipart is broken on Android, so use native fetch with the
+    // auth token (same pattern as createVendorAd in vendorService).
     async submitVendorReview(vendorId, reviewData) {
         try {
-            const response = await api.post(`/vendor-enhanced/${vendorId}/reviews`, {
-                rating: reviewData.rating,
-                review_text: reviewData.comment,
-                media_attachments: reviewData.media || []
+            const media = Array.isArray(reviewData.media) ? reviewData.media : [];
+
+            if (media.length === 0) {
+                // Plain JSON path — no files, the original behavior is fine.
+                const response = await api.post(`/vendor-enhanced/${vendorId}/reviews`, {
+                    rating: reviewData.rating,
+                    review_text: reviewData.comment,
+                });
+                return {
+                    success: true,
+                    data: response.data.data,
+                    message: 'Review submitted successfully',
+                };
+            }
+
+            // Multipart path
+            const formData = new FormData();
+            formData.append('rating', String(reviewData.rating));
+            if (reviewData.comment) {
+                formData.append('review_text', reviewData.comment);
+            }
+            media.forEach((m) => {
+                let uri = typeof m === 'string' ? m : m.uri;
+                if (Platform.OS === 'android' && uri && !uri.startsWith('file://') && !uri.startsWith('content://') && !uri.startsWith('http')) {
+                    uri = `file://${uri}`;
+                }
+                formData.append('media_attachments', {
+                    uri,
+                    type: m.type || 'image/jpeg',
+                    name: m.name || `review_${Date.now()}.jpg`,
+                });
             });
+
+            const token = await AsyncStorage.getItem('authToken');
+            const headers = { 'X-Client-Type': 'mobile' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const res = await fetch(`${API_BASE_URL}/vendor-enhanced/${vendorId}/reviews`, {
+                method: 'POST',
+                headers,
+                body: formData,
+            });
+            const data = await res.json();
+
+            if (!res.ok) {
+                return {
+                    success: false,
+                    message: data?.message || `Server error: ${res.status}`,
+                };
+            }
+
             return {
                 success: true,
-                data: response.data.data,
-                message: 'Review submitted successfully'
+                data: data.data,
+                message: data.message || 'Review submitted successfully',
             };
         } catch (error) {
             console.error('Submit vendor review error:', error);
             return {
                 success: false,
-                message: error.response?.data?.message || 'Failed to submit review'
+                message: error.response?.data?.message || error.message || 'Failed to submit review',
             };
         }
     }

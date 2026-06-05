@@ -148,8 +148,8 @@ export default function LocationSearchModal({ visible, onClose, onLocationSelect
         }
     };
 
-    const handleLocationSelect = (location) => {
-        onLocationSelect(location);
+    const handleLocationSelect = (location, structured = null) => {
+        onLocationSelect(location, structured);
         setSearchText('');
         setFilteredLocations(POPULAR_LOCATIONS);
         setSearchResults([]);
@@ -209,7 +209,10 @@ export default function LocationSearchModal({ visible, onClose, onLocationSelect
                 styles.locationItem,
                 { backgroundColor: currentLocation === item.formatted ? '#E7F0FF' : '#fff', borderColor: theme.colors.primary + (currentLocation === item.formatted ? '' : '22') },
             ]}
-            onPress={() => handleLocationSelect(item.formatted)}
+            // Pass the FULL Nominatim payload as the second arg so consumers (e.g.
+            // CreateAddForm) can extract country/state/city/lat/lon. Existing
+            // consumers that only read the first arg keep working unchanged.
+            onPress={() => handleLocationSelect(item.formatted, item)}
         >
             <Icon name="search-outline" size={20} color={theme.colors.primary} />
             <View style={styles.searchResultContent}>
@@ -338,10 +341,11 @@ const styles = StyleSheet.create({
     },
     container: {
         backgroundColor: '#fff',
-        // paddingTop: 20,
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
-        maxHeight: '50%',
+        // Fixed height so the sheet doesn't jump as content switches between
+        // popular locations / search results / empty state.
+        height: '70%',
     },
     header: {
         flexDirection: 'row',
@@ -427,6 +431,7 @@ const styles = StyleSheet.create({
         paddingBottom: 6,
     },
     list: {
+        flex: 1,
         paddingBottom: 20,
     },
     locationItem: {

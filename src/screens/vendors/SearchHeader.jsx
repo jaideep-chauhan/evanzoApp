@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
-    TextInput,
+    Text,
     Image,
     ImageBackground,
     StyleSheet,
@@ -14,10 +14,25 @@ import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
 import img from '../../assets/images/evanzoLogo.png';
 import bg from '../../assets/images/smallHeader.jpg';
+import { setSearchHandler } from '../../services/searchBridge';
 
-export default function SearchHeader({ onSearchChange, searchValue = '' }) {
+export default function SearchHeader({ onSearchChange, searchValue = '', searchType = 'vendors', onCategorySelect }) {
     const navigation = useNavigation();
     const theme = useTheme();
+
+    // Open the dedicated Search overlay. Register a one-shot handler that
+    // the Search screen pops + invokes when the user picks a keyword or
+    // category, so the list screen's own state is the source of truth.
+    const openSearch = () => {
+        setSearchHandler({
+            onQuery: (q) => onSearchChange?.(q),
+            onCategory: (cat) => onCategorySelect?.(cat),
+        });
+        navigation.navigate('Search', {
+            searchType,
+            initialQuery: searchValue,
+        });
+    };
 
     const placeholders = [
         'Search for vendors...',
@@ -79,10 +94,14 @@ export default function SearchHeader({ onSearchChange, searchValue = '' }) {
                     </TouchableOpacity>
                 </View>
 
-                {/* Search Bar */}
+                {/* Search Bar — tapping anywhere opens the dedicated Search overlay */}
                 <View style={{ width: '100%', paddingHorizontal: 10 }}>
-                    <View style={styles.searchBarWrapper}>
-                        <View style={[styles.searchBar, { backgroundColor: theme.colors.lightBackground + '50' }]}>
+                    <TouchableOpacity
+                        style={styles.searchBarWrapper}
+                        activeOpacity={0.85}
+                        onPress={openSearch}
+                    >
+                        <View style={[styles.searchBar, { backgroundColor: theme.colors.lightBackground + '50' }]} pointerEvents="none">
                             <Icon name="search-outline" size={20} color="#fff" style={styles.searchIcon} />
                             <View style={{ flex: 1, height: 40, justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
                                 {!searchValue && (
@@ -135,32 +154,33 @@ export default function SearchHeader({ onSearchChange, searchValue = '' }) {
                                         </Animated.Text>
                                     </>
                                 )}
-                                <TextInput
-                                    style={[styles.input, { position: 'absolute', left: 0, right: 0, zIndex: 1 }]}
-                                    underlineColorAndroid="transparent"
-                                    autoCorrect={false}
-                                    autoCapitalize="none"
-                                    selectionColor="#fff"
-                                    value={searchValue}
-                                    onChangeText={onSearchChange}
-                                    returnKeyType="search"
-                                    placeholder=""
-                                    placeholderTextColor="transparent"
-                                />
+                                {/* Read-only label showing the active keyword. The
+                                    bar is no longer editable in-place — tapping
+                                    opens the dedicated Search screen above. */}
+                                {!!searchValue && (
+                                    <Text style={[styles.input, { position: 'absolute', left: 0, right: 0, zIndex: 1 }]} numberOfLines={1}>
+                                        {searchValue}
+                                    </Text>
+                                )}
                             </View>
                             {searchValue ? (
-                                <TouchableOpacity 
-                                    style={styles.filterIconWrapper}
-                                    onPress={() => onSearchChange('')}
-                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                >
+                                <View style={styles.filterIconWrapper}>
                                     <Icon name="close-circle" size={20} color="#fff" style={styles.filterIcon} />
-                                </TouchableOpacity>
+                                </View>
                             ) : (
                                 <View style={styles.filterIconWrapper} />
                             )}
                         </View>
-                    </View>
+                        {/* Clear button sits ABOVE the pointerEvents-none child
+                            so the tap is captured before the navigation fires. */}
+                        {!!searchValue && (
+                            <TouchableOpacity
+                                style={styles.clearHit}
+                                onPress={() => onSearchChange('')}
+                                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                            />
+                        )}
+                    </TouchableOpacity>
                 </View>
             </View>
         </ImageBackground>
@@ -237,5 +257,12 @@ const styles = StyleSheet.create({
     filterIcon: {
         marginRight: 7,
         transform: [{ rotate: '90deg' }],
+    },
+    clearHit: {
+        position: 'absolute',
+        top: 0,
+        bottom: 0,
+        right: 0,
+        width: 48,
     },
 });

@@ -64,14 +64,22 @@ export default function Events() {
                 setIsLoading(true);
             }
 
-            // If clearing all filters, use empty filters, otherwise combine with current
+            // resetResults = true means the caller supplied the FULL intended
+            // filter set; don't merge with stale currentFilters or a cleared
+            // key (deleted from filters) will get re-applied from current state
+            // and the list keeps showing the old result. Pagination
+            // (resetResults=false) keeps current filters and advances the page.
             const searchFilters = clearAllFilters ? {
+                page: 1,
+                limit: 10
+            } : resetResults ? {
+                ...filters,
                 page: 1,
                 limit: 10
             } : {
                 ...currentFilters,
                 ...filters,
-                page: resetResults ? 1 : (filters.page || currentFilters.page || 1),
+                page: filters.page || currentFilters.page || 1,
                 limit: 10
             };
 
@@ -582,6 +590,8 @@ export default function Events() {
                 contentContainerStyle={{ paddingBottom: 24 }}
                 showsVerticalScrollIndicator={false}
                 scrollEventThrottle={16}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
                 refreshControl={
                     <RefreshControl
                         refreshing={refreshing}
@@ -607,8 +617,9 @@ export default function Events() {
                     }
                 )}
             >
-                <SearchHeader 
+                <SearchHeader
                     searchValue={searchQuery}
+                    searchType="events"
                     onSearchChange={(text) => {
                         setSearchQuery(text);
                         // Debounced search
@@ -618,6 +629,9 @@ export default function Events() {
                             500,
                             'event-header-search'
                         );
+                    }}
+                    onCategorySelect={(cat) => {
+                        handleCategorySelect([cat.category_id || cat.id], [cat]);
                     }}
                 />
                 <View style={{ marginBottom: 10 }}>
@@ -644,11 +658,30 @@ export default function Events() {
                                 {searchQuery && (
                                     <View style={[styles.filterChip, { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary + '30' }]}>
                                         <Text style={[styles.filterChipText, { color: theme.colors.primary }]}>Search: {searchQuery}</Text>
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                setSearchQuery('');
+                                                const newFilters = { ...currentFilters };
+                                                delete newFilters.keyword;
+                                                fetchEvents(newFilters, true);
+                                            }}
+                                            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                                            style={styles.filterChipClear}
+                                        >
+                                            <Icon name="close" size={14} color={theme.colors.primary} />
+                                        </TouchableOpacity>
                                     </View>
                                 )}
                                 {selectedLocation && (
                                     <View style={[styles.filterChip, { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary + '30' }]}>
                                         <Text style={[styles.filterChipText, { color: theme.colors.primary }]}>{selectedLocation}</Text>
+                                        <TouchableOpacity
+                                            onPress={() => handleLocationSelect(null)}
+                                            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                                            style={styles.filterChipClear}
+                                        >
+                                            <Icon name="close" size={14} color={theme.colors.primary} />
+                                        </TouchableOpacity>
                                     </View>
                                 )}
                                 {selectedDateRange && (
@@ -656,6 +689,19 @@ export default function Events() {
                                         <Text style={[styles.filterChipText, { color: '#059669' }]}>
                                             {selectedDateRange.startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {selectedDateRange.endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                         </Text>
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                setSelectedDateRange(null);
+                                                const newFilters = { ...currentFilters };
+                                                delete newFilters.dateFrom;
+                                                delete newFilters.dateTo;
+                                                fetchEvents(newFilters, true);
+                                            }}
+                                            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                                            style={styles.filterChipClear}
+                                        >
+                                            <Icon name="close" size={14} color="#059669" />
+                                        </TouchableOpacity>
                                     </View>
                                 )}
                                 {selectedCategoryNames.length > 0 && (
@@ -666,6 +712,13 @@ export default function Events() {
                                                 : selectedCategoryNames.join(', ')
                                             }
                                         </Text>
+                                        <TouchableOpacity
+                                            onPress={() => handleCategorySelect([], [])}
+                                            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                                            style={styles.filterChipClear}
+                                        >
+                                            <Icon name="close" size={14} color="#e91e63" />
+                                        </TouchableOpacity>
                                     </View>
                                 )}
                             </View>
@@ -896,7 +949,10 @@ const styles = StyleSheet.create({
         gap: 6,
     },
     filterChip: {
-        paddingHorizontal: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingLeft: 8,
+        paddingRight: 4,
         paddingVertical: 4,
         borderRadius: 12,
         borderWidth: 1,
@@ -904,6 +960,10 @@ const styles = StyleSheet.create({
     filterChipText: {
         fontSize: 12,
         fontWeight: '500',
+    },
+    filterChipClear: {
+        marginLeft: 6,
+        padding: 2,
     },
     retryButton: {
         paddingHorizontal: 20,

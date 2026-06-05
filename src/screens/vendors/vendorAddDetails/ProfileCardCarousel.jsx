@@ -16,6 +16,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import vendorDetailsService from '../../../services/vendorDetailsService';
 import img from '../../../assets/images/dummy.png';
+import { icons } from '../../../assets/icons';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.55;
@@ -64,7 +65,7 @@ const ProfileCard = ({ item, onPress }) => {
             <Text style={styles.role}>{item.role || item.type}</Text>
 
             <View style={styles.locationBadge}>
-                <Ionicons name="location-sharp" size={16} color="#2c3a58" />
+                <Image source={icons.location} style={styles.locationBadgeIcon} />
                 <Text style={styles.locationText} numberOfLines={1}>{item.location}</Text>
             </View>
 
@@ -354,6 +355,11 @@ const styles = StyleSheet.create({
         marginLeft: 6,
         fontSize: 10,
         color: '#2C3D5BF5',
+    },
+    locationBadgeIcon: {
+        width: 16,
+        height: 16,
+        resizeMode: 'contain',
     },
     button: {
         backgroundColor: '#2c3a58',

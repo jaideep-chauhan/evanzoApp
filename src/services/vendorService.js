@@ -398,7 +398,12 @@ class VendorService {
             description: vendor.description || '',
             images: photos.length > 0 ? photos : [dummyImage, dummyImage, dummyImage], // Use dummy images as fallback
             extraCount: photos.length > 3 ? photos.length - 3 : 0,
-            location: vendor.location || '',
+            // Prefer the structured city column (populated by newer ads).
+            // Legacy ads only have the full `location` string — fall back to
+            // its first comma-separated segment, which is the city.
+            location: vendor.city
+                || (vendor.location ? String(vendor.location).split(',')[0].trim() : '')
+                || '',
             offers: offers,
             approval_status: vendor.approval_status || 'pending', // Add approval_status
             status: vendor.status || 'active', // Add status

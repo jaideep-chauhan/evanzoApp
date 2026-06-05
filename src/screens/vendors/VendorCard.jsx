@@ -14,6 +14,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
 import theme from '../../theme';
 import img from '../../assets/images/dummy.png'; // Fallback image
+import { icons, getCategoryIcon } from '../../assets/icons';
 
 const { width } = Dimensions.get('window');
 
@@ -202,11 +203,19 @@ export default function VendorCard({
                 <View style={styles.nameBlock}>
                     <Text style={[styles.vendorName, { color: theme.colors.primary }]}>{name}</Text>
                     <View style={styles.tagRow}>
-                        <Text style={styles.tag}>
-                            {type === 'Photography' ? '📷' : type === 'Catering' ? '🍽️' : type === 'Music' ? '🎵' : type === 'Florist' ? '🌸' : type === 'Event Planner' ? '🎉' : type === 'Decor' ? '🎨' : type === 'Bakery' ? '🍰' : '🏷️'} {type}
-                        </Text>
+                        <View style={styles.tagWithIcon}>
+                            {getCategoryIcon(type) ? (
+                                <Image source={getCategoryIcon(type)} style={styles.tagIcon} />
+                            ) : (
+                                <Text style={styles.tagText}>🏷️</Text>
+                            )}
+                            <Text style={styles.tagText}>{type}</Text>
+                        </View>
                         {location && (
-                            <Text style={styles.tag}>📍 {location}</Text>
+                            <View style={styles.tagWithIcon}>
+                                <Image source={icons.location} style={styles.tagIcon} />
+                                <Text style={styles.tagText}>{location}</Text>
+                            </View>
                         )}
                     </View>
                 </View>
@@ -377,6 +386,24 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         paddingHorizontal: 8,
         paddingVertical: 4,
+        fontSize: 12,
+        color: '#666',
+    },
+    tagWithIcon: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f8f9fa',
+        borderRadius: 12,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        gap: 4,
+    },
+    tagIcon: {
+        width: 14,
+        height: 14,
+        resizeMode: 'contain',
+    },
+    tagText: {
         fontSize: 12,
         color: '#666',
     },

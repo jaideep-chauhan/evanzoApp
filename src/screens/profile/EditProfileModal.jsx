@@ -11,11 +11,28 @@ import {
     Alert,
     KeyboardAvoidingView,
     Platform,
+    Image,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../../ThemeContext';
 import userProfileService from '../../services/userProfileService';
 import { useAuth } from '../../context/AuthContext';
+import LocationSearchModal from '../vendors/LocationSearchModal';
+import { icons } from '../../assets/icons';
+
+// Translate a Nominatim/Photon payload into the flat shape the backend expects.
+// Returns null fields when only a popular-location string was picked.
+const extractLocationFields = (structured) => {
+    if (!structured) return null;
+    const addr = structured.address || {};
+    return {
+        country: addr.country || null,
+        state: addr.state || addr.state_district || addr.region || null,
+        city: addr.city || addr.town || addr.village || addr.municipality || addr.hamlet || null,
+        latitude: structured.lat ?? null,
+        longitude: structured.lon ?? null,
+    };
+};
 
 export default function EditProfileModal({ visible, onClose, onUpdate }) {
     const theme = useTheme();
@@ -28,10 +45,28 @@ export default function EditProfileModal({ visible, onClose, onUpdate }) {
         location: '',
         bio: '',
     });
+    // Structured location data captured when the user picks an API result in
+    // the modal. Stays null when only a popular-location string was picked.
+    const [locationData, setLocationData] = useState(null);
+    const [showLocationModal, setShowLocationModal] = useState(false);
 
     useEffect(() => {
         const loadUserData = async () => {
             if (visible && user) {
+                // Pre-populate structured location from whatever the user
+                // already has saved, so a Save without re-picking the modal
+                // doesn't wipe their existing country/state/city/lat/lon.
+                const hasStructured =
+                    user.country || user.state || user.city ||
+                    user.latitude != null || user.longitude != null;
+                setLocationData(hasStructured ? {
+                    country: user.country || null,
+                    state: user.state || null,
+                    city: user.city || null,
+                    latitude: user.latitude ?? null,
+                    longitude: user.longitude ?? null,
+                } : null);
+
                 console.log('📝 EditProfileModal - User data from context:', {
                     full_name: user.full_name,
                     email: user.email,
@@ -97,12 +132,24 @@ export default function EditProfileModal({ visible, onClose, onUpdate }) {
 
         setLoading(true);
         try {
-            const response = await userProfileService.updateProfile({
+            // Build payload — only include structured fields when the user
+            // actually picked an API result. Backend validation tolerates
+            // either presence or absence (allow('', null) + .unknown(true)).
+            const payload = {
                 full_name: formData.full_name.trim(),
                 phone: formData.phone.trim(),
                 location: formData.location.trim(),
                 bio: formData.bio.trim(),
-            });
+            };
+            if (locationData) {
+                if (locationData.country) payload.country = locationData.country;
+                if (locationData.state) payload.state = locationData.state;
+                if (locationData.city) payload.city = locationData.city;
+                if (locationData.latitude != null) payload.latitude = locationData.latitude;
+                if (locationData.longitude != null) payload.longitude = locationData.longitude;
+            }
+
+            const response = await userProfileService.updateProfile(payload);
 
             if (response.success) {
                 // Update user context with new data
@@ -112,6 +159,7 @@ export default function EditProfileModal({ visible, onClose, onUpdate }) {
                     phone: formData.phone.trim(),
                     location: formData.location.trim(),
                     bio: formData.bio.trim(),
+                    ...(locationData || {}),
                 });
                 
                 Alert.alert('Success', 'Profile updated successfully');
@@ -187,16 +235,27 @@ export default function EditProfileModal({ visible, onClose, onUpdate }) {
                             />
                         </View>
 
-                        {/* Location */}
+                        {/* Location — uses the same picker as the create-ad form
+                            so structured country/state/city/lat/lon are captured. */}
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Location</Text>
-                            <TextInput
-                                style={[styles.input, { borderColor: theme.colors.borderLight }]}
-                                value={formData.location}
-                                onChangeText={(text) => setFormData({ ...formData, location: text })}
-                                placeholder="Enter your location"
-                                placeholderTextColor={theme.colors.textSecondary}
-                            />
+                            <TouchableOpacity
+                                style={[styles.input, styles.locationPicker, { borderColor: theme.colors.borderLight }]}
+                                onPress={() => setShowLocationModal(true)}
+                                activeOpacity={0.8}
+                            >
+                                <Image source={icons.location} style={styles.locationPin} />
+                                <Text
+                                    style={[
+                                        styles.locationText,
+                                        { color: formData.location ? theme.colors.text : theme.colors.textSecondary },
+                                    ]}
+                                    numberOfLines={1}
+                                >
+                                    {formData.location || 'Choose location'}
+                                </Text>
+                                <Icon name="search" size={18} color={theme.colors.textSecondary} style={{ marginLeft: 'auto' }} />
+                            </TouchableOpacity>
                         </View>
 
                         {/* Bio */}
@@ -240,6 +299,18 @@ export default function EditProfileModal({ visible, onClose, onUpdate }) {
                     </View>
                 </View>
             </KeyboardAvoidingView>
+
+            {/* Location picker — same component used by the create-ad form */}
+            <LocationSearchModal
+                visible={showLocationModal}
+                onClose={() => setShowLocationModal(false)}
+                currentLocation={formData.location}
+                screenType="vendors"
+                onLocationSelect={(formatted, structured) => {
+                    setFormData((prev) => ({ ...prev, location: formatted || '' }));
+                    setLocationData(extractLocationFields(structured));
+                }}
+            />
         </Modal>
     );
 }
@@ -289,6 +360,20 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         fontSize: 16,
         color: '#333',
+    },
+    locationPicker: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    locationPin: {
+        width: 18,
+        height: 18,
+        resizeMode: 'contain',
+    },
+    locationText: {
+        flex: 1,
+        fontSize: 16,
     },
     disabledInput: {
         backgroundColor: '#f5f5f5',

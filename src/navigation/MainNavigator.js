@@ -35,6 +35,9 @@ import EventDetailViewEnhanced from '../screens/events/EventDetailViewEnhanced';
 import AllReviewsScreen from '../screens/vendors/vendorViewDetails';
 import Review from '../screens/vendors/Review';
 
+// Search overlay (opened from the Vendors/Events search input)
+import SearchScreen from '../screens/search';
+
 // User Profile Screen
 import UserProfile from '../screens/profile/UserProfile';
 
@@ -183,7 +186,14 @@ const MainNavigator = () => {
                         {/* Vendor Add Detail Screen */}
                         <Stack.Screen name="VendorAddDetail" component={VendorChat} />
                         <Stack.Screen name="VendorChat" component={VendorChat} />
-                        
+
+                        {/* Standalone Search overlay */}
+                        <Stack.Screen
+                            name="Search"
+                            component={SearchScreen}
+                            options={{ animation: 'fade_from_bottom' }}
+                        />
+
                         {/* Profile Screens */}
                         <Stack.Screen name="SavedVendors" component={SavedVendors} />
 

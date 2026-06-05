@@ -25,7 +25,23 @@ import categoryService from '../../services/categoryService';
 import { CustomSuccessModal } from '../../components/CustomSuccessModal';
 import { CustomToast } from '../../components/CustomToast';
 import ImageEditorModal from '../../components/ImageEditorModal';
-import LocationAutocomplete from '../../components/LocationAutocomplete';
+import LocationSearchModal from '../vendors/LocationSearchModal';
+import { icons } from '../../assets/icons';
+
+// Translate a Nominatim payload into the flat shape the backend expects.
+// Returns null for the structured fields when the user picked a popular
+// location (which only has a formatted string).
+const extractLocationFields = (structured) => {
+    if (!structured) return null;
+    const addr = structured.address || {};
+    return {
+        country: addr.country || null,
+        state: addr.state || addr.state_district || addr.region || null,
+        city: addr.city || addr.town || addr.village || addr.municipality || addr.hamlet || null,
+        latitude: structured.lat ?? null,
+        longitude: structured.lon ?? null,
+    };
+};
 import CategorySelectionModalEnhanced from '../vendors/CategorySelectionModalEnhanced';
 
 const CreateAddForm = ({ type, onClose }) => {
@@ -43,6 +59,10 @@ const CreateAddForm = ({ type, onClose }) => {
     const [eventTags, setEventTags] = useState([]);
     const [availableEventTags, setAvailableEventTags] = useState([]); // Dynamic tags based on selected event category
     const [location, setLocation] = useState('');
+    // Structured location data captured when the user picks an API result.
+    // Stays null when only a free-text / popular-location string was picked.
+    const [eventLocationData, setEventLocationData] = useState(null); // { country, state, city, latitude, longitude }
+    const [showEventLocationModal, setShowEventLocationModal] = useState(false);
     const [date, setDate] = useState(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [dateSelected, setDateSelected] = useState(false);
@@ -61,6 +81,8 @@ const CreateAddForm = ({ type, onClose }) => {
     const [vendorDescription, setVendorDescription] = useState('');
     const [companyName, setCompanyName] = useState('');
     const [vendorLocation, setVendorLocation] = useState('Ontario, Canada');
+    const [vendorLocationData, setVendorLocationData] = useState(null); // { country, state, city, latitude, longitude }
+    const [showVendorLocationModal, setShowVendorLocationModal] = useState(false);
     const [selectedTags, setSelectedTags] = useState([]);
     const [availableTags, setAvailableTags] = useState([]); // Dynamic tags based on selected category
     const [offers, setOffers] = useState([{ amount: '', discount: '' }]);
@@ -445,6 +467,16 @@ const CreateAddForm = ({ type, onClose }) => {
                 formData.append('event_type', finalEventType);
                 formData.append('event_tags', JSON.stringify(eventTags));
                 formData.append('location', location);
+                // Structured fields are only present when the user picked an
+                // API result from the modal (not when typing a free-text /
+                // popular location). Backend validation accepts these as optional.
+                if (eventLocationData) {
+                    if (eventLocationData.country) formData.append('country', eventLocationData.country);
+                    if (eventLocationData.state) formData.append('state', eventLocationData.state);
+                    if (eventLocationData.city) formData.append('city', eventLocationData.city);
+                    if (eventLocationData.latitude != null) formData.append('latitude', String(eventLocationData.latitude));
+                    if (eventLocationData.longitude != null) formData.append('longitude', String(eventLocationData.longitude));
+                }
                 formData.append('date', date.toISOString().split('T')[0]); // Format as YYYY-MM-DD
                 if (duration) formData.append('duration', duration);
                 if (budget) formData.append('budget', budget);
@@ -518,6 +550,15 @@ const CreateAddForm = ({ type, onClose }) => {
                 formData.append('description', vendorDescription || '');
                 formData.append('company_name', companyName);
                 formData.append('location', vendorLocation);
+                // Structured location fields — only present when the user
+                // selected an API result in the modal.
+                if (vendorLocationData) {
+                    if (vendorLocationData.country) formData.append('country', vendorLocationData.country);
+                    if (vendorLocationData.state) formData.append('state', vendorLocationData.state);
+                    if (vendorLocationData.city) formData.append('city', vendorLocationData.city);
+                    if (vendorLocationData.latitude != null) formData.append('latitude', String(vendorLocationData.latitude));
+                    if (vendorLocationData.longitude != null) formData.append('longitude', String(vendorLocationData.longitude));
+                }
                 formData.append('services_offered', JSON.stringify(selectedTags));
                 formData.append('offers', JSON.stringify(validOffers));
 
@@ -706,13 +747,17 @@ const CreateAddForm = ({ type, onClose }) => {
 
                         <View style={styles.fieldGroupPro}>
                             <Text style={styles.labelPro}>Location</Text>
-                            <LocationAutocomplete
-                                value={location}
-                                onChangeText={setLocation}
-                                placeholder="Enter location"
-                                placeholderTextColor="#ffffff80"
-                                style={styles.inputPro}
-                            />
+                            <TouchableOpacity
+                                style={[styles.inputPro, styles.locationPickerBtn]}
+                                onPress={() => setShowEventLocationModal(true)}
+                                activeOpacity={0.8}
+                            >
+                                <Image source={icons.location} style={styles.locationPickerIcon} />
+                                <Text style={location ? styles.dateText : styles.placeholderText} numberOfLines={1}>
+                                    {location || 'Choose location'}
+                                </Text>
+                                <Icon name="search" size={18} color="#ffffff80" style={{ marginLeft: 'auto' }} />
+                            </TouchableOpacity>
                         </View>
 
                         <View style={styles.fieldGroupPro}>
@@ -949,13 +994,17 @@ const CreateAddForm = ({ type, onClose }) => {
                         </View>
                         <View style={styles.fieldGroupPro}>
                             <Text style={styles.labelPro}>Location</Text>
-                            <LocationAutocomplete
-                                value={vendorLocation}
-                                onChangeText={setVendorLocation}
-                                placeholder="Enter location"
-                                placeholderTextColor="#ffffff80"
-                                style={styles.inputPro}
-                            />
+                            <TouchableOpacity
+                                style={[styles.inputPro, styles.locationPickerBtn]}
+                                onPress={() => setShowVendorLocationModal(true)}
+                                activeOpacity={0.8}
+                            >
+                                <Image source={icons.location} style={styles.locationPickerIcon} />
+                                <Text style={vendorLocation ? styles.dateText : styles.placeholderText} numberOfLines={1}>
+                                    {vendorLocation || 'Choose location'}
+                                </Text>
+                                <Icon name="search" size={18} color="#ffffff80" style={{ marginLeft: 'auto' }} />
+                            </TouchableOpacity>
                         </View>
 
                         <View style={styles.fieldGroupPro}>
@@ -1376,6 +1425,28 @@ const CreateAddForm = ({ type, onClose }) => {
                     setTempSelectedImages([]);
                 }}
                 onDone={handleImageEditorDone}
+            />
+
+            <LocationSearchModal
+                visible={showVendorLocationModal}
+                onClose={() => setShowVendorLocationModal(false)}
+                currentLocation={vendorLocation}
+                screenType="vendors"
+                onLocationSelect={(formatted, structured) => {
+                    setVendorLocation(formatted || '');
+                    setVendorLocationData(extractLocationFields(structured));
+                }}
+            />
+
+            <LocationSearchModal
+                visible={showEventLocationModal}
+                onClose={() => setShowEventLocationModal(false)}
+                currentLocation={location}
+                screenType="events"
+                onLocationSelect={(formatted, structured) => {
+                    setLocation(formatted || '');
+                    setEventLocationData(extractLocationFields(structured));
+                }}
             />
         </KeyboardAvoidingView>
     );
@@ -1805,6 +1876,16 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+    },
+    locationPickerBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    locationPickerIcon: {
+        width: 18,
+        height: 18,
+        resizeMode: 'contain',
+        marginRight: 8,
     },
     dateText: {
         color: '#ffffff',
