@@ -12,6 +12,10 @@ import {
     Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { EventCardSkeleton, renderSkeletons } from '../../components/SkeletonLoader';
+import { getCached, setCached } from '../../services/listCacheService';
+
+const EVENTS_CACHE_KEY = 'events:public';
 import Tabs from '../vendors/Tabs';
 import EventCard from './EventCard';
 import LocationSearchModal from '../vendors/LocationSearchModal';
@@ -225,7 +229,16 @@ export default function Events() {
             
             if (response.success) {
                 if (resetResults) {
-                    setEvents(response.data || []);
+                    const fresh = response.data || [];
+                    setEvents(fresh);
+                    // Persist only the unfiltered public list — filtered or
+                    // paginated results aren't worth caching across launches.
+                    const hasUserFilters = Object.keys(filters || {}).some(
+                        (k) => k !== 'page' && k !== 'limit' && filters[k],
+                    );
+                    if (!hasUserFilters && !clearAllFilters) {
+                        setCached(EVENTS_CACHE_KEY, fresh);
+                    }
                 } else {
                     // For pagination, append results and remove duplicates based on event_ad_id
                     setEvents(prev => {
@@ -258,6 +271,15 @@ export default function Events() {
     // Fetch events on component mount
     useEffect(() => {
         let isMounted = true;
+
+        // Hydrate from AsyncStorage so the first paint is the last known list
+        // (no spinner), then run the real fetch silently in the background.
+        (async () => {
+            const cached = await getCached(EVENTS_CACHE_KEY);
+            if (!isMounted || !Array.isArray(cached) || cached.length === 0) return;
+            setEvents(cached);
+            setIsLoading(false);
+        })();
 
         // Initial fetch with a small delay to prevent race conditions
         const initialFetchTimeout = setTimeout(() => {
@@ -583,6 +605,16 @@ export default function Events() {
         }
     }, [isFetchingEvents, currentFilters]);
 
+    // Pin the header in place ONLY when scrollY is negative (pull-to-refresh).
+    // Positive scrollY (normal scroll up) gets translateY = 0 so the header
+    // scrolls away with the cards as before.
+    const refreshPinTranslate = scrollY.interpolate({
+        inputRange: [-500, 0, 500],
+        outputRange: [-500, 0, 0],
+        extrapolateRight: 'clamp',
+        extrapolateLeft: 'identity',
+    });
+
     return (
         <View style={[styles.safe, { backgroundColor: '#fff' }]}>
             <Animated.ScrollView
@@ -607,7 +639,6 @@ export default function Events() {
                         useNativeDriver: false,
                         listener: (event) => {
                             const offsetY = event.nativeEvent.contentOffset.y;
-                            // Show sticky header when scrolled past header
                             if (offsetY > 180 && !isScrolled) {
                                 setIsScrolled(true);
                             } else if (offsetY <= 180 && isScrolled) {
@@ -617,37 +648,36 @@ export default function Events() {
                     }
                 )}
             >
-                <SearchHeader
-                    searchValue={searchQuery}
-                    searchType="events"
-                    onSearchChange={(text) => {
-                        setSearchQuery(text);
-                        // Debounced search
-                        filterService.debouncedSearch(
-                            (filters) => fetchEvents(filters, true),
-                            { ...currentFilters, keyword: text },
-                            500,
-                            'event-header-search'
-                        );
-                    }}
-                    onCategorySelect={(cat) => {
-                        handleCategorySelect([cat.category_id || cat.id], [cat]);
-                    }}
-                />
-                <View style={{ marginBottom: 10 }}>
-                    <Tabs
-                        tabs={['Location', 'Date', 'Category']}
-                        onTabPress={handleTabPress}
-                        defaultActive={activeTab}
+                <Animated.View style={{ transform: [{ translateY: refreshPinTranslate }] }}>
+                    <SearchHeader
+                        searchValue={searchQuery}
+                        searchType="events"
+                        onSearchChange={(text) => {
+                            setSearchQuery(text);
+                            filterService.debouncedSearch(
+                                (filters) => fetchEvents(filters, true),
+                                { ...currentFilters, keyword: text },
+                                500,
+                                'event-header-search'
+                            );
+                        }}
+                        onCategorySelect={(cat) => {
+                            handleCategorySelect([cat.category_id || cat.id], [cat]);
+                        }}
                     />
-                </View>
-
-                {/* Loading Spinner below tabs */}
-                {isLoading ? (
-                    <View style={styles.loaderContainer}>
-                        <ActivityIndicator size="large" color={theme.colors.primary} />
-                        <Text style={[styles.loadingText, { color: theme.colors.primary }]}>Loading events...</Text>
+                    <View style={{ marginBottom: 10 }}>
+                        <Tabs
+                            tabs={['Location', 'Date', 'Category']}
+                            onTabPress={handleTabPress}
+                            defaultActive={activeTab}
+                        />
                     </View>
+                </Animated.View>
+
+                {/* First-paint loading state — skeletons matching the real
+                    EventCard layout. Cache-hydrated mounts skip this branch. */}
+                {isLoading ? (
+                    renderSkeletons(EventCardSkeleton, 3)
                 ) : (
                     <>
                 {/* Filter status */}

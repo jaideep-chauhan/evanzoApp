@@ -8,14 +8,18 @@ import {
     Image,
     TextInput,
     StatusBar,
-    ActivityIndicator,
     RefreshControl,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../../ThemeContext';
 import chatService from '../../services/chatService';
 import socketService from '../../services/socketService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ChatRowSkeleton, renderSkeletons } from '../../components/SkeletonLoader';
+import { getCached, setCached } from '../../services/listCacheService';
+
+const CHAT_CACHE_KEY = 'chat:list';
 
 export default function ChatList({ navigation }) {
     const [chats, setChats] = useState([]);
@@ -25,9 +29,22 @@ export default function ChatList({ navigation }) {
     const [userId, setUserId] = useState(null);
     const [error, setError] = useState(null);
     const theme = useTheme();
+    const insets = useSafeAreaInsets();
 
     useEffect(() => {
-        loadUserAndChats();
+        // Hydrate from cache first so the tab opens with the last known list
+        // instead of a spinner. The real loadUserAndChats() then runs and
+        // silently overwrites with fresh state.
+        let cancelled = false;
+        (async () => {
+            const cached = await getCached(CHAT_CACHE_KEY);
+            if (cancelled) return;
+            if (Array.isArray(cached) && cached.length > 0) {
+                setChats(cached);
+                setLoading(false); // we have something to render; skip the spinner
+            }
+            loadUserAndChats();
+        })();
 
         // Refresh chats when screen comes into focus
         const unsubscribe = navigation.addListener('focus', async () => {
@@ -179,7 +196,13 @@ export default function ChatList({ navigation }) {
     const loadChats = async (currentUserId = null) => {
         try {
             console.log('📥 Loading chats...');
-            setLoading(true);
+            // Only show the full-screen loading state when we don't already
+            // have a list to render. With a cached or in-memory list, this is
+            // a silent background refresh — no spinner / blanking.
+            setChats((prev) => {
+                if (!prev || prev.length === 0) setLoading(true);
+                return prev;
+            });
             setError(null);
             const result = await chatService.getChats();
             console.log('📥 Chat service result:', {
@@ -312,6 +335,10 @@ export default function ChatList({ navigation }) {
 
                 console.log('✅ Formatted', uniqueChats.length, 'chats (removed', formattedChats.length - uniqueChats.length, 'duplicates)');
                 setChats(uniqueChats);
+                // Persist a snapshot for the next launch — `id` / `timestamp`
+                // / `lastMessage` / `unreadCount` are all already-formatted so
+                // the next mount can render immediately without re-fetching.
+                setCached(CHAT_CACHE_KEY, uniqueChats);
             } else {
                 // API call failed or returned no results
                 console.error('❌ Failed to load chats:', result.message || 'No results returned');
@@ -414,28 +441,39 @@ export default function ChatList({ navigation }) {
     console.log('🎨 Render - loading:', loading, 'chats count:', chats.length);
 
     if (loading) {
+        // First-ever open with no cache → show 6 chat-row skeletons in the
+        // real layout. Subsequent mounts hydrate from cache and skip this branch.
         return (
-            <View style={[styles.container, styles.centerContent]}>
-                <ActivityIndicator size="large" color={theme.colors.primary} />
-                <Text style={[styles.loadingText, { color: theme.colors.secondary }]}>
-                    Loading conversations...
-                </Text>
+            <View style={styles.container}>
+                <StatusBar barStyle="light-content" backgroundColor={theme.colors.primary} translucent />
+                <View
+                    style={[
+                        styles.header,
+                        { backgroundColor: theme.colors.primary, paddingTop: insets.top + 12 },
+                    ]}
+                >
+                    <Text style={styles.headerTitle}>Messages</Text>
+                </View>
+                {renderSkeletons(ChatRowSkeleton, 6)}
             </View>
         );
     }
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor={theme.colors.primary} />
-            
-            {/* Header */}
-            <View style={[styles.header, { backgroundColor: theme.colors.primary }]}>
-                <View style={styles.headerLeft}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                        <Icon name="arrow-back" size={24} color="#fff" />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Messages</Text>
-                </View>
+            <StatusBar barStyle="light-content" backgroundColor={theme.colors.primary} translucent />
+
+            {/* Header — no back arrow. This screen is the root of the
+                Messages tab; cross-tab navigation belongs to the tab bar,
+                not an in-screen back button. The blue fills behind the status
+                bar; insets.top pushes the title clear of the notch / camera. */}
+            <View
+                style={[
+                    styles.header,
+                    { backgroundColor: theme.colors.primary, paddingTop: insets.top + 12 },
+                ]}
+            >
+                <Text style={styles.headerTitle}>Messages</Text>
             </View>
 
             {/* Search Bar */}
@@ -514,26 +552,17 @@ const styles = StyleSheet.create({
         fontSize: 16,
     },
     header: {
-        paddingTop: StatusBar.currentHeight || 44,
+        // paddingTop is set inline as insets.top + 12 — the blue background
+        // fills the status-bar area while the title is pushed below the notch.
         paddingBottom: 15,
         paddingHorizontal: 20,
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
         elevation: 4,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
-    },
-    headerLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-    },
-    backButton: {
-        marginRight: 15,
-        padding: 5,
     },
     headerTitle: {
         fontSize: 24,

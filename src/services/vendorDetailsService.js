@@ -1,6 +1,6 @@
 import api, { API_BASE_URL } from './api';
 import { Share, Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import authFetch from './authFetch';
 import savedVendorsStorage from './savedVendorsStorage';
 
 class VendorDetailsService {
@@ -82,16 +82,13 @@ class VendorDetailsService {
                 });
             });
 
-            const token = await AsyncStorage.getItem('authToken');
-            const headers = { 'X-Client-Type': 'mobile' };
-            if (token) headers['Authorization'] = `Bearer ${token}`;
-
-            const res = await fetch(`${API_BASE_URL}/vendor-enhanced/${vendorId}/reviews`, {
+            // Go through authFetch so a 401 mid-upload transparently
+            // refreshes + retries instead of failing the whole submission.
+            const res = await authFetch(`${API_BASE_URL}/vendor-enhanced/${vendorId}/reviews`, {
                 method: 'POST',
-                headers,
                 body: formData,
             });
-            const data = await res.json();
+            const data = await res.json().catch(() => ({}));
 
             if (!res.ok) {
                 return {

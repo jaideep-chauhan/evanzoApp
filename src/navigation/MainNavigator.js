@@ -38,6 +38,10 @@ import Review from '../screens/vendors/Review';
 // Search overlay (opened from the Vendors/Events search input)
 import SearchScreen from '../screens/search';
 
+// Notification inbox (the received-notifications timeline — distinct from
+// the Notifications settings screen, which is just preference toggles).
+import NotificationInbox from '../screens/notifications/NotificationInbox';
+
 // User Profile Screen
 import UserProfile from '../screens/profile/UserProfile';
 
@@ -193,6 +197,10 @@ const MainNavigator = () => {
                             component={SearchScreen}
                             options={{ animation: 'fade_from_bottom' }}
                         />
+
+                        {/* Received-notifications inbox (NOT the settings screen
+                            registered as "Notifications" below). */}
+                        <Stack.Screen name="NotificationInbox" component={NotificationInbox} />
 
                         {/* Profile Screens */}
                         <Stack.Screen name="SavedVendors" component={SavedVendors} />

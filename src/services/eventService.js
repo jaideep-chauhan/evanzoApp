@@ -1,27 +1,41 @@
 import api, { API_BASE_URL } from './api';
 import dummyImage from '../assets/images/dummy.png';
+import authFetch from './authFetch';
 
 class EventService {
-    // Create event ad
+    // Create event ad. Multipart upload routes through authFetch (native
+    // fetch + refresh-on-401), same reason as createVendorAd.
     async createEventAd(eventData) {
         try {
-            const headers = {};
-            
-            // Check if eventData is FormData (for file uploads)
             if (eventData instanceof FormData) {
-                headers['Content-Type'] = 'multipart/form-data';
+                const res = await authFetch(`${API_BASE_URL}/event_ad`, {
+                    method: 'POST',
+                    body: eventData,
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    return {
+                        success: false,
+                        message: data?.message || `Server error: ${res.status}`,
+                    };
+                }
+                return {
+                    success: true,
+                    data: data.data,
+                    message: data.message || 'Event ad created successfully',
+                };
             }
-            
-            const response = await api.post('/event_ad', eventData, { headers });
+
+            const response = await api.post('/event_ad', eventData);
             return {
                 success: true,
                 data: response.data.data,
-                message: 'Event ad created successfully'
+                message: 'Event ad created successfully',
             };
         } catch (error) {
             return {
                 success: false,
-                message: error.response?.data?.message || 'Failed to create event ad'
+                message: error.response?.data?.message || error.message || 'Failed to create event ad',
             };
         }
     }
@@ -69,16 +83,22 @@ class EventService {
 
     // Delete event ad
     async deleteEventAd(eventId) {
+        const numericId = Number(eventId);
+        if (!Number.isFinite(numericId) || numericId <= 0) {
+            console.warn('[eventService.deleteEventAd] missing/invalid eventId:', eventId);
+            return { success: false, message: 'Event ad id is missing' };
+        }
         try {
-            await api.delete(`/event_ad/${eventId}`);
+            await api.delete(`/event_ad/${numericId}`);
             return {
                 success: true,
-                message: 'Event ad deleted successfully'
+                message: 'Event ad deleted successfully',
             };
         } catch (error) {
+            console.error('[eventService.deleteEventAd] failed for', numericId, '→', error.response?.status, error.response?.data?.message);
             return {
                 success: false,
-                message: error.response?.data?.message || 'Failed to delete event ad'
+                message: error.response?.data?.message || 'Failed to delete event ad',
             };
         }
     }
@@ -182,19 +202,27 @@ class EventService {
         }
     }
 
-    // Mark event ad as completed
+    // Mark event ad as completed.
+    // Backend has no `/event_ad/:id/complete` route — status changes go
+    // through PATCH /event_ad/:id/status with { status: 'completed' }.
     async markEventAdComplete(eventId) {
+        const numericId = Number(eventId);
+        if (!Number.isFinite(numericId) || numericId <= 0) {
+            console.warn('[eventService.markEventAdComplete] missing/invalid eventId:', eventId);
+            return { success: false, message: 'Event ad id is missing' };
+        }
         try {
-            const response = await api.put(`/event_ad/${eventId}/complete`);
+            const response = await api.patch(`/event_ad/${numericId}/status`, { status: 'completed' });
             return {
                 success: true,
                 data: response.data.data,
-                message: 'Event marked as completed'
+                message: 'Event marked as completed',
             };
         } catch (error) {
+            console.error('[eventService.markEventAdComplete] failed for', eventId, '→', error.response?.status, error.response?.data?.message);
             return {
                 success: false,
-                message: error.response?.data?.message || 'Failed to mark event as completed'
+                message: error.response?.data?.message || 'Failed to mark event as completed',
             };
         }
     }
@@ -254,17 +282,24 @@ class EventService {
         const extractedImages = this.extractImages(event.attachments);
         console.log('🎯 Extracted images count:', extractedImages.length);
         
-        // Format date if it exists
+        // Format date if it exists. The backend ships `event.date` as a Postgres
+        // timestamptz (string like "2026-05-30 00:00:00+00") or sometimes a ms
+        // timestamp. Normalise the space → "T" so JSC/Hermes parsers don't choke,
+        // and guard against NaN so we never propagate the string "Invalid Date".
         let formattedDate = 'Date TBD';
         if (event.date) {
-            try {
-                const dateObj = new Date(event.date);
+            const raw = typeof event.date === 'string'
+                ? event.date.replace(' ', 'T')
+                : event.date;
+            const dateObj = new Date(raw);
+            if (!isNaN(dateObj.getTime())) {
                 formattedDate = dateObj.toLocaleDateString('en-US', {
                     month: 'long',
                     day: 'numeric',
-                    year: 'numeric'
+                    year: 'numeric',
                 });
-            } catch (e) {
+            } else if (typeof event.date === 'string') {
+                // Backend already sent something human-readable; pass it through.
                 formattedDate = event.date;
             }
         }

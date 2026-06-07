@@ -1,5 +1,9 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Animated, ActivityIndicator, Alert } from 'react-native';
+import { VendorCardSkeleton, renderSkeletons } from '../../components/SkeletonLoader';
+import { getCached, setCached } from '../../services/listCacheService';
+
+const VENDORS_CACHE_KEY = 'vendors:public';
 import {
     StyleSheet,
     SafeAreaView,
@@ -170,7 +174,17 @@ export default function Vendor() {
             if (response.success) {
                 if (resetResults) {
                     console.log('✨ Setting vendors state to:', response.data?.length, 'items');
-                    setVendors(response.data || []);
+                    const fresh = response.data || [];
+                    setVendors(fresh);
+                    // Cache only the unfiltered public list so the next launch
+                    // can render instantly. Filtered results vary too widely
+                    // to be worth persisting.
+                    const hasUserFilters = Object.keys(filters || {}).some(
+                        (k) => k !== 'page' && k !== 'limit' && filters[k],
+                    );
+                    if (!hasUserFilters && !clearAllFilters) {
+                        setCached(VENDORS_CACHE_KEY, fresh);
+                    }
                 } else {
                     // For pagination, append results and remove duplicates based on vendor_ad_id
                     setVendors(prev => {
@@ -210,6 +224,16 @@ export default function Vendor() {
     // Fetch vendors on component mount
     useEffect(() => {
         let isMounted = true;
+
+        // Hydrate from AsyncStorage cache so the list paints immediately,
+        // then the real fetch runs in the background. If there's already
+        // cached data we skip the spinner — first-paint is the cached list.
+        (async () => {
+            const cached = await getCached(VENDORS_CACHE_KEY);
+            if (!isMounted || !Array.isArray(cached) || cached.length === 0) return;
+            setVendors(cached);
+            setIsLoading(false);
+        })();
 
         // Initial fetch with a small delay to prevent race conditions
         const initialFetchTimeout = setTimeout(() => {
@@ -375,6 +399,17 @@ export default function Vendor() {
         }
     }, [isFetchingVendors, currentFilters]);
 
+    // While the user is pulling down to refresh (negative scrollY), counter-
+    // translate the header so it appears pinned even though it lives inside
+    // the ScrollView. Normal upward scroll (positive scrollY) gets T=0, so the
+    // header still scrolls away with the cards as expected.
+    const refreshPinTranslate = scrollY.interpolate({
+        inputRange: [-500, 0, 500],
+        outputRange: [-500, 0, 0],
+        extrapolateRight: 'clamp',
+        extrapolateLeft: 'identity',
+    });
+
     return (
         <View style={[styles.safe]}>
             <Animated.ScrollView
@@ -383,9 +418,6 @@ export default function Vendor() {
                 contentContainerStyle={[styles.contentContainer, { backgroundColor: undefined }]}
                 showsVerticalScrollIndicator={false}
                 scrollEventThrottle={16}
-                // Keep chips/buttons tappable while the keyboard is up and
-                // dismiss the keyboard when the user starts scrolling the list,
-                // so the search experience doesn't feel like a separate page.
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="on-drag"
                 refreshControl={
@@ -410,13 +442,14 @@ export default function Vendor() {
                     }
                 )}
             >
-                <View style={styles.headerWrapper} >
+                <Animated.View
+                    style={[styles.headerWrapper, { transform: [{ translateY: refreshPinTranslate }] }]}
+                >
                     <SearchHeader
                         searchValue={searchQuery}
                         searchType="vendors"
                         onSearchChange={(text) => {
                             setSearchQuery(text);
-                            // Debounced search
                             filterService.debouncedSearch(
                                 (filters) => fetchVendors(filters, true),
                                 { ...currentFilters, keyword: text },
@@ -433,16 +466,19 @@ export default function Vendor() {
                         onTabPress={handleTabPress}
                         defaultActive={activeTab}
                     />
-                </View>
+                </Animated.View>
 
-                {/* Loading Spinner below tabs */}
+                {/* First-paint loading state — skeletons matching the real
+                    VendorCard layout. Subsequent renders never hit this branch
+                    because cache hydration flips isLoading false before the
+                    network call returns. Network-error state is a richer
+                    fallback with a retry button. */}
                 {isLoading ? (
-                    <View style={styles.loaderContainer}>
-                        <ActivityIndicator size="large" color={theme.colors.primary} />
-                        <Text style={[styles.loadingText, { color: theme.colors.primary }]}>
-                            {networkError ? 'Network issue detected. Retrying...' : 'Loading vendors...'}
-                        </Text>
-                        {networkError && (
+                    networkError ? (
+                        <View style={styles.loaderContainer}>
+                            <Text style={[styles.loadingText, { color: theme.colors.primary }]}>
+                                Network issue detected. Retrying...
+                            </Text>
                             <TouchableOpacity
                                 style={[styles.retryButton, { backgroundColor: theme.colors.primary }]}
                                 onPress={() => {
@@ -455,8 +491,10 @@ export default function Vendor() {
                                     {isFetchingVendors ? 'Retrying...' : 'Retry Now'}
                                 </Text>
                             </TouchableOpacity>
-                        )}
-                    </View>
+                        </View>
+                    ) : (
+                        renderSkeletons(VendorCardSkeleton, 3)
+                    )
                 ) : (
                     <>
                         {/* Filter status */}

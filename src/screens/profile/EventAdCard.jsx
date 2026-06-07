@@ -6,14 +6,19 @@ import {
     StyleSheet,
     TouchableOpacity,
     ScrollView,
+    Alert,
+    ActionSheetIOS,
+    Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../../ThemeContext';
+import eventService from '../../services/eventService';
 import img from '../../assets/images/dummy.png';
 import { useNavigation } from '@react-navigation/native';
 import { icons } from '../../assets/icons';
 
 export default function EventAdCard({
+    eventId,
     title = 'Corporate Event',
     location = 'Ontario, Canada',
     duration = '2 hours',
@@ -33,10 +38,85 @@ export default function EventAdCard({
     description = 'Amet minim mollit non deserunt ullamco est sit aliqua dolor do amet sint. Velit officia consequat duis enim velit mollit. Exercitation veniam consequat sunt nostrud amet.',
     attachments,
     onComplete = () => { },
+    onDelete = () => { },
 }) {
     const theme = useTheme();
     const navigation = useNavigation();
     const safeAttachments = Array.isArray(attachments) ? attachments : [];
+
+    // Owner action menu — only Live ads show "Mark as Complete"; every ad
+    // can be deleted. Uses ActionSheetIOS on iOS, a 3-button Alert on Android.
+    const handleMoreOptions = () => {
+        const canComplete = String(status).toUpperCase() === 'LIVE';
+
+        const confirmDelete = () => {
+            Alert.alert(
+                'Delete this ad?',
+                'This will remove the event ad permanently.',
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                        text: 'Delete',
+                        style: 'destructive',
+                        onPress: async () => {
+                            if (!eventId) {
+                                onDelete();
+                                return;
+                            }
+                            const res = await eventService.deleteEventAd(eventId);
+                            if (res.success) {
+                                onDelete(eventId);
+                            } else {
+                                Alert.alert('Error', res.message || 'Failed to delete the ad.');
+                            }
+                        },
+                    },
+                ],
+            );
+        };
+
+        const triggerComplete = async () => {
+            if (!eventId) {
+                onComplete();
+                return;
+            }
+            const res = await eventService.markEventAdComplete(eventId);
+            if (res.success) {
+                onComplete(eventId);
+            } else {
+                Alert.alert('Error', res.message || 'Failed to mark the ad as complete.');
+            }
+        };
+
+        if (Platform.OS === 'ios') {
+            const options = [];
+            if (canComplete) options.push('Mark as Complete');
+            options.push('Delete');
+            options.push('Cancel');
+            const destructiveIndex = options.indexOf('Delete');
+            const cancelIndex = options.indexOf('Cancel');
+            ActionSheetIOS.showActionSheetWithOptions(
+                {
+                    options,
+                    destructiveButtonIndex: destructiveIndex,
+                    cancelButtonIndex: cancelIndex,
+                },
+                (idx) => {
+                    if (idx === cancelIndex) return;
+                    if (options[idx] === 'Mark as Complete') triggerComplete();
+                    if (options[idx] === 'Delete') confirmDelete();
+                },
+            );
+        } else {
+            const buttons = [];
+            if (canComplete) {
+                buttons.push({ text: 'Mark as Complete', onPress: triggerComplete });
+            }
+            buttons.push({ text: 'Delete', style: 'destructive', onPress: confirmDelete });
+            buttons.push({ text: 'Cancel', style: 'cancel' });
+            Alert.alert(title || 'Options', null, buttons);
+        }
+    };
     
     // Debug logging for attachments
     console.log('🎴 EventAdCard - attachments received:', {
@@ -95,7 +175,10 @@ export default function EventAdCard({
                         <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                         <Text style={[styles.statusText, { color: theme.colors.primary }]} numberOfLines={1} ellipsizeMode="tail">{status}</Text>
                     </View>
-                    <TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={handleMoreOptions}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
                         <Icon name="ellipsis-horizontal" size={22} color={theme.colors.primary} style={{ marginLeft: 10 }} />
                     </TouchableOpacity>
                 </View>

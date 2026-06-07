@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -22,6 +22,12 @@ import CreateAd from './CreateAd';
 import CreateAddForm from './CreateAddForm';
 import EditProfileModal from './EditProfileModal';
 import RefreshableScrollView from '../../components/RefreshableScrollView';
+import {
+    VendorCardSkeleton,
+    EventCardSkeleton,
+    renderSkeletons,
+} from '../../components/SkeletonLoader';
+import useCachedList from '../../hooks/useCachedList';
 import img from '../../assets/images/dummy.png';
 import bg from '../../assets/images/profileBG.png';
 
@@ -47,46 +53,48 @@ export default function VendorAdDashboard({ navigation }) {
     const [showCreateAddForm, setShowCreateAddForm] = useState(false);
     const [showEditProfile, setShowEditProfile] = useState(false);
     const [createAddFormType, setCreateAddFormType] = useState('vendor');
-    const [vendorAds, setVendorAds] = useState([]);
-    const [eventAds, setEventAds] = useState([]);
-    const [isLoading, setIsLoading] = useState(false);
+    // Stale-while-revalidate: each sub-tab is cached independently in
+    // AsyncStorage. Tab switches re-render with whatever's already in state
+    // (no network, no spinner). On first mount both lists hydrate from cache
+    // synchronously-ish, then a background fetch overwrites the cache silently.
+    const fetchMyVendorAds = useCallback(async () => {
+        const r = await vendorService.getMyVendorAds();
+        return {
+            success: !!r.success,
+            data: r.success && Array.isArray(r.data)
+                ? r.data.map((v) => vendorService.formatVendorForDisplay(v))
+                : [],
+            message: r.message,
+        };
+    }, []);
 
-    // Fetch ads on component mount and when tab changes
-    useEffect(() => {
-        fetchAds();
-    }, [activeTab]);
+    const fetchMyEventAds = useCallback(async () => {
+        const r = await eventService.getMyEventAds();
+        return {
+            success: !!r.success,
+            data: r.success && Array.isArray(r.data)
+                ? r.data.map((e) => eventService.formatEventForDisplay(e))
+                : [],
+            message: r.message,
+        };
+    }, []);
 
+    const vendorList = useCachedList('my-ads:vendor', fetchMyVendorAds);
+    const eventList = useCachedList('my-ads:event', fetchMyEventAds);
 
+    const vendorAds = vendorList.data || [];
+    const eventAds = eventList.data || [];
 
+    // Loading is *only* true the first time, before either cache or fresh data
+    // is available for the active tab. Tab switches go straight to rendered
+    // data with no spinner / skeleton flash.
+    const isLoading =
+        activeTab === 'vendor' ? vendorList.isLoading : eventList.isLoading;
 
-    const fetchAds = async () => {
-        setIsLoading(true);
-        try {
-            if (activeTab === 'vendor') {
-                const response = await vendorService.getMyVendorAds();
-
-                if (response.success) {
-                    const formattedVendors = response.data.map(vendor => {
-                        const formatted = vendorService.formatVendorForDisplay(vendor);
-                        return formatted;
-                    });
-                    setVendorAds(formattedVendors);
-                }
-            } else {
-                const response = await eventService.getMyEventAds();
-                if (response.success) {
-                    const formattedEvents = response.data.map(event =>
-                        eventService.formatEventForDisplay(event)
-                    );
-                    setEventAds(formattedEvents);
-                }
-            }
-        } catch (error) {
-            console.error('Error fetching ads:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    // Pull-to-refresh hits both lists so the user gets fresh state on both tabs.
+    const fetchAds = useCallback(async () => {
+        await Promise.all([vendorList.refresh(), eventList.refresh()]);
+    }, [vendorList, eventList]);
 
     return (
         <View style={[styles.safe, { flex: 1, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 }]}>
@@ -163,7 +171,10 @@ export default function VendorAdDashboard({ navigation }) {
                             <Text style={[styles.secondaryText, { color: theme.colors.primary }]}>MESSAGE</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.bellBtn}>
+                        <TouchableOpacity
+                            style={styles.bellBtn}
+                            onPress={() => navigation.navigate('NotificationInbox')}
+                        >
                             <Icon name="notifications-outline" size={18} color={theme.colors.primary} />
                         </TouchableOpacity>
                     </View>
@@ -211,13 +222,15 @@ export default function VendorAdDashboard({ navigation }) {
                     </TouchableOpacity>
                 </View>
 
-                {/* List content */}
-                {/* List */}
+                {/* List content. We only show skeletons when there's no
+                    cached data AND no fresh data yet — that's first-ever
+                    open. Tab switches and pull-to-refresh keep showing the
+                    last known list (cached or live). */}
                 {isLoading ? (
-                    <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="large" color={theme.colors.primary} />
-                        <Text style={[styles.loadingText, { color: theme.colors.primary }]}>Loading ads...</Text>
-                    </View>
+                    renderSkeletons(
+                        activeTab === 'vendor' ? VendorCardSkeleton : EventCardSkeleton,
+                        3,
+                    )
                 ) : activeTab === 'vendor' ? (
                     vendorAds.length > 0 ? (
                         vendorAds.map((vendor, idx) => {
@@ -249,11 +262,19 @@ export default function VendorAdDashboard({ navigation }) {
                 ) : (
                     eventAds.length > 0 ? (
                         eventAds.map((event) => {
-                            // Determine status display based on approval_status
+                            // Determine status display. Order matters:
+                            //  - terminal states (completed / cancelled) win over approval state
+                            //  - approval state wins over operational state when still pending/rejected
                             let displayStatus = 'LIVE';
                             let displayStatusColor = '#2ECC71';
 
-                            if (event.approval_status === 'pending') {
+                            if (event.status === 'completed') {
+                                displayStatus = 'COMPLETED';
+                                displayStatusColor = '#2C3D5B'; // navy — matches brand
+                            } else if (event.status === 'cancelled') {
+                                displayStatus = 'CANCELLED';
+                                displayStatusColor = '#7F8C8D';
+                            } else if (event.approval_status === 'pending') {
                                 displayStatus = 'PENDING';
                                 displayStatusColor = '#FFA500';
                             } else if (event.approval_status === 'rejected') {
@@ -267,17 +288,20 @@ export default function VendorAdDashboard({ navigation }) {
                                 displayStatusColor = '#999999';
                             }
 
+                            const eventAdId = event._original?.event_ad_id || event.id;
                             return (
                                 <EventAdCard
-                                    key={event.id}
+                                    key={eventAdId}
+                                    eventId={eventAdId}
                                     title={event.title}
                                     location={event.location}
                                     duration={event.duration}
-                                    date={event.date ? new Date(event.date).toLocaleDateString('en-US', {
-                                        month: 'long',
-                                        day: 'numeric',
-                                        year: 'numeric'
-                                    }) : 'Date TBD'}
+                                    /* event.date is already a human string
+                                       ("May 30, 2026") produced by
+                                       eventService.formatEventForDisplay.
+                                       Re-running new Date(...) on it gave
+                                       "Invalid Date" — just pass it through. */
+                                    date={event.date || 'Date TBD'}
                                     time={event.time}
                                     budget={event.budget}
                                     guests={event.guests_count || event.guests}
@@ -290,9 +314,18 @@ export default function VendorAdDashboard({ navigation }) {
                                     attachments={event.attachments || event.images}
                                     profile={{
                                         name: user?.full_name || 'User',
-                                        image: img
+                                        image: img,
                                     }}
-                                    onComplete={() => {}}
+                                    onComplete={() => eventList.refresh()}
+                                    onDelete={() => {
+                                        // Optimistic remove from local list +
+                                        // cache, no full refetch needed.
+                                        eventList.setData(
+                                            (eventList.data || []).filter(
+                                                (e) => (e._original?.event_ad_id || e.id) !== eventAdId,
+                                            ),
+                                        );
+                                    }}
                                 />
                             );
                         })

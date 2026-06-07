@@ -1,5 +1,6 @@
 import api, { API_BASE_URL } from './api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import authFetch from './authFetch';
 
 class ChatService {
   // Create a new chat
@@ -228,38 +229,41 @@ class ChatService {
     }
   }
 
-  // Send media message
+  // Send media message — uses authFetch so the multipart body actually
+  // works on Android (axios XHR mangles file parts) and so a 401 mid-upload
+  // is transparently refreshed + retried once.
   async sendMediaMessage(chatId, formData) {
     try {
       console.log('📤 ChatService.sendMediaMessage - Sending to:', `/chat/${chatId}/messages/media`);
 
-      // Don't set Content-Type header - api.js interceptor handles it
-      const response = await api.post(`/chat/${chatId}/messages/media`, formData);
+      const res = await authFetch(`${API_BASE_URL}/chat/${chatId}/messages/media`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json().catch(() => ({}));
 
-      console.log('✅ ChatService.sendMediaMessage - Full Response:', JSON.stringify(response.data, null, 2));
+      if (!res.ok) {
+        console.error('❌ ChatService.sendMediaMessage - HTTP', res.status, data?.message);
+        return {
+          success: false,
+          message: data?.message || `Server error: ${res.status}`,
+        };
+      }
 
-      // Process attachments to fix URLs
-      const responseData = response.data.data;
-      console.log('📎 Raw attachments from backend:', JSON.stringify(responseData?.attachments, null, 2));
+      const responseData = data.data;
       if (responseData && responseData.attachments) {
         responseData.attachments = this.processAttachments(responseData.attachments);
-        console.log('📎 After processing attachments:', responseData.attachments);
       }
 
       return {
         success: true,
-        data: responseData
+        data: responseData,
       };
     } catch (error) {
-      console.error('❌ ChatService.sendMediaMessage - Error:', {
-        status: error.response?.status,
-        data: error.response?.data,
-        message: error.message
-      });
-
+      console.error('❌ ChatService.sendMediaMessage - Error:', error?.message);
       return {
         success: false,
-        message: error.response?.data?.message || error.message || 'Failed to send media'
+        message: error.message || 'Failed to send media',
       };
     }
   }

@@ -125,34 +125,40 @@ const SavedVendors = () => {
     // Render vendor item
     const renderVendorItem = ({ item }) => {
         const vendorId = item.vendor_ad_id || item.item_id || item.itemId || item.vendorId || item.id;
-        const name = item.name || item.vendor_name || item.title || 'Unknown Vendor';
-        const type = item.type || item.category || item.vendor_type || 'Service';
-        const location = item.location || item.address || 'Location not specified';
-        const rating = item.rating || 0;
+        const name = String(item.name || item.vendor_name || item.title || 'Unknown Vendor');
+        const type = String(item.type || item.category || item.vendor_type || 'Service');
+        const location = String(item.location || item.address || 'Location not specified');
+        // Backend returns DECIMAL columns as strings — coerce, default to 0.
+        const ratingNum = Number(item.rating);
+        const ratingDisplay = (Number.isFinite(ratingNum) ? ratingNum : 0).toFixed(1);
         const image = item.image || item.images?.[0] || item.vendor_image;
-        
+
         return (
-            <TouchableOpacity 
+            <TouchableOpacity
                 style={styles.vendorCard}
                 onPress={() => handleVendorPress(item)}
                 activeOpacity={0.9}
             >
-                <Image 
+                <Image
                     source={image ? { uri: image } : require('../../assets/images/dummy.png')}
                     style={styles.vendorImage}
                 />
                 <View style={styles.vendorInfo}>
                     <Text style={styles.vendorName} numberOfLines={1}>{name}</Text>
                     <Text style={styles.vendorType} numberOfLines={1}>{type}</Text>
-                    <Text style={styles.vendorLocation} numberOfLines={1}>
-                        <Icon name="location-outline" size={12} color="#666" /> {location}
-                    </Text>
+                    {/* Icon inside Text with numberOfLines is fragile on RN — split into a row */}
+                    <View style={styles.vendorLocationRow}>
+                        <Icon name="location-outline" size={12} color="#666" />
+                        <Text style={styles.vendorLocation} numberOfLines={1}>
+                            {' '}{location}
+                        </Text>
+                    </View>
                     <View style={styles.vendorFooter}>
                         <View style={styles.ratingContainer}>
                             <FontAwesome name="star" size={12} color="#FFB800" />
-                            <Text style={styles.ratingText}>{rating.toFixed(1)}</Text>
+                            <Text style={styles.ratingText}>{ratingDisplay}</Text>
                         </View>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={styles.unsaveButton}
                             onPress={() => handleUnsave(vendorId)}
                         >
@@ -355,6 +361,10 @@ const styles = StyleSheet.create({
     vendorLocation: {
         fontSize: 12,
         color: '#999',
+    },
+    vendorLocationRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
         marginBottom: 8,
     },
     vendorFooter: {

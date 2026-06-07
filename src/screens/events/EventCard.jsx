@@ -6,6 +6,10 @@ import {
     TouchableOpacity,
     Image,
     ScrollView,
+    Share,
+    Alert,
+    ActionSheetIOS,
+    Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
@@ -23,12 +27,60 @@ export default function EventCard({ event, onGiveQuote }) {
         navigation.navigate('EventDetailView', { event });
     };
 
+    const handleShare = async () => {
+        try {
+            const lines = [event.title, event.location, event.date].filter(Boolean);
+            await Share.share({
+                title: event.title || 'Event',
+                message: lines.join(' • ') + (event.description ? `\n\n${event.description}` : ''),
+            });
+        } catch (e) {
+            // share dialog cancellations land here on iOS; nothing to do.
+        }
+    };
+
+    const handleReport = () => {
+        Alert.alert(
+            'Report this event?',
+            'A moderator will review this ad. You won\'t see further updates from this report.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Report', style: 'destructive', onPress: () => Alert.alert('Thanks', 'Your report has been recorded.') },
+            ],
+        );
+    };
+
+    const handleMoreOptions = () => {
+        if (Platform.OS === 'ios') {
+            ActionSheetIOS.showActionSheetWithOptions(
+                {
+                    options: ['Share', 'Report', 'Cancel'],
+                    cancelButtonIndex: 2,
+                    destructiveButtonIndex: 1,
+                },
+                (idx) => {
+                    if (idx === 0) handleShare();
+                    if (idx === 1) handleReport();
+                },
+            );
+        } else {
+            Alert.alert(event.title || 'Options', null, [
+                { text: 'Share', onPress: handleShare },
+                { text: 'Report', style: 'destructive', onPress: handleReport },
+                { text: 'Cancel', style: 'cancel' },
+            ]);
+        }
+    };
+
     return (
         <TouchableOpacity style={[styles.card]} onPress={handleCardPress}>
             {/* Title, Status, and More Icon Row */}
             <View style={styles.rowBetween}>
                 <Text style={[styles.title]} numberOfLines={1} ellipsizeMode="tail">{event.title}</Text>
-                <TouchableOpacity>
+                <TouchableOpacity
+                    onPress={handleMoreOptions}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
                     <Icon name="ellipsis-horizontal" size={22} color={theme.colors.primary} style={{ marginLeft: 10 }} />
                 </TouchableOpacity>
             </View>

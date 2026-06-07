@@ -1,5 +1,6 @@
 import api, { API_BASE_URL } from './api';
 import dummyImage from '../assets/images/dummy.png';
+import authFetch from './authFetch';
 
 class VendorService {
     constructor() {
@@ -175,31 +176,45 @@ class VendorService {
         return this.getPublicVendorAds();
     }
 
-    // Create vendor ad
+    // Create vendor ad. FormData (file upload) path uses native fetch via
+    // authFetch — axios's XHR layer breaks multipart on Android. The
+    // non-FormData path stays on axios.
     async createVendorAd(vendorData) {
         try {
-            const headers = {};
-            
-            // Check if vendorData is FormData (for file uploads)
             if (vendorData instanceof FormData) {
-                headers['Content-Type'] = 'multipart/form-data';
+                const res = await authFetch(`${API_BASE_URL}/vendor_ad`, {
+                    method: 'POST',
+                    body: vendorData,
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    return {
+                        success: false,
+                        message: data?.message || `Server error: ${res.status}`,
+                        data: null,
+                    };
+                }
+                return {
+                    success: true,
+                    data: data.data || data,
+                    message: data.message || 'Vendor ad created successfully',
+                };
             }
 
-            const response = await api.post('/vendor_ad', vendorData, { headers });
-            
+            const response = await api.post('/vendor_ad', vendorData);
             return {
                 success: true,
                 data: response.data.data || response.data,
-                message: response.data.message || 'Vendor ad created successfully'
+                message: response.data.message || 'Vendor ad created successfully',
             };
         } catch (error) {
             console.error('Create vendor ad error:', error);
             console.error('Error response:', error.response?.data);
-            
+
             return {
                 success: false,
-                message: error.response?.data?.message || 'Failed to create vendor ad',
-                data: null
+                message: error.response?.data?.message || error.message || 'Failed to create vendor ad',
+                data: null,
             };
         }
     }

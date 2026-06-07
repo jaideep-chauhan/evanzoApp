@@ -24,8 +24,34 @@ import { useTheme } from '../ThemeContext';
 
 const Tab = createBottomTabNavigator();
 
+// Detail / full-screen routes nested inside a tab's stack where the tab bar
+// would overlap the screen's own bottom UI (e.g. the sticky chat-input on
+// VendorAddDetail). Render nothing for the bar when one of these is focused.
+const HIDE_TAB_BAR_ON_SCREENS = new Set([
+    'VendorAddDetail',
+    'VendorChat',
+    'AllReviews',
+    'EventDetailView',
+]);
+
+const getFocusedDeepRouteName = (route) => {
+    const nested = route?.state;
+    if (!nested?.routes?.length) return route?.name;
+    const child = nested.routes[nested.index ?? 0];
+    return getFocusedDeepRouteName(child);
+};
+
 function CustomTabBar({ state, descriptors, navigation }) {
     const theme = useTheme();
+
+    // Walk into the focused tab's nested stack and bail out if the visible
+    // screen is a detail page.
+    const focusedRoute = state.routes[state.index];
+    const deepName = getFocusedDeepRouteName(focusedRoute);
+    if (deepName && HIDE_TAB_BAR_ON_SCREENS.has(deepName)) {
+        return null;
+    }
+
     return (
         <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center', pointerEvents: 'box-none' }}>
             <LinearGradient

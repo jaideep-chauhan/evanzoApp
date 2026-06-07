@@ -415,6 +415,82 @@ class NotificationService {
             this.notificationOpenedListener();
         }
     }
+
+    // ───────────────────────────────────────────────────────────────────
+    // Inbox API — the FCM bits above handle push delivery; the methods
+    // below back the NotificationInbox screen by hitting /notifications
+    // on the backend.
+    // ───────────────────────────────────────────────────────────────────
+
+    async getNotifications({ page = 1, limit = 20 } = {}) {
+        try {
+            const res = await api.get('/notifications', { params: { page, limit } });
+            const payload = res.data?.data || res.data || {};
+            return {
+                success: true,
+                data: {
+                    results: payload.results || [],
+                    page: payload.page || page,
+                    totalPages: payload.totalPages || 1,
+                    totalResults: payload.totalResults || 0,
+                },
+            };
+        } catch (error) {
+            return {
+                success: false,
+                error: error.response?.data?.message || error.message,
+            };
+        }
+    }
+
+    async getUnreadCount() {
+        try {
+            const res = await api.get('/notifications/unread-count');
+            return { success: true, count: res.data?.data?.count ?? 0 };
+        } catch (error) {
+            return {
+                success: false,
+                count: 0,
+                error: error.response?.data?.message || error.message,
+            };
+        }
+    }
+
+    async markAsRead(notificationId) {
+        try {
+            await api.patch(`/notifications/${notificationId}/read`);
+            return { success: true };
+        } catch (error) {
+            return {
+                success: false,
+                error: error.response?.data?.message || error.message,
+            };
+        }
+    }
+
+    async markAllAsRead() {
+        try {
+            await api.post('/notifications/mark-all-read');
+            return { success: true };
+        } catch (error) {
+            return {
+                success: false,
+                error: error.response?.data?.message || error.message,
+            };
+        }
+    }
+
+    async deleteNotification(notificationId) {
+        try {
+            await api.delete(`/notifications/${notificationId}`);
+            return { success: true };
+        } catch (error) {
+            return {
+                success: false,
+                error: error.response?.data?.message || error.message,
+            };
+        }
+    }
 }
 
 const notificationService = new NotificationService();
