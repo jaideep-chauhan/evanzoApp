@@ -427,7 +427,10 @@ class VendorService {
                 || (vendor.location ? String(vendor.location).split(',')[0].trim() : '')
                 || '',
             offers: offers,
-            approval_status: vendor.approval_status || 'pending', // Add approval_status
+            // Same auto-approval rationale as eventService.js — backend
+            // sets approval_status: 'approved' at insert
+            // (services/vendorAd.service.js:21), so default to 'approved'.
+            approval_status: vendor.approval_status || 'approved',
             status: vendor.status || 'active', // Add status
             // Keep original data for reference
             _original: vendor

@@ -354,7 +354,12 @@ class EventService {
             organizer: organizer, // Add organizer data for EventCard with user_id
             category: category, // Add category for filtering
             status: event.status || 'active',
-            approval_status: event.approval_status || 'pending', // Add approval_status
+            // Backend now auto-approves new event ads (approval_status:
+            // 'approved' on insert at services/eventAd.service.js:22), so
+            // default to 'approved' instead of 'pending' when the backend
+            // omits the field. Avoids lighting up the "Waiting for approval"
+            // banner on freshly-posted ads.
+            approval_status: event.approval_status || 'approved',
             visibility: event.visibility || 'public',
             is_urgent: event.is_urgent || false,
             views_count: event.views_count || 0,
