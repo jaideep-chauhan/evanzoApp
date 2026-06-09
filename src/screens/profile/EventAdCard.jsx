@@ -10,6 +10,7 @@ import {
     ActionSheetIOS,
     Platform,
     ActivityIndicator,
+    Modal,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../../ThemeContext';
@@ -46,11 +47,41 @@ export default function EventAdCard({
     const navigation = useNavigation();
     const safeAttachments = Array.isArray(attachments) ? attachments : [];
     const [isCompleting, setIsCompleting] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
 
     // Only LIVE ads can be completed. COMPLETED / CANCELLED / PENDING /
     // REJECTED are dead-end states for this action.
     const canComplete = String(status).toUpperCase() === 'LIVE';
     const isAlreadyComplete = String(status).toUpperCase() === 'COMPLETED';
+
+    // Open the styled delete confirmation modal. Used by both the visible
+    // DELETE button on the card and the three-dots action sheet.
+    const openDeleteModal = () => setShowDeleteModal(true);
+
+    // Actual destructive call. Fires after the user confirms in the modal.
+    const performDelete = async () => {
+        if (isDeleting) return;
+        setIsDeleting(true);
+        try {
+            if (!eventId) {
+                onDelete();
+                setShowDeleteModal(false);
+                return;
+            }
+            const res = await eventService.deleteEventAd(eventId);
+            if (res?.success) {
+                setShowDeleteModal(false);
+                onDelete(eventId);
+            } else {
+                Alert.alert('Error', res?.message || 'Failed to delete the ad.');
+            }
+        } catch (e) {
+            Alert.alert('Error', e?.message || 'Failed to delete the ad.');
+        } finally {
+            setIsDeleting(false);
+        }
+    };
 
     // Hits the backend, then bubbles up to the parent on success so the
     // dashboard can refresh / re-paint. Used by BOTH the in-card
@@ -78,33 +109,9 @@ export default function EventAdCard({
 
     // Owner action menu — only Live ads show "Mark as Complete"; every ad
     // can be deleted. Uses ActionSheetIOS on iOS, a 3-button Alert on Android.
+    // The destructive Delete option opens the styled confirmation modal
+    // (not a native Alert), matching the visible DELETE button below.
     const handleMoreOptions = () => {
-        const confirmDelete = () => {
-            Alert.alert(
-                'Delete this ad?',
-                'This will remove the event ad permanently.',
-                [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                        text: 'Delete',
-                        style: 'destructive',
-                        onPress: async () => {
-                            if (!eventId) {
-                                onDelete();
-                                return;
-                            }
-                            const res = await eventService.deleteEventAd(eventId);
-                            if (res.success) {
-                                onDelete(eventId);
-                            } else {
-                                Alert.alert('Error', res.message || 'Failed to delete the ad.');
-                            }
-                        },
-                    },
-                ],
-            );
-        };
-
         if (Platform.OS === 'ios') {
             const options = [];
             if (canComplete) options.push('Mark as Complete');
@@ -121,7 +128,7 @@ export default function EventAdCard({
                 (idx) => {
                     if (idx === cancelIndex) return;
                     if (options[idx] === 'Mark as Complete') triggerComplete();
-                    if (options[idx] === 'Delete') confirmDelete();
+                    if (options[idx] === 'Delete') openDeleteModal();
                 },
             );
         } else {
@@ -129,7 +136,7 @@ export default function EventAdCard({
             if (canComplete) {
                 buttons.push({ text: 'Mark as Complete', onPress: triggerComplete });
             }
-            buttons.push({ text: 'Delete', style: 'destructive', onPress: confirmDelete });
+            buttons.push({ text: 'Delete', style: 'destructive', onPress: openDeleteModal });
             buttons.push({ text: 'Cancel', style: 'cancel' });
             Alert.alert(title || 'Options', null, buttons);
         }
@@ -312,6 +319,53 @@ export default function EventAdCard({
                     )}
                 </TouchableOpacity>
             )}
+
+            {/* In-card Delete — opens the styled confirmation modal. */}
+            <TouchableOpacity
+                style={styles.deleteBtn}
+                onPress={openDeleteModal}
+                disabled={isDeleting}
+            >
+                <Text style={styles.deleteText}>DELETE</Text>
+            </TouchableOpacity>
+
+            {/* Confirmation modal — used by both the in-card Delete button
+                and the three-dots action sheet's Delete option. */}
+            <Modal
+                visible={showDeleteModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => !isDeleting && setShowDeleteModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalCard}>
+                        <Text style={styles.modalTitle}>Delete this ad?</Text>
+                        <Text style={styles.modalBody}>
+                            This will remove the event ad permanently. This action can't be undone.
+                        </Text>
+                        <View style={styles.modalActions}>
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.modalCancelBtn]}
+                                onPress={() => setShowDeleteModal(false)}
+                                disabled={isDeleting}
+                            >
+                                <Text style={styles.modalCancelText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.modalDeleteBtn, isDeleting && { opacity: 0.7 }]}
+                                onPress={performDelete}
+                                disabled={isDeleting}
+                            >
+                                {isDeleting ? (
+                                    <ActivityIndicator size="small" color="#fff" />
+                                ) : (
+                                    <Text style={styles.modalDeleteText}>Delete</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </TouchableOpacity>
     );
 }
@@ -482,6 +536,74 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         fontSize: 14,
         letterSpacing: 0.2,
+    },
+    deleteBtn: {
+        marginTop: 10,
+        paddingVertical: 12,
+        borderRadius: 12,
+        backgroundColor: '#FFEBEE',
+        borderWidth: 1,
+        borderColor: '#FFCDD2',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    deleteText: {
+        color: '#C62828',
+        fontWeight: '700',
+        fontSize: 14,
+        letterSpacing: 0.2,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.55)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 32,
+    },
+    modalCard: {
+        width: '100%',
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 24,
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#1A1A1A',
+        marginBottom: 10,
+    },
+    modalBody: {
+        fontSize: 14,
+        color: '#5F6368',
+        lineHeight: 20,
+        marginBottom: 22,
+    },
+    modalActions: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    modalBtn: {
+        flex: 1,
+        paddingVertical: 12,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    modalCancelBtn: {
+        backgroundColor: '#F1F3F4',
+    },
+    modalCancelText: {
+        color: '#3C4043',
+        fontWeight: '600',
+        fontSize: 15,
+    },
+    modalDeleteBtn: {
+        backgroundColor: '#C62828',
+    },
+    modalDeleteText: {
+        color: '#fff',
+        fontWeight: '700',
+        fontSize: 15,
     },
     statusRow: {
         flexDirection: 'row',
