@@ -189,7 +189,18 @@ export default function EventAdCard({
             <View style={styles.metaRow}>
                 <View style={styles.metaItem}>
                     <Image source={icons.location} style={styles.metaIcon} />
-                    <Text style={[styles.metaText, { color: theme.colors.primary }]} numberOfLines={1} ellipsizeMode="tail">{location}</Text>
+                    <Text
+                        style={[styles.metaText, { color: theme.colors.primary }]}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                    >
+                        {/* City only — same trimming as the public Events
+                            list. Splits the full address on commas and
+                            takes the first segment. */}
+                        {(typeof location === 'string'
+                            ? location.split(',')[0].trim()
+                            : location)}
+                    </Text>
                 </View>
                 <View style={styles.metaItem}>
                     <Image source={icons.clock} style={styles.metaIcon} />
