@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
     View,
     Text,
@@ -9,6 +9,7 @@ import {
     Alert,
     ActionSheetIOS,
     Platform,
+    ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../../ThemeContext';
@@ -44,12 +45,40 @@ export default function EventAdCard({
     const theme = useTheme();
     const navigation = useNavigation();
     const safeAttachments = Array.isArray(attachments) ? attachments : [];
+    const [isCompleting, setIsCompleting] = useState(false);
+
+    // Only LIVE ads can be completed. COMPLETED / CANCELLED / PENDING /
+    // REJECTED are dead-end states for this action.
+    const canComplete = String(status).toUpperCase() === 'LIVE';
+    const isAlreadyComplete = String(status).toUpperCase() === 'COMPLETED';
+
+    // Hits the backend, then bubbles up to the parent on success so the
+    // dashboard can refresh / re-paint. Used by BOTH the in-card
+    // "MARK AS COMPLETE" button and the three-dots action sheet.
+    const triggerComplete = async () => {
+        if (isCompleting || !canComplete) return;
+        if (!eventId) {
+            onComplete();
+            return;
+        }
+        setIsCompleting(true);
+        try {
+            const res = await eventService.markEventAdComplete(eventId);
+            if (res?.success) {
+                onComplete(eventId);
+            } else {
+                Alert.alert('Error', res?.message || 'Failed to mark the ad as complete.');
+            }
+        } catch (e) {
+            Alert.alert('Error', e?.message || 'Failed to mark the ad as complete.');
+        } finally {
+            setIsCompleting(false);
+        }
+    };
 
     // Owner action menu — only Live ads show "Mark as Complete"; every ad
     // can be deleted. Uses ActionSheetIOS on iOS, a 3-button Alert on Android.
     const handleMoreOptions = () => {
-        const canComplete = String(status).toUpperCase() === 'LIVE';
-
         const confirmDelete = () => {
             Alert.alert(
                 'Delete this ad?',
@@ -74,19 +103,6 @@ export default function EventAdCard({
                     },
                 ],
             );
-        };
-
-        const triggerComplete = async () => {
-            if (!eventId) {
-                onComplete();
-                return;
-            }
-            const res = await eventService.markEventAdComplete(eventId);
-            if (res.success) {
-                onComplete(eventId);
-            } else {
-                Alert.alert('Error', res.message || 'Failed to mark the ad as complete.');
-            }
         };
 
         if (Platform.OS === 'ios') {
@@ -261,10 +277,41 @@ export default function EventAdCard({
                 </View>
             )}
 
-            {/* Complete Button */}
-            <TouchableOpacity style={[styles.completeBtn, { backgroundColor: theme.colors.tabBackground, shadowColor: theme.colors.tabBackground, marginTop: 14 }]} onPress={onComplete}>
-                <Text style={[styles.completeText, { color: theme.colors.primary }]}>MARK AS COMPLETE</Text>
-            </TouchableOpacity>
+            {/* Complete Button — actionable only when ad is LIVE. For
+                already-completed events render a non-tappable "Completed"
+                pill so the slot stays in the same visual position. */}
+            {isAlreadyComplete ? (
+                <View
+                    style={[
+                        styles.completeBtn,
+                        { backgroundColor: '#E8F5E9', shadowColor: 'transparent', marginTop: 14 },
+                    ]}
+                >
+                    <Text style={[styles.completeText, { color: '#2E7D32' }]}>✓ COMPLETED</Text>
+                </View>
+            ) : (
+                <TouchableOpacity
+                    style={[
+                        styles.completeBtn,
+                        {
+                            backgroundColor: theme.colors.tabBackground,
+                            shadowColor: theme.colors.tabBackground,
+                            marginTop: 14,
+                            opacity: canComplete && !isCompleting ? 1 : 0.5,
+                        },
+                    ]}
+                    onPress={triggerComplete}
+                    disabled={!canComplete || isCompleting}
+                >
+                    {isCompleting ? (
+                        <ActivityIndicator size="small" color={theme.colors.primary} />
+                    ) : (
+                        <Text style={[styles.completeText, { color: theme.colors.primary }]}>
+                            MARK AS COMPLETE
+                        </Text>
+                    )}
+                </TouchableOpacity>
+            )}
         </TouchableOpacity>
     );
 }
