@@ -16,6 +16,15 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 28
         versionName "1.9"
+
+        // Bundle native debug symbols into the AAB so Play Console can
+        // symbolicate native crashes / ANRs. Without this, every release
+        // pings the "you've not uploaded debug symbols" warning. Use
+        // SYMBOL_TABLE for stack traces only (smaller); switch to FULL if
+        // you want line-number resolution at the cost of a fatter AAB.
+        ndk {
+            debugSymbolLevel 'SYMBOL_TABLE'
+        }
     }
 
     signingConfigs {
