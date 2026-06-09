@@ -23,6 +23,14 @@ console.log('🌐 API Configuration:', {
 
 export const API_BASE_URL = BASE_URL; // Export for socket service
 
+// Pass-through URL fixer kept for compatibility with screens that grew up
+// against an older dev setup where localhost ↔ machine-IP rewriting lived
+// here. In production it's a no-op — the URL is already absolute.
+export const fixLocalUrl = (url) => {
+    if (!url || typeof url !== 'string') return url;
+    return url;
+};
+
 // Track if we're currently refreshing token to prevent multiple refresh attempts
 let isRefreshing = false;
 let failedQueue = [];

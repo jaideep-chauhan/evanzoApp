@@ -33,6 +33,9 @@ import PrivacyPolicy from '../screens/settings/PrivacyPolicy';
 import BlockedUsers from '../screens/settings/BlockedUsers';
 import Safety from '../screens/settings/Safety';
 import LoginHistory from '../screens/settings/LoginHistory';
+// Extended chat screens (chat info sidebar + media & links tab)
+import ChatInfoScreen from '../screens/chat/ChatInfoScreen';
+import MediaLinksScreen from '../screens/chat/MediaLinksScreen';
 
 // Event Detail Screen
 import EventDetailViewEnhanced from '../screens/events/EventDetailViewEnhanced';
@@ -172,6 +175,8 @@ const MainNavigator = () => {
                         <Stack.Screen name="Chat" component={VendorChat} />
                         <Stack.Screen name="ChatList" component={ChatList} />
                         <Stack.Screen name="ChatScreen" component={ChatScreen} />
+                        <Stack.Screen name="ChatInfo" component={ChatInfoScreen} />
+                        <Stack.Screen name="MediaLinks" component={MediaLinksScreen} />
 
 
                         {/* Vendor View Details */}
