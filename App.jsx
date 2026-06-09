@@ -9,6 +9,22 @@ import notificationService from './src/services/notificationService';
 import socketService from './src/services/socketService';
 import { initAds } from './src/services/adsService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+// React Query client. Single instance, shared by every screen that pulls
+// in a hook from src/hooks/. Defaults tuned for a mobile app:
+//   - 30s staleTime so quick re-mounts don't refetch
+//   - retry: 1 (one quick retry, then fall through to error)
+//   - refetchOnWindowFocus: false (RN handles AppState explicitly)
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30 * 1000,
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 const App = () => {
   const appState = useRef(AppState.currentState);
@@ -57,14 +73,16 @@ const App = () => {
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <ThemeProvider>
-        <AuthProvider>
-          <MainNavigator />
-          <Toast />
-        </AuthProvider>
-      </ThemeProvider>
-    </SafeAreaProvider>
+    <QueryClientProvider client={queryClient}>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <MainNavigator />
+            <Toast />
+          </AuthProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </QueryClientProvider>
   );
 };
 
