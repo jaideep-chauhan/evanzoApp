@@ -702,9 +702,10 @@ const CreateAddForm = ({ type, onClose }) => {
                     return;
                 }
 
-                // Validate minimum photos for vendor
-                if (photos.length < 10) {
-                    setToastState({ visible: true, message: `Please add at least 10 photos. Current: ${photos.length} photos`, type: 'error' });
+                // Validate minimum photos for vendor (5 min, 10 max). Matches
+                // the public-side photo-cap logic and what tesst-App used.
+                if (photos.length < 5) {
+                    setToastState({ visible: true, message: `Please add at least 5 photos. Current: ${photos.length} photos`, type: 'error' });
                     setIsLoading(false);
                     return;
                 }
