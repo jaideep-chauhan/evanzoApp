@@ -90,7 +90,20 @@ export default function EventCard({ event, onGiveQuote }) {
             <View style={styles.metaRow}>
                 <View style={styles.metaItem}>
                     <Image source={icons.location} style={styles.metaIcon} />
-                    <Text style={[styles.metaText, { color: theme.colors.primary }]} numberOfLines={1} ellipsizeMode="tail">{event.location}</Text>
+                    <Text
+                        style={[styles.metaText, { color: theme.colors.primary }]}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                    >
+                        {/* Prefer the dedicated city field; otherwise take the
+                            first comma-delimited segment of the full address
+                            so the chip shows "Bangalore" not the entire
+                            "MG Road, Bangalore, Karnataka, India" string. */}
+                        {event.city ||
+                            (typeof event.location === 'string'
+                                ? event.location.split(',')[0].trim()
+                                : event.location)}
+                    </Text>
                 </View>
                 <View style={styles.metaItem}>
                     <Image source={icons.clock} style={styles.metaIcon} />
