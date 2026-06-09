@@ -135,6 +135,54 @@ const vendors = [
     },
 ];
 
+// Review media on the DB lives in a TEXT column holding a JSON-stringified
+// array of `{file_url, ...}` objects (or sometimes plain URL strings). Parse
+// it into a uniform array and prepend the API host for relative paths so
+// <Image> can actually load each thumbnail.
+//
+// Also force any `http://api.evnzo.com/...` URL to `https://` — historic
+// records were stored with http because the backend ran without
+// `trust proxy` set and `req.protocol` resolved to the in-cluster scheme.
+// iOS App Transport Security silently blocks plaintext HTTP image loads,
+// so without this rewrite the thumbnails render as blank tiles.
+const HOST = 'https://api.evnzo.com';
+const forceHttps = (u) => {
+    if (typeof u !== 'string') return u;
+    if (u.startsWith('http://api.evnzo.com')) return u.replace('http://', 'https://');
+    return u;
+};
+const normalizeReviewMedia = (raw) => {
+    if (!raw) return [];
+    let arr = raw;
+    if (typeof arr === 'string') {
+        try {
+            arr = JSON.parse(arr);
+        } catch (_) {
+            return [];
+        }
+    }
+    if (!Array.isArray(arr)) return [];
+    return arr
+        .map((m) => {
+            if (typeof m === 'string') {
+                const url = m.startsWith('http')
+                    ? forceHttps(m)
+                    : `${HOST}${m.startsWith('/') ? '' : '/'}${m}`;
+                return { file_url: url };
+            }
+            if (m && typeof m === 'object') {
+                const rawUrl = m.file_url || m.url || m.uri;
+                if (!rawUrl) return null;
+                const url = rawUrl.startsWith('http')
+                    ? forceHttps(rawUrl)
+                    : `${HOST}${rawUrl.startsWith('/') ? '' : '/'}${rawUrl}`;
+                return { ...m, file_url: url };
+            }
+            return null;
+        })
+        .filter(Boolean);
+};
+
 export default function ReviewList({ navigation }) {
     const route = useRoute();
     const [activeTab, setActiveTab] = useState('REVIEWS');
@@ -179,22 +227,41 @@ export default function ReviewList({ navigation }) {
 
             if (response.success && response.data) {
                 const reviewsData = response.data.reviews || response.data;
-                setReviews(Array.isArray(reviewsData) ? reviewsData : []);
-                
-                // Set review stats
+                // Normalize each review so the renderer can read consistent
+                // fields. Two things to fix:
+                //  1) `media_attachments` is stored as a JSON-stringified
+                //     array on the DB — string `.length` is truthy and
+                //     `.map` iterates characters, breaking the renderer.
+                //  2) Attachment URLs may be relative (`/uploads/...`) and
+                //     need the API host prepended before <Image> can load.
+                const normalized = (Array.isArray(reviewsData) ? reviewsData : []).map(
+                    (r) => ({
+                        ...r,
+                        media_attachments: normalizeReviewMedia(r.media_attachments),
+                        rating: Number(r.rating) || 0,
+                    }),
+                );
+                setReviews(normalized);
+
+                // PostgreSQL DECIMAL columns come back from the API as strings
+                // (Sequelize never coerces them to JS numbers). Force-cast at
+                // the boundary so render-time `.toFixed(1)` doesn't blow up.
+                const avgRaw = response.data.averageRating;
+                const avgNum = Number(avgRaw);
                 setReviewStats({
-                    totalReviews: response.data.totalReviews || reviewsData.length || 0,
-                    averageRating: response.data.averageRating || 0
+                    totalReviews: Number(response.data.totalReviews) || normalized.length || 0,
+                    averageRating: Number.isFinite(avgNum) ? avgNum : 0,
                 });
             } else {
+                // Real empty state — don't seed dummy "Raya James" reviews.
                 console.warn('Failed to fetch reviews:', response.message);
-                // Keep using dummy reviews as fallback for now
-                setReviews(dummyReviews);
+                setReviews([]);
+                setReviewStats({ totalReviews: 0, averageRating: 0 });
             }
         } catch (error) {
             console.error('Error fetching reviews:', error);
-            // Use dummy reviews as fallback
-            setReviews(dummyReviews);
+            setReviews([]);
+            setReviewStats({ totalReviews: 0, averageRating: 0 });
         } finally {
             setIsLoading(false);
             setRefreshing(false);
@@ -253,14 +320,14 @@ export default function ReviewList({ navigation }) {
                                     <View style={styles.statsContainer}>
                                         <View style={styles.statItem}>
                                             <Text style={styles.statNumber}>
-                                                {(reviewStats.averageRating || 0).toFixed(1)}
+                                                {(Number(reviewStats.averageRating) || 0).toFixed(1)}
                                             </Text>
                                             <Text style={styles.statLabel}>Average Rating</Text>
                                             <View style={styles.starsRow}>
                                                 {[...Array(5)].map((_, index) => (
                                                     <FontAwesome
                                                         key={index}
-                                                        name={index < Math.round(reviewStats.averageRating || 0) ? 'star' : 'star-o'}
+                                                        name={index < Math.round(Number(reviewStats.averageRating) || 0) ? 'star' : 'star-o'}
                                                         size={12}
                                                         color="#FFB800"
                                                         style={{ marginRight: 2 }}
@@ -297,72 +364,105 @@ export default function ReviewList({ navigation }) {
                                 )}
                             </View>
                         )}
-                        renderItem={({ item: review }) => (
-                            <View style={styles.card}>
-                                <View style={styles.top}>
-                                    <Text style={styles.title}>
-                                        {review.title || review.review_title || `Review by ${review.user_name || review.name || 'Anonymous'}`}
-                                    </Text>
-                                    <View style={styles.stars}>
-                                        {[...Array(5)].map((_, index) => (
-                                            <FontAwesome
-                                                key={index}
-                                                name={index < (review.rating || 0) ? 'star' : 'star-o'}
-                                                size={12}
-                                                color="#2C3D5B"
-                                                style={{ marginRight: 2 }}
-                                            />
-                                        ))}
+                        renderItem={({ item: review }) => {
+                            // Reviewer info is nested under `review.reviewer`
+                            // (Sequelize include with `as: 'reviewer'`).
+                            const reviewerName =
+                                review.reviewer?.full_name ||
+                                review.user_name ||
+                                review.name ||
+                                'Anonymous User';
+
+                            // profile_pic may be relative (`/uploads/...`).
+                            // Prepend the API host so <Image> can load it.
+                            const rawAvatar =
+                                review.reviewer?.profile_pic ||
+                                review.user_avatar ||
+                                review.avatar ||
+                                null;
+                            const avatarSource =
+                                rawAvatar && typeof rawAvatar === 'string'
+                                    ? {
+                                          uri: rawAvatar.startsWith('http')
+                                              ? rawAvatar
+                                              : `https://api.evnzo.com${rawAvatar.startsWith('/') ? '' : '/'}${rawAvatar}`,
+                                      }
+                                    : img;
+
+                            // created_at is BIGINT epoch-ms on the backend
+                            // and arrives as a STRING through Sequelize. Cast
+                            // to Number before constructing Date, otherwise
+                            // `new Date("1717…")` parses as ISO → Invalid Date.
+                            const tsRaw = review.created_at;
+                            const tsNum = typeof tsRaw === 'string' ? Number(tsRaw) : tsRaw;
+                            const dateLabel =
+                                Number.isFinite(tsNum) && tsNum > 0
+                                    ? new Date(tsNum).toLocaleDateString()
+                                    : '';
+
+                            return (
+                                <View style={styles.card}>
+                                    <View style={styles.top}>
+                                        <Text style={styles.title}>
+                                            {review.title || review.review_title || `Review by ${reviewerName}`}
+                                        </Text>
+                                        <View style={styles.stars}>
+                                            {[...Array(5)].map((_, index) => (
+                                                <FontAwesome
+                                                    key={index}
+                                                    name={index < (review.rating || 0) ? 'star' : 'star-o'}
+                                                    size={12}
+                                                    color="#2C3D5B"
+                                                    style={{ marginRight: 2 }}
+                                                />
+                                            ))}
+                                        </View>
                                     </View>
-                                </View>
 
-                                <Text style={styles.description}>
-                                    {review.description || review.review_text || review.comment || 'No comment provided'}
-                                </Text>
+                                    <Text style={styles.description}>
+                                        {review.description || review.review_text || review.comment || 'No comment provided'}
+                                    </Text>
 
-                                {/* Review Images */}
-                                {review.media_attachments && review.media_attachments.length > 0 && (
-                                    <View style={styles.reviewImages}>
-                                        {review.media_attachments.slice(0, 3).map((media, index) => (
+                                    {/* Review Images */}
+                                    {review.media_attachments && review.media_attachments.length > 0 && (
+                                        <View style={styles.reviewImages}>
+                                            {review.media_attachments.slice(0, 3).map((media, index) => (
+                                                <Image
+                                                    key={index}
+                                                    source={getImageSource(media.file_url || media.url, img)}
+                                                    style={styles.reviewImage}
+                                                    resizeMode="cover"
+                                                />
+                                            ))}
+                                            {review.media_attachments.length > 3 && (
+                                                <View style={styles.moreImagesOverlay}>
+                                                    <Text style={styles.moreImagesText}>+{review.media_attachments.length - 3}</Text>
+                                                </View>
+                                            )}
+                                        </View>
+                                    )}
+
+                                    <View style={styles.footer}>
+                                        <View style={styles.userInfo}>
                                             <Image
-                                                key={index}
-                                                source={getImageSource(media.file_url || media.url, img)}
-                                                style={styles.reviewImage}
-                                                resizeMode="cover"
+                                                source={avatarSource}
+                                                style={styles.avatar}
                                             />
-                                        ))}
-                                        {review.media_attachments.length > 3 && (
-                                            <View style={styles.moreImagesOverlay}>
-                                                <Text style={styles.moreImagesText}>+{review.media_attachments.length - 3}</Text>
+                                            <View>
+                                                <Text style={styles.userName}>{reviewerName}</Text>
+                                                <Text style={styles.reviewDate}>{dateLabel}</Text>
+                                            </View>
+                                        </View>
+                                        {review.helpful_count > 0 && (
+                                            <View style={styles.helpfulInfo}>
+                                                <Icon name="thumbs-up" size={12} color='rgba(28, 28, 28, 0.4)' />
+                                                <Text style={styles.helpfulCount}>{review.helpful_count}</Text>
                                             </View>
                                         )}
                                     </View>
-                                )}
-
-                                <View style={styles.footer}>
-                                    <View style={styles.userInfo}>
-                                        <Image 
-                                            source={getImageSource(review.user_avatar || review.avatar, img)}
-                                            style={styles.avatar} 
-                                        />
-                                        <View>
-                                            <Text style={styles.userName}>
-                                                {review.user_name || review.name || 'Anonymous User'}
-                                            </Text>
-                                            <Text style={styles.reviewDate}>
-                                                {review.created_at ? new Date(review.created_at).toLocaleDateString() : ''}
-                                            </Text>
-                                        </View>
-                                    </View>
-                                    {review.helpful_count > 0 && (
-                                        <View style={styles.helpfulInfo}>
-                                            <Icon name="thumbs-up" size={12} color='rgba(28, 28, 28, 0.4)' />
-                                            <Text style={styles.helpfulCount}>{review.helpful_count}</Text>
-                                        </View>
-                                    )}
                                 </View>
-                            </View>
-                        )}
+                            );
+                        }}
                         ListEmptyComponent={() => (
                             !isLoading && (
                                 <View style={styles.emptyContainer}>

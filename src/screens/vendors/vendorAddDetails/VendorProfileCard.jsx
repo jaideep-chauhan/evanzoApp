@@ -151,9 +151,13 @@ const ActionIcons = ({ vendor, navigation }) => {
                             vendor?.vendor_ad_id || 
                             vendor?.id ||
                             vendor?._id;
-            navigation.navigate('AllReviews', { 
+            navigation.navigate('AllReviews', {
                 vendorId: vendorId,
-                vendorName: vendor?.name || vendor?.company_name || vendor?.title
+                vendorName: vendor?.name || vendor?.company_name || vendor?.title,
+                // Pass the whole vendor object too so the AllReviews header
+                // can render real data (name, location, rating, category,
+                // photos, offers, description) instead of the placeholder.
+                vendor: vendor,
             });
         }
     };
@@ -165,9 +169,13 @@ const ActionIcons = ({ vendor, navigation }) => {
                             vendor?.vendor_ad_id || 
                             vendor?.id ||
                             vendor?._id;
-            navigation.navigate('AllReviews', { 
+            navigation.navigate('AllReviews', {
                 vendorId: vendorId,
-                vendorName: vendor?.name || vendor?.company_name || vendor?.title
+                vendorName: vendor?.name || vendor?.company_name || vendor?.title,
+                // Pass the whole vendor object too so the AllReviews header
+                // can render real data (name, location, rating, category,
+                // photos, offers, description) instead of the placeholder.
+                vendor: vendor,
             });
         }
     };
@@ -257,7 +265,8 @@ export default function VendorProfileCard({
                                             vendor?._id;
                             navigation?.navigate('AllReviews', {
                                 vendorId: vendorId,
-                                vendorName: name
+                                vendorName: name,
+                                vendor: vendor,
                             });
                         }} 
                         activeOpacity={0.7}

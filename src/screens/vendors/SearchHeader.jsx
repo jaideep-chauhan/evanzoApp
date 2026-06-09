@@ -10,11 +10,12 @@ import {
     Easing,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
 import img from '../../assets/images/evanzoLogo.png';
 import bg from '../../assets/images/smallHeader.jpg';
 import { setSearchHandler } from '../../services/searchBridge';
+import notificationService from '../../services/notificationService';
 
 export default function SearchHeader({ onSearchChange, searchValue = '', searchType = 'vendors', onCategorySelect }) {
     const navigation = useNavigation();
@@ -44,6 +45,23 @@ export default function SearchHeader({ onSearchChange, searchValue = '', searchT
     const [nextIndex, setNextIndex] = useState(1);
     const anim = useRef(new Animated.Value(0)).current;
     const intervalRef = useRef();
+
+    // Unread badge on the bell. Refetched each time the header gains focus
+    // (returning from inbox flips the count back to 0) and once on mount.
+    const [unreadCount, setUnreadCount] = useState(0);
+    const fetchUnread = async () => {
+        try {
+            const res = await notificationService.getUnreadCount();
+            if (res?.success) setUnreadCount(Number(res.count) || 0);
+        } catch (_) {}
+    };
+    useFocusEffect(
+        // useCallback'd inline to avoid re-subscribing on every render
+        React.useCallback(() => {
+            fetchUnread();
+            return undefined;
+        }, []),
+    );
 
     useEffect(() => {
         let running = true;
@@ -91,6 +109,13 @@ export default function SearchHeader({ onSearchChange, searchValue = '', searchT
                         onPress={() => navigation.navigate('NotificationInbox')}
                     >
                         <Icon name="notifications-outline" size={30} color="#fff" />
+                        {unreadCount > 0 && (
+                            <View style={styles.unreadBadge}>
+                                <Text style={styles.unreadBadgeText}>
+                                    {unreadCount > 99 ? '99+' : unreadCount}
+                                </Text>
+                            </View>
+                        )}
                     </TouchableOpacity>
                 </View>
 
@@ -216,6 +241,25 @@ const styles = StyleSheet.create({
     iconCircle: {
         padding: 7,
         borderRadius: 22,
+    },
+    unreadBadge: {
+        position: 'absolute',
+        top: 2,
+        right: 0,
+        minWidth: 18,
+        height: 18,
+        borderRadius: 9,
+        backgroundColor: '#ff3b30',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 4,
+        borderWidth: 1.5,
+        borderColor: '#fff',
+    },
+    unreadBadgeText: {
+        color: '#fff',
+        fontSize: 10,
+        fontWeight: '700',
     },
     logo: {
         width: 130,

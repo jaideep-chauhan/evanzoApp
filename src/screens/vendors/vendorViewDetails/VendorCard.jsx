@@ -22,19 +22,69 @@ import dollar from '../../../assets/icons/dollar.png';
 const { width } = Dimensions.get('window');
 const AVATAR_SIZE = 100;
 
+// photos / offers / extra DB fields land here as JSON strings (Sequelize
+// returns the raw TEXT column unparsed). Defensive parse-or-passthrough.
+const parseMaybeJson = (val) => {
+    if (Array.isArray(val) || (val && typeof val === 'object')) return val;
+    if (typeof val !== 'string') return null;
+    try {
+        return JSON.parse(val);
+    } catch (_) {
+        return null;
+    }
+};
+
+const firstPhotoUrl = (vendor) => {
+    if (!vendor) return null;
+    const photos = parseMaybeJson(vendor.photos);
+    if (Array.isArray(photos) && photos.length > 0) {
+        const first = photos[0];
+        const raw = first?.url || (typeof first === 'string' ? first : null);
+        if (raw) return raw.startsWith('http') ? raw : `https://api.evnzo.com${raw}`;
+    }
+    if (Array.isArray(vendor.images) && vendor.images.length > 0) {
+        const first = vendor.images[0];
+        if (typeof first === 'string') return first;
+        if (first?.uri) return first.uri;
+    }
+    if (typeof vendor.image === 'string') return vendor.image;
+    return null;
+};
+
 const VendorCard = ({
-    logo,
-    name = '4x90 Studio',
-    category = 'Photography',
-    location = 'Ontario, Canada',
+    vendor,
     onBackPress,
     onBellPress,
     navigation,
 }) => {
     const theme = useTheme();
-    
+
+    // Pull out the bits the header actually shows. Every field has a clear
+    // fallback so the screen never blows up if backend is sparse.
+    const logoUri = firstPhotoUrl(vendor);
+    const name = vendor?.name || vendor?.company_name || vendor?.title || 'Vendor';
+    const category = vendor?.type || vendor?.category?.name || vendor?.vendor_type || '';
+    const location =
+        vendor?.city ||
+        (typeof vendor?.location === 'string'
+            ? vendor.location.split(',')[0].trim()
+            : '') ||
+        vendor?.address ||
+        '';
+
+    const ratingNum = Number(vendor?.rating);
+    const rating = Number.isFinite(ratingNum) && ratingNum > 0 ? ratingNum.toFixed(1) : null;
+    const reviewsCount = Number(vendor?.reviews_count) || 0;
+    const description = vendor?.description || '';
+
+    // Offers JSON: prefer the first offer's amount + percentage if present.
+    const offersArr = parseMaybeJson(vendor?.offers);
+    const firstOffer = Array.isArray(offersArr) ? offersArr[0] : null;
+    const offerAmount = firstOffer?.amount_spent ?? firstOffer?.amount ?? null;
+    const offerPercent = firstOffer?.percentage ?? firstOffer?.percent ?? null;
+
     return (
-        <View style={{ backgroundColor: '#fff', marginBottom: 3, }}>
+        <View style={{ backgroundColor: '#fff', marginBottom: 3 }}>
             {/* Top Banner */}
             <ImageBackground source={bg1} style={styles.banner} resizeMode="cover">
                 <View style={styles.headerIcons}>
@@ -58,70 +108,88 @@ const VendorCard = ({
                     {/* Avatar */}
                     <View style={styles.avatarWrapper}>
                         <Image
-                            source={typeof logo === 'string' ? { uri: logo } : logo}
+                            source={
+                                logoUri
+                                    ? { uri: logoUri }
+                                    : require('../../../assets/images/dummy.png')
+                            }
                             style={styles.avatar}
                         />
                     </View>
 
                     {/* Name & Meta */}
-                    <Text style={styles.name}>{name}</Text>
+                    <Text style={styles.name} numberOfLines={1}>{name}</Text>
                     <View style={styles.metaRow}>
-
-                        {/* Location */}
-                        <View style={styles.metaItem}>
-                            <FontAwesome name="map-marker" size={12} color="#334462" />
-                            <Text style={styles.metaText}>Ontario, Canada</Text>
-                        </View>
-                        {/* Rating */}
-                        <View style={styles.metaItem}>
-                            <FontAwesome name="star" size={12} color="#2C3D5B" />
-                            <Text style={styles.metaText}>
-                                5.0 <Text style={styles.reviewCount}>(10)</Text>
-                            </Text>
-                        </View>
-
-                        {/* Category */}
-                        <View style={styles.metaItem}>
-                            <Feather name="camera" size={12} color="#334462" />
-                            <Text style={styles.metaText}>Photography</Text>
-                        </View>
+                        {location ? (
+                            <View style={styles.metaItem}>
+                                <FontAwesome name="map-marker" size={12} color="#334462" />
+                                <Text style={styles.metaText} numberOfLines={1}>{location}</Text>
+                            </View>
+                        ) : null}
+                        {rating ? (
+                            <View style={styles.metaItem}>
+                                <FontAwesome name="star" size={12} color="#2C3D5B" />
+                                <Text style={styles.metaText}>
+                                    {rating}{' '}
+                                    <Text style={styles.reviewCount}>({reviewsCount})</Text>
+                                </Text>
+                            </View>
+                        ) : null}
+                        {category ? (
+                            <View style={styles.metaItem}>
+                                <Feather name="camera" size={12} color="#334462" />
+                                <Text style={styles.metaText} numberOfLines={1}>{category}</Text>
+                            </View>
+                        ) : null}
                     </View>
 
+                    {/* Description — only render if real text exists, so we
+                        don't lock a fake lorem-ipsum into the layout. */}
+                    {description ? (
+                        <Text style={styles.description} numberOfLines={4}>
+                            {description}
+                        </Text>
+                    ) : null}
 
-                    {/* Description */}
-                    <Text style={styles.description}>
-                        Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut ...see more.
-                    </Text>
-
-                    {/* Offer Section */}
-                    <View style={styles.offerSection}>
-                        <View style={styles.offerRow}>
-                            <View style={styles.offerTextContainer}>
-                                <Text style={styles.offerText}>Offer:</Text>
-                                <View style={styles.offerItem}>
-                                    <Text style={[styles.offerLabel, { color: theme.colors.textSecondary }]}>Amount spent</Text>
-                                    <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
-                                        <View style={styles.iconBox}>
-                                            <Image source={dollar} style={{ width: 10, height: 10, resizeMode: 'contain' }} />
+                    {/* Offer Section — render only if at least one value present. */}
+                    {(offerAmount != null || offerPercent != null) && (
+                        <View style={styles.offerSection}>
+                            <View style={styles.offerRow}>
+                                <View style={styles.offerTextContainer}>
+                                    <Text style={styles.offerText}>Offer:</Text>
+                                    {offerAmount != null && (
+                                        <View style={styles.offerItem}>
+                                            <Text style={[styles.offerLabel, { color: theme.colors.textSecondary }]}>
+                                                Amount spent
+                                            </Text>
+                                            <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
+                                                <View style={styles.iconBox}>
+                                                    <Image source={dollar} style={{ width: 10, height: 10, resizeMode: 'contain' }} />
+                                                </View>
+                                                <Text style={styles.offerValue}>{String(offerAmount)}</Text>
+                                            </View>
                                         </View>
-                                        <Text style={styles.offerValue}>150</Text>
-                                    </View>
-                                </View>
-                                <View style={styles.offerItem}>
-                                    <Text style={[styles.offerLabel, { color: theme.colors.textSecondary }]}>Percentage</Text>
-                                    <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
-                                        <View style={styles.iconBox}>
-                                            <Image source={percent} style={{ width: 10, height: 10, resizeMode: 'contain' }} />
+                                    )}
+                                    {offerPercent != null && (
+                                        <View style={styles.offerItem}>
+                                            <Text style={[styles.offerLabel, { color: theme.colors.textSecondary }]}>
+                                                Percentage
+                                            </Text>
+                                            <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
+                                                <View style={styles.iconBox}>
+                                                    <Image source={percent} style={{ width: 10, height: 10, resizeMode: 'contain' }} />
+                                                </View>
+                                                <Text style={styles.offerValue}>{`${offerPercent}%`}</Text>
+                                            </View>
                                         </View>
-                                        <Text style={styles.offerValue}>10%</Text>
-                                    </View>
+                                    )}
                                 </View>
-                            </View>
-                            <View style={styles.seeMoreBox}>
-                                <Text style={[styles.seeMore, { color: theme.colors.primary }]}>SEE MORE</Text>
+                                <View style={styles.seeMoreBox}>
+                                    <Text style={[styles.seeMore, { color: theme.colors.primary }]}>SEE MORE</Text>
+                                </View>
                             </View>
                         </View>
-                    </View>
+                    )}
                 </View>
             </View>
         </View>
