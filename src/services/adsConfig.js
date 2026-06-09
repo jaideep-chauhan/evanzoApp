@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { TestIds } from 'react-native-google-mobile-ads';
 
 // Production AdMob unit IDs. Used in BOTH dev and release builds.
 // Note: simulators / emulators routinely no-fill on production units
@@ -8,12 +9,17 @@ const ANDROID = {
     banner: 'ca-app-pub-2655968575466386/4536714219',
     interstitial: 'ca-app-pub-2655968575466386/4425033573',
     native: 'ca-app-pub-2655968575466386/2363492381',
+    // No production Rewarded unit configured in AdMob yet. Falling back to
+    // Google's TestIds.REWARDED so `useRewardedAd` works for dev/preview.
+    // Replace once a real rewarded unit is created in AdMob console.
+    rewarded: TestIds.REWARDED,
 };
 
 const IOS = {
     banner: 'ca-app-pub-2655968575466386/5466652507',
     interstitial: 'ca-app-pub-2655968575466386/2544975694',
     native: 'ca-app-pub-2655968575466386/6859625227',
+    rewarded: TestIds.REWARDED,
 };
 
 const pick = (key) => (Platform.OS === 'ios' ? IOS[key] : ANDROID[key]);
@@ -22,6 +28,7 @@ export const AD_UNITS = {
     banner: pick('banner'),
     interstitial: pick('interstitial'),
     native: pick('native'),
+    rewarded: pick('rewarded'),
 };
 
 // Show an interstitial after every Nth opening of an ad detail page.
