@@ -1,6 +1,5 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { logout } from './navigationService';
 import { Platform } from 'react-native';
 
 // Production URL - LIVE SERVER (ACTIVE)
@@ -139,11 +138,14 @@ api.interceptors.response.use(
                         processQueue(error, null);
                         isRefreshing = false;
 
-                        // Force logout
-                        setTimeout(async () => {
-                            await logout();
-                        }, 100);
-
+                        // Don't force-navigate to Login. Guests routinely hit
+                        // auth-required endpoints at startup (FCM token
+                        // register, notification inbox prefetch, etc.) and
+                        // yanking them to Login would break the guest-mode
+                        // browsing flow. Just signal the caller via
+                        // shouldLogout — the in-app LoginPrompt component
+                        // catches users when they explicitly tap a feature
+                        // that requires auth.
                         return Promise.reject({
                             ...error,
                             shouldLogout: true,
@@ -183,11 +185,10 @@ api.interceptors.response.use(
                     processQueue(refreshError, null);
                     isRefreshing = false;
 
-                    // Force logout
-                    setTimeout(async () => {
-                        await logout();
-                    }, 100);
-
+                    // Same as the no-refresh-token branch: don't yank the
+                    // user to Login. Refresh failed → they're effectively a
+                    // guest now; let the LoginPrompt catch them on the next
+                    // auth-required tap.
                     return Promise.reject({
                         ...refreshError,
                         shouldLogout: true,
