@@ -320,17 +320,9 @@ export default function EventAdCard({
                 </TouchableOpacity>
             )}
 
-            {/* In-card Delete — opens the styled confirmation modal. */}
-            <TouchableOpacity
-                style={styles.deleteBtn}
-                onPress={openDeleteModal}
-                disabled={isDeleting}
-            >
-                <Text style={styles.deleteText}>DELETE</Text>
-            </TouchableOpacity>
-
-            {/* Confirmation modal — used by both the in-card Delete button
-                and the three-dots action sheet's Delete option. */}
+            {/* Confirmation modal — opened by the three-dots action
+                sheet's Delete option. The in-card Delete button was
+                removed; the three-dots menu remains the only entry. */}
             <Modal
                 visible={showDeleteModal}
                 transparent
@@ -533,22 +525,6 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     completeText: {
-        fontWeight: '700',
-        fontSize: 14,
-        letterSpacing: 0.2,
-    },
-    deleteBtn: {
-        marginTop: 10,
-        paddingVertical: 12,
-        borderRadius: 12,
-        backgroundColor: '#FFEBEE',
-        borderWidth: 1,
-        borderColor: '#FFCDD2',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    deleteText: {
-        color: '#C62828',
         fontWeight: '700',
         fontSize: 14,
         letterSpacing: 0.2,
