@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
     View,
     Text,
@@ -39,6 +39,11 @@ import MessageOptionsModal from '../../components/MessageOptionsModal';
 import MessageReactions from '../../components/MessageReactions';
 import ImagePreview from '../../components/ImagePreview';
 import preSavedMessageService from '../../services/preSavedMessageService';
+import { getCached, setCached } from '../../services/listCacheService';
+
+// Cache key per chat — same prefix as other lists, so it shows up in the
+// regular cache namespace and gets pruned on log-out cache wipes.
+const chatCacheKey = (chatId) => `chat:msgs:${chatId}`;
 
 export default function ChatScreen({ route, navigation }) {
     const { chatId: initialChatId, chatName, avatar, isOnline: initialOnline, recipientId } = route.params;
@@ -86,6 +91,23 @@ export default function ChatScreen({ route, navigation }) {
 
     // Initialize chat and socket connection
     useEffect(() => {
+        // Synchronously hydrate from the on-disk cache the moment the screen
+        // mounts. This is the WhatsApp-feel piece: the previous conversation
+        // is already on screen by the time React paints the first frame,
+        // long before initializeChat() finishes the network round-trip.
+        // initializeChat() then quietly refreshes with the latest from server.
+        (async () => {
+            if (!initialChatId) return;
+            const cached = await getCached(chatCacheKey(initialChatId));
+            if (Array.isArray(cached) && cached.length > 0) {
+                console.log(`💾 Hydrated ${cached.length} cached messages for chat ${initialChatId}`);
+                setMessages(cached);
+                // Cached data is "good enough" to drop the loading gate — the
+                // network refresh below will reconcile in-place.
+                setIsLoading(false);
+            }
+        })();
+
         initializeChat();
         return () => {
             // Cleanup on unmount
@@ -315,14 +337,15 @@ export default function ChatScreen({ route, navigation }) {
                 
                 setMessages(sortedMessages);
 
-                // Auto-scroll to latest message after messages are rendered
-                // Use longer delay to ensure FlatList has rendered all items
-                setTimeout(() => {
-                    if (flatListRef.current && sortedMessages.length > 0) {
-                        console.log('📜 Scrolling to end after loading messages');
-                        flatListRef.current.scrollToEnd({ animated: false }); // Use false for instant scroll on load
-                    }
-                }, 300);
+                // Inverted FlatList naturally pins offset 0 = bottom (newest),
+                // so no manual scroll needed on initial load — the list opens
+                // already showing the most recent messages above the input bar.
+
+                // Persist for the next mount so the screen opens instantly
+                // next time. Cap stored size to avoid AsyncStorage bloat on
+                // long threads (50 newest is enough for the open-first-paint).
+                const toCache = sortedMessages.slice(-50);
+                setCached(chatCacheKey(chatIdToLoad || chatId), toCache).catch(() => {});
             }
         } catch (error) {
             console.error('Failed to load messages:', error);
@@ -408,12 +431,9 @@ export default function ChatScreen({ route, navigation }) {
                     return prev; // Don't add duplicate
                 }
 
-                // Auto-scroll to new message
-                setTimeout(() => {
-                    if (flatListRef.current) {
-                        flatListRef.current.scrollToEnd({ animated: true });
-                    }
-                }, 100);
+                // Inverted list auto-pins offset 0 (bottom = newest) when a
+                // new item lands at the front of the display array, so no
+                // explicit scroll call is needed for incoming messages.
 
                 return [...prev, newMsg];
             });
@@ -565,12 +585,8 @@ export default function ChatScreen({ route, navigation }) {
             }
             console.log('✅ Adding optimistic message to UI');
 
-            // Auto-scroll to the new message
-            setTimeout(() => {
-                if (flatListRef.current) {
-                    flatListRef.current.scrollToEnd({ animated: true });
-                }
-            }, 100);
+            // Inverted list pins the bottom — the sent message slides into
+            // view automatically, no scrollToEnd race needed.
 
             return [...prev, optimisticMessage];
         });
@@ -984,12 +1000,8 @@ export default function ChatScreen({ route, navigation }) {
                 return prev;
             }
 
-            // Auto-scroll to the new message
-            setTimeout(() => {
-                if (flatListRef.current) {
-                    flatListRef.current.scrollToEnd({ animated: true });
-                }
-            }, 100);
+            // Inverted list keeps the newest message pinned at the visible
+            // bottom — no manual scroll required here either.
 
             return [...prev, optimisticMessage];
         });
@@ -1313,14 +1325,17 @@ export default function ChatScreen({ route, navigation }) {
             if (result.success) {
                 console.log('✅ ChatScreen - Media sent successfully, updating message');
                 console.log('📎 Attachment data from backend:', result.data.attachments);
-                // Update optimistic message with real data
+                // Normalize URLs the same way loadMessages does, otherwise a
+                // dev-host upload echoed back during the session would render
+                // a broken (localhost) URI on a real device.
+                const normalizedAttachments = chatService.processAttachments(result.data.attachments);
                 setMessages(prev => prev.map(msg =>
                     msg.id === tempId
                         ? {
                             ...msg,
                             id: result.data.message_id,
                             status: 'sent',
-                            attachments: result.data.attachments,
+                            attachments: normalizedAttachments,
                         }
                         : msg
                 ));
@@ -1410,13 +1425,14 @@ export default function ChatScreen({ route, navigation }) {
 
             if (result.success) {
                 console.log('✅ Voice message sent successfully');
+                const normalizedAttachments = chatService.processAttachments(result.data.attachments);
                 setMessages(prev => prev.map(msg =>
                     msg.id === tempId
                         ? {
                             ...msg,
                             id: result.data.message_id,
                             status: 'sent',
-                            attachments: result.data.attachments,
+                            attachments: normalizedAttachments,
                         }
                         : msg
                 ));
@@ -2044,24 +2060,32 @@ export default function ChatScreen({ route, navigation }) {
     const previousMessagesLength = useRef(messages.length);
 
     useEffect(() => {
-        // Only auto-scroll if new messages were added (not on initial load)
-        if (messages.length > 0 && messages.length > previousMessagesLength.current) {
-            console.log('📜 New message added, scrolling to end');
-            setTimeout(() => {
-                flatListRef.current?.scrollToEnd({ animated: true });
-            }, 100);
-        }
+        // With an inverted FlatList, the newest message sits at data[0] and the
+        // list naturally pins offset 0 (bottom of viewport). New messages slot
+        // in at the bottom on their own — no scrollToEnd race against layout.
         previousMessagesLength.current = messages.length;
     }, [messages]);
 
-    if (isLoading) {
-        return (
-            <View style={[styles.container, styles.loadingContainer]}>
-                <ActivityIndicator size="large" color={theme.colors.primary} />
-                <Text style={styles.loadingText}>Loading chat...</Text>
-            </View>
-        );
-    }
+    // Mirror messages → cache on every change (debounced ~400ms). Covers
+    // socket-driven updates (incoming, deletes, reactions, edits) and
+    // optimistic sends — anything that mutates `messages` gets persisted
+    // without touching individual setMessages call sites.
+    useEffect(() => {
+        if (!chatId || messages.length === 0) return;
+        const t = setTimeout(() => {
+            setCached(chatCacheKey(chatId), messages.slice(-50)).catch(() => {});
+        }, 400);
+        return () => clearTimeout(t);
+    }, [messages, chatId]);
+
+    // Reversed copy for the inverted FlatList. State stays ASC sorted so every
+    // existing `prev => [...prev, newMsg]` reducer keeps working unchanged.
+    const displayMessages = useMemo(() => [...messages].reverse(), [messages]);
+
+    // No full-screen "Loading chat..." gate any more — the chat shell (header,
+    // background, input bar) renders immediately so the screen feels instant.
+    // While the first fetch is in flight we just show an empty list. The user
+    // sees the chat layout right away instead of a centered spinner.
 
     return (
         <KeyboardAvoidingView 
@@ -2108,30 +2132,24 @@ export default function ChatScreen({ route, navigation }) {
             >
                 <FlatList
                     ref={flatListRef}
-                    data={messages}
+                    data={displayMessages}
                     renderItem={renderMessage}
                     keyExtractor={(item, index) => `msg-${item.id}-${index}`}
                     style={styles.messagesList}
                     contentContainerStyle={styles.messagesContainer}
                     showsVerticalScrollIndicator={false}
-                    ListFooterComponent={renderTypingIndicator}
+                    inverted
+                    // Inverted flips header/footer visually:
+                    // ListHeaderComponent renders at the BOTTOM (below newest message).
+                    // That's where the typing indicator belongs (WhatsApp-style).
+                    ListHeaderComponent={renderTypingIndicator}
                     ListEmptyComponent={
-                        <View style={styles.emptyContainer}>
-                            <Text style={styles.emptyText}>No messages yet. Start a conversation!</Text>
-                        </View>
+                        isLoading ? null : (
+                            <View style={styles.emptyContainer}>
+                                <Text style={styles.emptyText}>No messages yet. Start a conversation!</Text>
+                            </View>
+                        )
                     }
-                    onContentSizeChange={() => {
-                        // Scroll to end when content size changes (messages loaded/added)
-                        if (messages.length > 0 && !isLoading) {
-                            flatListRef.current?.scrollToEnd({ animated: false });
-                        }
-                    }}
-                    onLayout={() => {
-                        // Scroll to end when layout is ready
-                        if (messages.length > 0 && !isLoading) {
-                            flatListRef.current?.scrollToEnd({ animated: false });
-                        }
-                    }}
                 />
             </ImageBackground>
 

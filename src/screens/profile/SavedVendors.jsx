@@ -99,31 +99,65 @@ const SavedVendors = () => {
     const handleVendorPress = (row) => {
         // Same unwrap as the renderer: backend wraps the vendor under .item.
         const vendor = row?.item || row || {};
+
+        // photos is a JSON-stringified array of {url} objects on the DB.
+        // The detail screen reads `vendor.images` (array of URL strings) and
+        // shows lorem-ipsum / dummy.png fallbacks if it's missing — so parse
+        // photos into the shape the detail screen expects.
+        let images = [];
+        if (vendor.photos) {
+            try {
+                const parsed =
+                    typeof vendor.photos === 'string'
+                        ? JSON.parse(vendor.photos)
+                        : vendor.photos;
+                if (Array.isArray(parsed)) {
+                    images = parsed
+                        .map((p) => p?.url || (typeof p === 'string' ? p : null))
+                        .filter(Boolean)
+                        .map((u) => (u.startsWith('http') ? u : `https://api.evnzo.com${u}`));
+                }
+            } catch (_) {}
+        }
+        if (images.length === 0 && Array.isArray(vendor.images)) {
+            images = vendor.images;
+        }
+        if (images.length === 0 && vendor.image) {
+            images = [vendor.image];
+        }
+
+        let offers = [];
+        if (vendor.offers) {
+            try {
+                offers =
+                    typeof vendor.offers === 'string'
+                        ? JSON.parse(vendor.offers)
+                        : vendor.offers;
+            } catch (_) {
+                offers = [];
+            }
+        }
+
         const vendorData = {
             _original: vendor,
             vendor_ad_id: vendor.vendor_ad_id || vendor.item_id || vendor.itemId || vendor.vendorId,
             id: vendor.vendor_ad_id || vendor.item_id || vendor.itemId || vendor.vendorId,
+            user_id: vendor.user_id,
             name: vendor.company_name || vendor.title || vendor.name || vendor.vendor_name,
             type: vendor.category?.name || vendor.type || vendor.vendor_type,
-            location: vendor.location || vendor.address,
-            rating: vendor.rating || 0,
+            location: vendor.location || vendor.city || vendor.address,
+            rating: Number(vendor.rating) || 0,
             description: vendor.description,
-            images: vendor.images || (vendor.image ? [vendor.image] : []),
-            offers: vendor.offers || [],
+            images,
             photos: vendor.photos,
+            offers: Array.isArray(offers) ? offers : [],
         };
 
-        console.log('📍 Navigating to vendor details:', vendorData.name);
-        // VendorAddDetail lives in the Vendors tab's nested stack; navigate
-        // through Main → Vendors → VendorAddDetail so the right screen mounts
-        // with the right params (the flat navigate falls through silently).
-        navigation.navigate('Main', {
-            screen: 'Vendors',
-            params: {
-                screen: 'VendorAddDetail',
-                params: { vendor: vendorData },
-            },
-        });
+        console.log('📍 Navigating to vendor details:', vendorData.name, 'images:', images.length);
+        // VendorAddDetail is registered at the root MainNavigator level
+        // (not nested in the Vendors tab stack — that was a misread earlier).
+        // A flat navigate from any screen in the root stack reaches it.
+        navigation.navigate('VendorAddDetail', { vendor: vendorData });
     };
 
     // Navigate to Vendors tab
@@ -176,7 +210,7 @@ const SavedVendors = () => {
         return (
             <TouchableOpacity
                 style={styles.vendorCard}
-                onPress={() => handleVendorPress(item)}
+                onPress={() => handleVendorPress(row)}
                 activeOpacity={0.9}
             >
                 <Image

@@ -61,6 +61,38 @@ export const AuthProvider = ({ children }) => {
                     } catch (socketError) {
                         console.log('⚠️ Socket connection failed on startup:', socketError.message);
                     }
+
+                    // Rehydrate profile fields the login response doesn't return
+                    // (profile_pic, bio, location, …). Existing sessions logged
+                    // in before the login response included these fields would
+                    // otherwise be stuck without an avatar until they log out.
+                    // Silent — failures don't disrupt startup.
+                    try {
+                        const meRes = await api.get('/profile/me');
+                        const fresh = meRes?.data?.data;
+                        if (fresh && typeof fresh === 'object') {
+                            const merged = {
+                                ...user,
+                                profile_pic: fresh.profile_pic ?? user.profile_pic ?? null,
+                                bio: fresh.bio ?? user.bio ?? null,
+                                location: fresh.location ?? user.location ?? null,
+                                country: fresh.country ?? user.country ?? null,
+                                state: fresh.state ?? user.state ?? null,
+                                city: fresh.city ?? user.city ?? null,
+                                latitude: fresh.latitude ?? user.latitude ?? null,
+                                longitude: fresh.longitude ?? user.longitude ?? null,
+                                website: fresh.website ?? user.website ?? null,
+                                full_name:
+                                    fresh.full_name ||
+                                    [fresh.first_name, fresh.last_name].filter(Boolean).join(' ') ||
+                                    user.full_name,
+                            };
+                            await AsyncStorage.setItem('userData', JSON.stringify(merged));
+                            setUser(merged);
+                        }
+                    } catch (profileError) {
+                        console.log('⚠️ Profile rehydrate skipped:', profileError?.message);
+                    }
                 } catch (testError) {
                     if (testError.response?.status === 401 || testError.shouldLogout) {
                         await logout();

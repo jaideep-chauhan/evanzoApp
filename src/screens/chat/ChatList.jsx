@@ -128,17 +128,14 @@ export default function ChatList({ navigation }) {
                 // Update existing chat
                 const updatedChats = prevChats.map(chat => {
                     if (chat.id === chatId) {
-                        // Format last message based on message type
-                        let lastMessage = message.content;
-                        if (message.message_type === 'image') {
-                            lastMessage = '📷 Photo';
-                        } else if (message.message_type === 'document') {
-                            lastMessage = '📄 Document';
-                        } else if (message.message_type === 'video') {
-                            lastMessage = '🎥 Video';
-                        } else if (!lastMessage || lastMessage.trim() === '') {
-                            lastMessage = '📎 Attachment';
-                        }
+                        // Shape the socket payload into the same form the
+                        // helper expects, so media / contact / audio previews
+                        // are formatted identically to the initial fetch.
+                        const lastMessage = formatLastMessagePreview({
+                            last_message_type: message.message_type,
+                            last_message: message.content,
+                            last_message_time: message.created_at,
+                        });
 
                         // Increment unread count only if message is from another user
                         const isFromOtherUser = String(message.sender_id) !== String(userId);
@@ -262,14 +259,14 @@ export default function ChatList({ navigation }) {
                             // User data is populated from the backend
                             participantInfo = {
                                 name: otherParticipant.user.full_name || otherParticipant.user.name || 'Unknown User',
-                                avatar: otherParticipant.user.profile_pic || otherParticipant.user.avatar
+                                avatar: normalizeAvatar(otherParticipant.user.profile_pic || otherParticipant.user.avatar)
                             };
                             console.log('✅ Using user data:', participantInfo);
                         } else if (otherParticipant) {
                             // Fallback if user data is not populated
                             participantInfo = {
                                 name: otherParticipant.full_name || otherParticipant.name || 'Unknown User',
-                                avatar: otherParticipant.profile_pic || otherParticipant.avatar
+                                avatar: normalizeAvatar(otherParticipant.profile_pic || otherParticipant.avatar)
                             };
                             console.log('⚠️ Using fallback data:', participantInfo);
                         }
@@ -283,22 +280,12 @@ export default function ChatList({ navigation }) {
                         }
                     }
 
-                    // Format last message based on message type
-                    let lastMessage = chat.last_message || 'No messages yet';
-                    if (chat.last_message_type === 'image') {
-                        lastMessage = '📷 Photo';
-                    } else if (chat.last_message_type === 'document') {
-                        lastMessage = '📄 Document';
-                    } else if (chat.last_message_type === 'video') {
-                        lastMessage = '🎥 Video';
-                    } else if (!chat.last_message || chat.last_message.trim() === '') {
-                        // If there's a message but no content, it's likely an attachment
-                        if (chat.last_message_time) {
-                            lastMessage = '📎 Attachment';
-                        } else {
-                            lastMessage = 'No messages yet';
-                        }
-                    }
+                    // WhatsApp-style preview for every message type. The
+                    // backend stores a `last_message_type` on the chat row;
+                    // for media we ignore raw content and show an emoji +
+                    // label. Contacts are JSON-stringified on send, so we
+                    // attempt to parse and show the contact's name.
+                    const lastMessage = formatLastMessagePreview(chat);
 
                     return {
                         id: chat.chat_id,
@@ -306,7 +293,13 @@ export default function ChatList({ navigation }) {
                         lastMessage: lastMessage,
                         time: formatTime(chat.last_message_time),
                         timestamp: chat.last_message_time, // Keep raw timestamp for sorting
-                        avatar: participantInfo.avatar || chat.avatar || generateAvatar(participantInfo.name || chat.name),
+                        // Prefer the participant's real profile pic, then any
+                        // avatar already on the chat row, then a generated
+                        // initials avatar (ui-avatars.com) as last resort.
+                        avatar:
+                            participantInfo.avatar ||
+                            normalizeAvatar(chat.avatar) ||
+                            generateAvatar(participantInfo.name || chat.name),
                         unreadCount: chat.unread_count || 0,
                         isOnline: false, // This will be updated via socket
                         type: chat.type,
@@ -356,11 +349,90 @@ export default function ChatList({ navigation }) {
         }
     };
 
+    // WhatsApp-style "last message" preview for the chat list. Handles every
+    // attachment type the app supports plus contact-share (JSON-stringified
+    // content) and empty-attachment edge cases. Always returns a string.
+    const formatLastMessagePreview = (chat) => {
+        const type = chat.last_message_type;
+        const raw = chat.last_message;
+        const hasTextContent = typeof raw === 'string' && raw.trim() !== '';
+
+        switch (type) {
+            case 'image':
+                return '📷 Photo';
+            case 'video':
+                return '🎥 Video';
+            case 'audio':
+                return '🎵 Voice message';
+            case 'document':
+            case 'file':
+                // If the backend included the file name in content, show it.
+                return hasTextContent ? `📄 ${raw}` : '📄 Document';
+            case 'location':
+                return '📍 Location';
+            case 'contact': {
+                // Contact-share sends JSON.stringify({name, phone, ...}) as
+                // the message content. Parse it back so we don't render the
+                // raw JSON / "[object Object]" string in the list.
+                if (hasTextContent) {
+                    try {
+                        const parsed = JSON.parse(raw);
+                        if (parsed?.name) return `👤 ${parsed.name}`;
+                    } catch (_) {}
+                } else if (raw && typeof raw === 'object' && raw.name) {
+                    return `👤 ${raw.name}`;
+                }
+                return '👤 Contact';
+            }
+            default:
+                break;
+        }
+
+        // Text branch — defend against raw objects sneaking through (e.g. an
+        // un-parsed contact payload), which would otherwise toString() into
+        // "[object Object]" inside the row.
+        if (raw && typeof raw === 'object') {
+            return raw.name ? `👤 ${raw.name}` : '📎 Attachment';
+        }
+        if (hasTextContent) {
+            // Some contact shares land here with `last_message_type === 'text'`
+            // because the backend never typed them as 'contact'. Detect the
+            // payload by shape instead — if the string parses to JSON with a
+            // `name` (and optionally `phone`) it's a contact card.
+            const trimmed = raw.trim();
+            if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    if (parsed && typeof parsed === 'object' && parsed.name) {
+                        return `👤 ${parsed.name}`;
+                    }
+                } catch (_) {
+                    // not JSON — fall through to raw text
+                }
+            }
+            return raw;
+        }
+        if (chat.last_message_time) return '📎 Attachment';
+        return 'No messages yet';
+    };
+
     const generateAvatar = (name) => {
         const encodedName = encodeURIComponent(name || 'User');
         const colors = ['5E72E4', '11CDEF', '2DCE89', 'FB6340', 'F5365C'];
         const randomColor = colors[Math.floor(Math.random() * colors.length)];
         return `https://ui-avatars.com/api/?name=${encodedName}&background=${randomColor}&color=fff&bold=true`;
+    };
+
+    // profile_pic can come back as a relative path (`/uploads/profile/x.jpg`)
+    // or an absolute URL — Image needs absolute. Defensive prefix to the API
+    // host (NOT baseURL with /api, since uploads serve from root). Returns
+    // null if there's nothing to normalize, so the caller can fall through to
+    // the generated initials avatar.
+    const normalizeAvatar = (raw) => {
+        if (!raw || typeof raw !== 'string' || raw.trim() === '') return null;
+        if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+        const host = 'https://api.evnzo.com';
+        return raw.startsWith('/') ? `${host}${raw}` : `${host}/${raw}`;
     };
 
     const formatTime = (timestamp) => {

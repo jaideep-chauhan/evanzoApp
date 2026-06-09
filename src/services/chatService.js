@@ -606,9 +606,17 @@ class ChatService {
         }
       }
 
+      // Mirror the normalized URL onto `uri` too. Many call sites in the UI
+      // (Image, Video, AudioPlayer) read `attachment.uri || attachment.url`,
+      // preferring `uri`. If the backend stored a bad/relative `uri` (e.g.
+      // `http://localhost:3000/...` from the dev box, or `/uploads/...`),
+      // the renderer would pick that up before falling through to the fixed
+      // `url`, causing NSURL "hostname not found" (-1003) on real devices.
+      // Setting both fields to the same processed value avoids that.
       return {
         ...attachment,
         url: processedUrl,
+        uri: processedUrl,
         name: attachment.name || attachment.originalName || 'Document' // Map originalName to name for display
       };
     };

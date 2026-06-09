@@ -1,5 +1,6 @@
 import mobileAds, {
     MaxAdContentRating,
+    TestIds,
 } from 'react-native-google-mobile-ads';
 import { initInterstitialController } from './interstitialController';
 
@@ -12,11 +13,16 @@ export const initAds = async () => {
     initialized = true;
 
     try {
-        // Family-safe defaults. Adjust later if you want full inventory.
+        // Family-safe defaults. The `testDeviceIdentifiers: ['EMULATOR']`
+        // entry makes simulators / Android emulators always receive
+        // real-looking test fills (AdMob otherwise returns no-fill for
+        // non-physical devices). Production ads still serve normally to
+        // real phones because they're not marked as test devices.
         await mobileAds().setRequestConfiguration({
             maxAdContentRating: MaxAdContentRating.PG,
             tagForChildDirectedTreatment: false,
             tagForUnderAgeOfConsent: false,
+            testDeviceIdentifiers: ['EMULATOR'],
         });
 
         const adapterStatuses = await mobileAds().initialize();

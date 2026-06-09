@@ -1,8 +1,9 @@
 import { Platform } from 'react-native';
 
-// AdMob unit IDs — production, used in BOTH dev and release.
-// If you ever want to flip to Google's TestIds locally, swap pickId()
-// to return TestIds[type] from `react-native-google-mobile-ads`.
+// Production AdMob unit IDs. Used in BOTH dev and release builds.
+// Note: simulators / emulators routinely no-fill on production units
+// even with testDeviceIdentifiers set — that's expected. Real ads
+// serve on real devices and TestFlight / internal-track installs.
 const ANDROID = {
     banner: 'ca-app-pub-2655968575466386/4536714219',
     interstitial: 'ca-app-pub-2655968575466386/4425033573',
