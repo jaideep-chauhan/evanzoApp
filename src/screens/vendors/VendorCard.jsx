@@ -15,6 +15,18 @@ import { useTheme } from '../../ThemeContext';
 import theme from '../../theme';
 import img from '../../assets/images/dummy.png'; // Fallback image
 import { icons, getCategoryIcon } from '../../assets/icons';
+import FastImage from 'react-native-fast-image';
+
+// FastImage source helper: it expects {uri,priority,cache} for remote URLs
+// and a require() number for local assets. Pass remotes through, fall back
+// to the local placeholder when the source is missing.
+const toFastSource = (src, fallback) => {
+    if (!src) return fallback;
+    if (typeof src === 'number') return src; // require() result
+    if (typeof src === 'string') return { uri: src, priority: FastImage.priority.normal };
+    if (src.uri) return { ...src, priority: src.priority || FastImage.priority.normal };
+    return fallback;
+};
 
 const { width } = Dimensions.get('window');
 
@@ -203,18 +215,21 @@ export default function VendorCard({
                 <View style={styles.nameBlock}>
                     <Text style={[styles.vendorName, { color: theme.colors.primary }]}>{name}</Text>
                     <View style={styles.tagRow}>
+                        {/* Category pill — intrinsic width, can't shrink */}
                         <View style={styles.tagWithIcon}>
                             {getCategoryIcon(type) ? (
                                 <Image source={getCategoryIcon(type)} style={styles.tagIcon} />
                             ) : (
                                 <Text style={styles.tagText}>🏷️</Text>
                             )}
-                            <Text style={styles.tagText}>{type}</Text>
+                            <Text style={styles.tagText} numberOfLines={1}>{type}</Text>
                         </View>
+                        {/* Location pill — flexShrink so the row never wraps;
+                            the text inside ellipsizes when there's no space. */}
                         {location && (
-                            <View style={styles.tagWithIcon}>
+                            <View style={[styles.tagWithIcon, styles.tagLocation]}>
                                 <Image source={icons.location} style={styles.tagIcon} />
-                                <Text style={styles.tagText}>{location}</Text>
+                                <Text style={styles.tagText} numberOfLines={1}>{location}</Text>
                             </View>
                         )}
                     </View>
@@ -275,20 +290,28 @@ export default function VendorCard({
                             snapToInterval={carouselWidth}
                             decelerationRate="fast"
                         >
-                            {extendedImages.map((img, idx) => (
-                                <Image
+                            {extendedImages.map((src, idx) => (
+                                <FastImage
                                     key={idx}
-                                    source={img}
+                                    source={toFastSource(src, img)}
                                     style={[styles.carouselImage, { width: carouselWidth }]}
-                                    resizeMode="cover"
+                                    resizeMode={FastImage.resizeMode.cover}
                                 />
                             ))}
                         </Animated.ScrollView>
                     </View>
                     <View style={styles.smallImages}>
-                        <Image source={formattedImages[1] || img} style={styles.smallImage} />
+                        <FastImage
+                            source={toFastSource(formattedImages[1], img)}
+                            style={styles.smallImage}
+                            resizeMode={FastImage.resizeMode.cover}
+                        />
                         <View style={styles.overlayWrapper}>
-                            <Image source={formattedImages[2] || img} style={styles.smallImage} />
+                            <FastImage
+                                source={toFastSource(formattedImages[2], img)}
+                                style={styles.smallImage}
+                                resizeMode={FastImage.resizeMode.cover}
+                            />
                             {extraCount > 0 && (
                                 <View style={[styles.overlay, { backgroundColor: theme.colors.primary + '99' }]}>
                                     <Text style={styles.overlayText}>{`+${extraCount}`}</Text>
@@ -378,8 +401,10 @@ const styles = StyleSheet.create({
     },
     tagRow: {
         flexDirection: 'row',
-        gap: 8,
-        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: 6,
+        // No flexWrap: the row stays single-line. The location pill below has
+        // flexShrink:1 so it gives way when the row is too narrow.
     },
     tag: {
         backgroundColor: '#f8f9fa',
@@ -394,18 +419,23 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: '#f8f9fa',
         borderRadius: 12,
-        paddingHorizontal: 8,
+        paddingHorizontal: 7,
         paddingVertical: 4,
         gap: 4,
+        minWidth: 0, // lets the inner Text ellipsize instead of overflowing
+    },
+    tagLocation: {
+        flexShrink: 1, // location pill is the shrinker — keeps the row 1 line
     },
     tagIcon: {
-        width: 14,
-        height: 14,
+        width: 12,
+        height: 12,
         resizeMode: 'contain',
     },
     tagText: {
-        fontSize: 12,
+        fontSize: 11,
         color: '#666',
+        flexShrink: 1,
     },
     filtersRow: {
         flexDirection: 'row',

@@ -16,6 +16,7 @@ import eventService from '../../services/eventService';
 import img from '../../assets/images/dummy.png';
 import { useNavigation } from '@react-navigation/native';
 import { icons } from '../../assets/icons';
+import FastImage from 'react-native-fast-image';
 
 export default function EventAdCard({
     eventId,
@@ -220,30 +221,28 @@ export default function EventAdCard({
                     </View>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                         {safeAttachments.map((imageItem, index) => {
-                            // Ensure we have a valid image source
+                            // Normalize to a FastImage source. Strings get the
+                            // api host prepended when relative; objects with
+                            // .uri pass through; anything weird falls back to
+                            // the local dummy png.
                             let imageSource;
                             if (typeof imageItem === 'string') {
-                                // If it's a string URL, ensure it's properly formatted
-                                const imageUrl = imageItem.startsWith('http') ? imageItem : `https://api.evnzo.com${imageItem}`;
-                                imageSource = { uri: imageUrl };
-                                console.log(`🖼️ EventAdCard - Image ${index} URL:`, imageUrl);
+                                const imageUrl = imageItem.startsWith('http')
+                                    ? imageItem
+                                    : `https://api.evnzo.com${imageItem}`;
+                                imageSource = { uri: imageUrl, priority: FastImage.priority.low };
                             } else if (typeof imageItem === 'object' && imageItem.uri) {
-                                // If it's already an object with uri
-                                imageSource = imageItem;
+                                imageSource = { uri: imageItem.uri, priority: FastImage.priority.low };
                             } else {
-                                // Fallback to dummy image
                                 imageSource = img;
                             }
-                            
+
                             return (
-                                <Image 
-                                    key={index} 
+                                <FastImage
+                                    key={index}
                                     source={imageSource}
                                     style={styles.attachmentImage}
-                                    defaultSource={img} // Fallback image
-                                    onError={(error) => {
-                                        console.log(`❌ EventAdCard - Image ${index} load error:`, error.nativeEvent);
-                                    }}
+                                    resizeMode={FastImage.resizeMode.cover}
                                 />
                             );
                         })}

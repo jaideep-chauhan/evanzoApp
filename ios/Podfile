@@ -70,6 +70,15 @@ target 'EVNZO' do
         # Ensure C++ standard is set
         config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++20'
 
+        # Xcode 26.x ships a clang that segfaults compiling certain RN C++
+        # modules at -O1+. Drop optimization for the known-bad targets so the
+        # compiler takes the simple code path. Slows their compile slightly but
+        # they're tiny modules; total build time is unaffected.
+        if ['React-jserrorhandler', 'React-Fabric', 'React-FabricComponents'].include?(target.name)
+          config.build_settings['GCC_OPTIMIZATION_LEVEL'] = '0'
+          config.build_settings['LLVM_LTO'] = 'NO'
+        end
+
         # Additional GoogleSignIn specific fix
         if target.name == 'GoogleSignIn'
           config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']

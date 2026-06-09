@@ -32,6 +32,7 @@ import img from '../../assets/images/dummy.png';
 import bg from '../../assets/images/profileBG.png';
 
 import { useTheme } from '../../ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import vendorService from '../../services/vendorService';
 import eventService from '../../services/eventService';
 import profileService from '../../services/profileService';
@@ -42,6 +43,7 @@ const { height: screenHeight } = Dimensions.get('window');
 
 export default function VendorAdDashboard({ navigation }) {
     const theme = useTheme();
+    const insets = useSafeAreaInsets();
     const { user } = useAuth();
     const [activeTab, setActiveTab] = useState('vendor');
     
@@ -97,16 +99,17 @@ export default function VendorAdDashboard({ navigation }) {
     }, [vendorList, eventList]);
 
     return (
-        <View style={[styles.safe, { flex: 1, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 }]}>
+        <View style={[styles.safe, { flex: 1 }]}>
             {/* Entire scrollable content */}
             <RefreshableScrollView
                 onRefresh={fetchAds}
                 contentContainerStyle={{ flexGrow: 1 }}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
+                contentInsetAdjustmentBehavior="never"
             >
                 {/* Header and all content before tabs */}
-                <View style={styles.headerBox}>
+                <View style={[styles.headerBox, { paddingTop: insets.top + 12 }]}>
                         <ImageBackground
                             source={bg}
                             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: -1 }}
@@ -125,13 +128,26 @@ export default function VendorAdDashboard({ navigation }) {
                         </View>
                         {/* Profile Info inside blue box */}
                         <View style={styles.profileSection}>
-                            <View style={styles.profileImage}>
-                                <Text style={styles.profileInitialsText}>
-                                    {user?.full_name ? (
-                                        user.full_name.split(' ').map(name => name[0]).slice(0, 2).join('').toUpperCase()
-                                    ) : 'U'}
-                                </Text>
-                            </View>
+                            {user?.profile_pic ? (
+                                <Image
+                                    source={{ uri: user.profile_pic }}
+                                    style={styles.profileImage}
+                                    resizeMode="cover"
+                                />
+                            ) : (
+                                <View style={styles.profileImage}>
+                                    <Text style={styles.profileInitialsText}>
+                                        {user?.full_name
+                                            ? user.full_name
+                                                  .split(' ')
+                                                  .map((name) => name[0])
+                                                  .slice(0, 2)
+                                                  .join('')
+                                                  .toUpperCase()
+                                            : 'U'}
+                                    </Text>
+                                </View>
+                            )}
                             <View style={styles.nameRow}>
                                 <Text style={[styles.name, { color: theme.colors.primary }]}>
                                     {user?.full_name || 'User'}
@@ -194,8 +210,9 @@ export default function VendorAdDashboard({ navigation }) {
                         </View>
                     </TouchableOpacity>
 
-                {/* Tabs */}
-                <View style={[styles.tabRow, { backgroundColor: theme.colors.background }]}>
+                {/* Tabs — no explicit background; inherit the page so the
+                    row blends with the white area instead of showing a band. */}
+                <View style={styles.tabRow}>
                     <TouchableOpacity
                         style={[
                             styles.activeTab,
@@ -485,7 +502,9 @@ const styles = StyleSheet.create({
         borderBottomLeftRadius: 32,
         borderBottomRightRadius: 32,
         paddingBottom: 24,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 40,
+        // paddingTop is set inline as insets.top + 12 so the doodle
+        // ImageBackground inside this box paints all the way to the device top,
+        // and the action row still has breathing room below the notch.
         paddingHorizontal: 0,
         alignItems: 'center',
         minHeight: 100,

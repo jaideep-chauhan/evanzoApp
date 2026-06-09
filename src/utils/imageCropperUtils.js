@@ -14,6 +14,11 @@ export const openImagePickerWithCropper = async (options = {}) => {
         multiple = false,
         maxFiles = 10,
         compressImageQuality = 0.8,
+        // WhatsApp-style cap: 12 MP iPhone photos shrink from 4032×3024 to
+        // ≤1080 on the long edge, which lands at ~150–400 KB per JPEG. The
+        // cards / carousels never render larger than ~800px on screen anyway.
+        compressImageMaxWidth = 1080,
+        compressImageMaxHeight = 1080,
     } = options;
 
     try {
@@ -24,9 +29,11 @@ export const openImagePickerWithCropper = async (options = {}) => {
             mediaType: 'photo',
             includeBase64: false,
             includeExif: false,
-            forceJpg: false,
+            forceJpg: true, // ensure compressed JPEG, not the original HEIC
             cropping: false, // No automatic cropping
             compressImageQuality,
+            compressImageMaxWidth,
+            compressImageMaxHeight,
         };
 
         const result = await ImagePicker.openPicker(pickerOptions);

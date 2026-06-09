@@ -565,6 +565,8 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
     },
     headerTitle: {
+        flex: 1,
+        textAlign: 'center',
         fontSize: 24,
         fontWeight: 'bold',
         color: '#fff',

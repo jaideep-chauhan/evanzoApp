@@ -14,6 +14,8 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import { EventCardSkeleton, renderSkeletons } from '../../components/SkeletonLoader';
 import { getCached, setCached } from '../../services/listCacheService';
+import BannerAdView from '../../components/ads/BannerAdView';
+import { BANNER_LIST_INTERVAL } from '../../services/adsConfig';
 
 const EVENTS_CACHE_KEY = 'events:public';
 import Tabs from '../vendors/Tabs';
@@ -798,11 +800,16 @@ export default function Events() {
                     </View>
                 ) : (
                     events.map((event, idx) => (
+                      <React.Fragment key={`event-frag-${event._original?.event_ad_id || event.id}-${idx}`}>
                         <EventCard
                             key={`event-${event._original?.event_ad_id || event.id}-${idx}`}
                             event={event}
                             onGiveQuote={() => handleGiveQuote(event)}
                         />
+                        {(idx + 1) % BANNER_LIST_INTERVAL === 0 && (
+                            <BannerAdView style={{ marginVertical: 12 }} />
+                        )}
+                      </React.Fragment>
                     ))
                 )}
                     </>

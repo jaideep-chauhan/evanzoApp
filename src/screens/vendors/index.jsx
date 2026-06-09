@@ -2,6 +2,8 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Animated, ActivityIndicator, Alert } from 'react-native';
 import { VendorCardSkeleton, renderSkeletons } from '../../components/SkeletonLoader';
 import { getCached, setCached } from '../../services/listCacheService';
+import BannerAdView from '../../components/ads/BannerAdView';
+import { BANNER_LIST_INTERVAL } from '../../services/adsConfig';
 
 const VENDORS_CACHE_KEY = 'vendors:public';
 import {
@@ -595,8 +597,10 @@ export default function Vendor() {
                                 )}
                             </View>
                         ) : (
-                            // Use vendors directly instead of filteredVendors
+                            // Use vendors directly instead of filteredVendors.
+                            // After every Nth card we drop an inline banner.
                             vendors.map((vendor, idx) => (
+                              <React.Fragment key={`vendor-frag-${vendor._original?.vendor_ad_id || vendor.id}-${idx}`}>
                                 <VendorCard
                                     key={`vendor-${vendor._original?.vendor_ad_id || vendor.id}-${idx}`}
                                     vendorId={vendor._original?.vendor_ad_id || vendor.id}
@@ -694,6 +698,10 @@ export default function Vendor() {
                                         }
                                     }}
                                 />
+                                {(idx + 1) % BANNER_LIST_INTERVAL === 0 && (
+                                    <BannerAdView style={{ marginVertical: 12 }} />
+                                )}
+                              </React.Fragment>
                             ))
                         )}
                     </>

@@ -1,4 +1,6 @@
-import api from './api';
+import api, { API_BASE_URL } from './api';
+import { Platform } from 'react-native';
+import authFetch from './authFetch';
 
 class UserProfileService {
     // Get user profile
@@ -19,24 +21,73 @@ class UserProfileService {
         }
     }
 
-    // Update user profile
+    // Update user profile. If `profileData.profile_pic_file` is set
+    // (`{uri, type, name}`), the request goes out as multipart so the backend
+    // can persist the photo. Otherwise it stays as a plain JSON PUT.
     async updateProfile(profileData) {
         try {
-            // Filter out email as it's not editable
-            const { email, ...updateData } = profileData;
-            
+            // Email is read-only; never send it through.
+            const { email, profile_pic_file, ...updateData } = profileData;
+
+            if (profile_pic_file?.uri) {
+                const formData = new FormData();
+                // Numeric / object fields need to be stringified for multipart text parts.
+                Object.entries(updateData).forEach(([key, value]) => {
+                    if (value === undefined || value === null) return;
+                    formData.append(
+                        key,
+                        typeof value === 'object' ? JSON.stringify(value) : String(value),
+                    );
+                });
+                // Normalize Android URIs to file:// the same way the other
+                // multipart paths do (createVendorAd, sendMediaMessage, etc.).
+                let uri = profile_pic_file.uri;
+                if (
+                    Platform.OS === 'android' &&
+                    uri &&
+                    !uri.startsWith('file://') &&
+                    !uri.startsWith('content://') &&
+                    !uri.startsWith('http')
+                ) {
+                    uri = `file://${uri}`;
+                }
+                formData.append('profile_pic', {
+                    uri,
+                    type: profile_pic_file.type || 'image/jpeg',
+                    name: profile_pic_file.name || `profile_${Date.now()}.jpg`,
+                });
+
+                const res = await authFetch(`${API_BASE_URL}/profile/update`, {
+                    method: 'PUT',
+                    body: formData,
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    return {
+                        success: false,
+                        message: data?.message || `Server error: ${res.status}`,
+                        data: null,
+                    };
+                }
+                return {
+                    success: true,
+                    message: data?.message || 'Profile updated successfully',
+                    data: data?.data,
+                };
+            }
+
             const response = await api.put('/profile/update', updateData);
             return {
                 success: true,
                 message: 'Profile updated successfully',
-                data: response.data.data
+                data: response.data.data,
             };
         } catch (error) {
             console.error('Update profile error:', error);
             return {
                 success: false,
-                message: error.response?.data?.message || 'Failed to update profile',
-                data: null
+                message: error.response?.data?.message || error.message || 'Failed to update profile',
+                data: null,
             };
         }
     }

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import useInterstitialAd from '../../hooks/useInterstitialAd';
 import {
     View,
     Text,
@@ -36,6 +37,10 @@ export default function EventDetailViewEnhanced() {
     const [quoteText, setQuoteText] = useState('');
     const [isSaved, setIsSaved] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+
+    // Every Nth event-detail open triggers an interstitial.
+    const tickInterstitial = useInterstitialAd();
+    useEffect(() => { tickInterstitial(); }, [tickInterstitial]);
     const [isCheckingStatus, setIsCheckingStatus] = useState(true);
     const [showFullDesc, setShowFullDesc] = useState(false);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);

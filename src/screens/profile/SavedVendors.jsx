@@ -96,23 +96,34 @@ const SavedVendors = () => {
     };
 
     // Navigate to vendor details
-    const handleVendorPress = (vendor) => {
-        // Convert saved vendor data to match expected format
+    const handleVendorPress = (row) => {
+        // Same unwrap as the renderer: backend wraps the vendor under .item.
+        const vendor = row?.item || row || {};
         const vendorData = {
             _original: vendor,
             vendor_ad_id: vendor.vendor_ad_id || vendor.item_id || vendor.itemId || vendor.vendorId,
             id: vendor.vendor_ad_id || vendor.item_id || vendor.itemId || vendor.vendorId,
-            name: vendor.name || vendor.vendor_name || vendor.title,
-            type: vendor.type || vendor.category || vendor.vendor_type,
+            name: vendor.company_name || vendor.title || vendor.name || vendor.vendor_name,
+            type: vendor.category?.name || vendor.type || vendor.vendor_type,
             location: vendor.location || vendor.address,
             rating: vendor.rating || 0,
             description: vendor.description,
             images: vendor.images || (vendor.image ? [vendor.image] : []),
-            offers: vendor.offers || []
+            offers: vendor.offers || [],
+            photos: vendor.photos,
         };
 
         console.log('📍 Navigating to vendor details:', vendorData.name);
-        navigation.navigate('VendorAddDetail', { vendor: vendorData });
+        // VendorAddDetail lives in the Vendors tab's nested stack; navigate
+        // through Main → Vendors → VendorAddDetail so the right screen mounts
+        // with the right params (the flat navigate falls through silently).
+        navigation.navigate('Main', {
+            screen: 'Vendors',
+            params: {
+                screen: 'VendorAddDetail',
+                params: { vendor: vendorData },
+            },
+        });
     };
 
     // Navigate to Vendors tab
@@ -122,16 +133,45 @@ const SavedVendors = () => {
         navigation.navigate('Main', { screen: 'Vendors' });
     };
 
-    // Render vendor item
-    const renderVendorItem = ({ item }) => {
-        const vendorId = item.vendor_ad_id || item.item_id || item.itemId || item.vendorId || item.id;
-        const name = String(item.name || item.vendor_name || item.title || 'Unknown Vendor');
-        const type = String(item.type || item.category || item.vendor_type || 'Service');
-        const location = String(item.location || item.address || 'Location not specified');
-        // Backend returns DECIMAL columns as strings — coerce, default to 0.
-        const ratingNum = Number(item.rating);
+    // Render vendor item.
+    // Two shapes can land here:
+    //   1) Backend response — { save_id, item_type, saved_at, item: { vendor_ad_id, company_name, photos, ... } }
+    //   2) Local-storage fallback — already-flattened vendor object
+    // Always unwrap before reading fields so both paths render real data.
+    const renderVendorItem = ({ item: row }) => {
+        const v = row?.item || row || {};
+        const vendorId =
+            v.vendor_ad_id || v.item_id || v.itemId || v.vendorId || v.id ||
+            row?.item_id || row?.id;
+        const name = String(v.company_name || v.title || v.name || v.vendor_name || 'Unknown Vendor');
+        const type = String(v.category?.name || v.type || v.vendor_type || 'Service');
+        // Prefer the new structured city; fall back to the first segment of
+        // the legacy location string so cards show just "Chandigarh" instead
+        // of "Chandigarh, Chandigarh, India".
+        const location = String(
+            v.city || (v.location ? String(v.location).split(',')[0].trim() : '') || 'Location not specified',
+        );
+        const ratingNum = Number(v.rating);
         const ratingDisplay = (Number.isFinite(ratingNum) ? ratingNum : 0).toFixed(1);
-        const image = item.image || item.images?.[0] || item.vendor_image;
+
+        // photos is a JSON-stringified array of file objects on the DB. Parse
+        // and pick the first url; prepend the api host when relative.
+        let image = null;
+        if (v.photos) {
+            try {
+                const parsed = typeof v.photos === 'string' ? JSON.parse(v.photos) : v.photos;
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    const first = parsed[0];
+                    const raw = first?.url || (typeof first === 'string' ? first : null);
+                    if (raw) {
+                        image = raw.startsWith('http') ? raw : `https://api.evnzo.com${raw}`;
+                    }
+                }
+            } catch (_) {}
+        }
+        if (!image) {
+            image = v.image || v.images?.[0] || v.vendor_image || null;
+        }
 
         return (
             <TouchableOpacity

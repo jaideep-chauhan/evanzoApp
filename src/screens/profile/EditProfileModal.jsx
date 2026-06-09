@@ -19,6 +19,7 @@ import userProfileService from '../../services/userProfileService';
 import { useAuth } from '../../context/AuthContext';
 import LocationSearchModal from '../vendors/LocationSearchModal';
 import { icons } from '../../assets/icons';
+import { openImagePickerWithCropper, openCameraWithCropper } from '../../utils/imageCropperUtils';
 
 // Translate a Nominatim/Photon payload into the flat shape the backend expects.
 // Returns null fields when only a popular-location string was picked.
@@ -48,11 +49,72 @@ export default function EditProfileModal({ visible, onClose, onUpdate }) {
     // Structured location data captured when the user picks an API result in
     // the modal. Stays null when only a popular-location string was picked.
     const [locationData, setLocationData] = useState(null);
+    // profile_pic_uri = currently-rendered avatar (existing user.profile_pic or a
+    // local file:// from the picker). pendingPicFile = the {uri,type,name} we
+    // attach to the multipart PUT on save. null if the user hasn't changed it.
+    const [profilePicUri, setProfilePicUri] = useState(null);
+    const [pendingPicFile, setPendingPicFile] = useState(null);
+
+    // Picker: gallery → cropper → preview. Camera path is offered too via
+    // Alert so the user can take a fresh shot. The cropper utility already
+    // caps the output at 1080×1080 / q=0.8 so uploads stay small.
+    const handlePickProfilePic = () => {
+        Alert.alert(
+            'Profile picture',
+            'Choose a new photo',
+            [
+                {
+                    text: 'Take photo',
+                    onPress: async () => {
+                        try {
+                            const result = await openCameraWithCropper({
+                                width: 800,
+                                height: 800,
+                                cropping: true,
+                                freeStyleCropEnabled: false,
+                            });
+                            if (result?.uri) {
+                                setProfilePicUri(result.uri);
+                                setPendingPicFile({
+                                    uri: result.uri,
+                                    type: result.mime || 'image/jpeg',
+                                    name: `profile_${Date.now()}.jpg`,
+                                });
+                            }
+                        } catch (_) { /* user cancelled */ }
+                    },
+                },
+                {
+                    text: 'Choose from library',
+                    onPress: async () => {
+                        try {
+                            const [picked] = await openImagePickerWithCropper({ multiple: false });
+                            if (picked?.uri) {
+                                setProfilePicUri(picked.uri);
+                                setPendingPicFile({
+                                    uri: picked.uri,
+                                    type: picked.mime || 'image/jpeg',
+                                    name: `profile_${Date.now()}.jpg`,
+                                });
+                            }
+                        } catch (_) { /* user cancelled */ }
+                    },
+                },
+                { text: 'Cancel', style: 'cancel' },
+            ],
+        );
+    };
     const [showLocationModal, setShowLocationModal] = useState(false);
 
     useEffect(() => {
         const loadUserData = async () => {
             if (visible && user) {
+                // Hydrate the avatar preview from whatever the server says
+                // the user's profile_pic currently is. Reset the pending file
+                // so an old picked-but-not-saved image doesn't bleed across opens.
+                setProfilePicUri(user.profile_pic || null);
+                setPendingPicFile(null);
+
                 // Pre-populate structured location from whatever the user
                 // already has saved, so a Save without re-picking the modal
                 // doesn't wipe their existing country/state/city/lat/lon.
@@ -148,10 +210,20 @@ export default function EditProfileModal({ visible, onClose, onUpdate }) {
                 if (locationData.latitude != null) payload.latitude = locationData.latitude;
                 if (locationData.longitude != null) payload.longitude = locationData.longitude;
             }
+            // Attach the picked photo if the user changed it this session.
+            // The service detects this and switches to multipart.
+            if (pendingPicFile) {
+                payload.profile_pic_file = pendingPicFile;
+            }
 
             const response = await userProfileService.updateProfile(payload);
 
             if (response.success) {
+                // Prefer the server-returned URL — the controller wrote the
+                // absolute URL into the response, so any avatar elsewhere in
+                // the app (profile header, chat list, etc.) sees the new one.
+                const newProfilePic = response.data?.profile_pic || profilePicUri || user.profile_pic;
+
                 // Update user context with new data
                 updateUser({
                     ...user,
@@ -159,6 +231,7 @@ export default function EditProfileModal({ visible, onClose, onUpdate }) {
                     phone: formData.phone.trim(),
                     location: formData.location.trim(),
                     bio: formData.bio.trim(),
+                    profile_pic: newProfilePic,
                     ...(locationData || {}),
                 });
                 
@@ -200,6 +273,36 @@ export default function EditProfileModal({ visible, onClose, onUpdate }) {
 
                     {/* Form */}
                     <ScrollView showsVerticalScrollIndicator={false}>
+                        {/* Avatar — tap to pick. The pending file rides
+                            along on the multipart Save; the preview shows
+                            the local URI immediately. */}
+                        <TouchableOpacity
+                            style={styles.avatarPickerWrap}
+                            onPress={handlePickProfilePic}
+                            activeOpacity={0.85}
+                        >
+                            {profilePicUri ? (
+                                <Image source={{ uri: profilePicUri }} style={styles.avatarPreview} />
+                            ) : (
+                                <View style={[styles.avatarPreview, styles.avatarFallback]}>
+                                    <Text style={[styles.avatarFallbackText, { color: theme.colors.primary }]}>
+                                        {(user?.full_name || 'U')
+                                            .split(' ')
+                                            .map((p) => p[0])
+                                            .slice(0, 2)
+                                            .join('')
+                                            .toUpperCase()}
+                                    </Text>
+                                </View>
+                            )}
+                            <View style={[styles.avatarBadge, { backgroundColor: theme.colors.primary }]}>
+                                <Icon name="camera" size={14} color="#fff" />
+                            </View>
+                        </TouchableOpacity>
+                        <Text style={[styles.avatarHint, { color: theme.colors.textSecondary }]}>
+                            Tap to change photo
+                        </Text>
+
                         {/* Full Name */}
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Full Name *</Text>
@@ -345,6 +448,44 @@ const styles = StyleSheet.create({
         fontWeight: '700',
     },
     inputGroup: {
+        marginBottom: 20,
+    },
+    avatarPickerWrap: {
+        alignSelf: 'center',
+        marginTop: 4,
+        marginBottom: 8,
+        width: 96,
+        height: 96,
+    },
+    avatarPreview: {
+        width: 96,
+        height: 96,
+        borderRadius: 48,
+        backgroundColor: '#E5E9F0',
+    },
+    avatarFallback: {
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    avatarFallbackText: {
+        fontSize: 32,
+        fontWeight: '700',
+    },
+    avatarBadge: {
+        position: 'absolute',
+        right: 0,
+        bottom: 0,
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        borderWidth: 2,
+        borderColor: '#fff',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    avatarHint: {
+        textAlign: 'center',
+        fontSize: 12,
         marginBottom: 20,
     },
     label: {

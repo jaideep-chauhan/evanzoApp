@@ -15,6 +15,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
 import { icons } from '../../assets/icons';
+import FastImage from 'react-native-fast-image';
 
 export default function EventCard({ event, onGiveQuote }) {
     const navigation = useNavigation();
@@ -104,7 +105,11 @@ export default function EventCard({ event, onGiveQuote }) {
             {/* Profile + Description */}
             <View style={[styles.profileRow, { marginTop: 6, marginBottom: 12 }]}>
                 <View style={{ alignItems: 'center', marginRight: 12 }}>
-                    <Image source={{ uri: event.organizer.avatar }} style={styles.avatar} />
+                    <FastImage
+                        source={{ uri: event.organizer.avatar, priority: FastImage.priority.normal }}
+                        style={styles.avatar}
+                        resizeMode={FastImage.resizeMode.cover}
+                    />
                     <Text style={[styles.profileName, { color: theme.colors.primary, marginTop: 6 }]} numberOfLines={1} ellipsizeMode="tail">{event.organizer.name}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
@@ -131,8 +136,13 @@ export default function EventCard({ event, onGiveQuote }) {
                         <Text style={[styles.attachmentTitle, { color: theme.colors.primary }]}>Attachments</Text>
                     </View>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                        {safeAttachments.map((img, index) => (
-                            <Image key={index} source={{ uri: img }} style={styles.attachmentImage} />
+                        {safeAttachments.map((src, index) => (
+                            <FastImage
+                                key={index}
+                                source={{ uri: src, priority: FastImage.priority.low }}
+                                style={styles.attachmentImage}
+                                resizeMode={FastImage.resizeMode.cover}
+                            />
                         ))}
                     </ScrollView>
                 </View>

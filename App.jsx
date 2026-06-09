@@ -1,18 +1,21 @@
 import React, { useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import MainNavigator from './src/navigation/MainNavigator';
 import Toast from 'react-native-toast-message';
 import { ThemeProvider } from './src/ThemeContext';
 import { AuthProvider } from './src/context/AuthContext';
 import notificationService from './src/services/notificationService';
 import socketService from './src/services/socketService';
+import { initAds } from './src/services/adsService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const App = () => {
   const appState = useRef(AppState.currentState);
 
   useEffect(() => {
-    // Initialize notification service
+    // Initialize AdMob (banners + interstitial preload) and notifications.
+    initAds();
     notificationService.initialize();
 
     // Handle app state changes for socket connection
@@ -54,12 +57,14 @@ const App = () => {
   }, []);
 
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <MainNavigator />
-        <Toast />
-      </AuthProvider>
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <MainNavigator />
+          <Toast />
+        </AuthProvider>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 };
 

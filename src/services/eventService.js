@@ -2,6 +2,21 @@ import api, { API_BASE_URL } from './api';
 import dummyImage from '../assets/images/dummy.png';
 import authFetch from './authFetch';
 
+// Backend stores `duration` as a free-text varchar (legacy ads sometimes
+// have just "4" without units). Format it for display:
+//   - empty / null  → "TBD"
+//   - already contains letters (e.g. "2 hours", "90 min") → pass through
+//   - purely numeric → "<N> hour" / "<N> hours"
+const formatDuration = (raw) => {
+    if (raw == null) return 'TBD';
+    const s = String(raw).trim();
+    if (!s) return 'TBD';
+    if (/[a-zA-Z]/.test(s)) return s; // user already typed a unit
+    const n = Number(s);
+    if (!Number.isFinite(n)) return s;
+    return `${n} ${n === 1 ? 'hour' : 'hours'}`;
+};
+
 class EventService {
     // Create event ad. Multipart upload routes through authFetch (native
     // fetch + refresh-on-401), same reason as createVendorAd.
@@ -324,7 +339,7 @@ class EventService {
             event_tags: event.event_tags || [],
             location: event.location || 'Unknown',
             date: formattedDate,
-            duration: event.duration || 'TBD',
+            duration: formatDuration(event.duration),
             budget: event.budget || null,
             guests: event.guests_count || null,
             guests_count: event.guests_count || null, // Add guests_count for consistency
