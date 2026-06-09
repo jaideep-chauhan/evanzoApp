@@ -1,0 +1,2 @@
+com/x4x90studio/evnzo/MainApplication
+com/x4x90studio/evnzo/MainActivity

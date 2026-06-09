@@ -2,6 +2,11 @@ plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
     id 'com.facebook.react'
+    // Firebase / Google Services. Reads android/app/google-services.json
+    // and bakes the FCM keys into the build. Without this plugin, the
+    // @react-native-firebase native modules can't initialize and the app
+    // crashes on launch (or fails the Gradle config step entirely).
+    id 'com.google.gms.google-services'
 }
 
 android {
@@ -17,11 +22,16 @@ android {
         versionCode 28
         versionName "1.9"
 
+        // RN apps with lots of native modules routinely cross Android's
+        // 65K methods limit. Multidex splits the dex output into multiple
+        // files; multidex-config.txt keeps the classes we need in the
+        // primary dex (boot-critical, e.g. application class).
+        multiDexEnabled true
+        multiDexKeepFile file('multidex-config.txt')
+
         // Bundle native debug symbols into the AAB so Play Console can
         // symbolicate native crashes / ANRs. Without this, every release
-        // pings the "you've not uploaded debug symbols" warning. Use
-        // SYMBOL_TABLE for stack traces only (smaller); switch to FULL if
-        // you want line-number resolution at the cost of a fatter AAB.
+        // pings the "you've not uploaded debug symbols" warning.
         ndk {
             debugSymbolLevel 'SYMBOL_TABLE'
         }
@@ -47,12 +57,26 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
+            // Speed up local-emulator dev: only build native libs for the
+            // emulator's ABI (x86_64 on Intel Macs / modern emulators).
+            // Without this the gradle build compiles C++ codegen four
+            // times (armeabi-v7a, arm64-v8a, x86, x86_64) — 20+ minutes
+            // on a clean build. Change to "arm64-v8a" if running on a
+            // physical Android device over USB / wireless debugging.
+            ndk {
+                abiFilters "x86_64"
+            }
         }
         release {
             signingConfig signingConfigs.release
             shrinkResources false
             minifyEnabled false
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+            // Play Store only accepts ARM ABIs. Skipping x86 / x86_64
+            // cuts the AAB size roughly in half.
+            ndk {
+                abiFilters "armeabi-v7a", "arm64-v8a"
+            }
         }
     }
 }
