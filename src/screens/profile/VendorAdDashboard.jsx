@@ -121,10 +121,10 @@ export default function VendorAdDashboard({ navigation }) {
                             <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
                                 <Icon name="settings-outline" size={30} color="#fff" />
                             </TouchableOpacity>
-                            <View style={{ width: 32 }} />
-                            <TouchableOpacity onPress={() => navigation.navigate('ChatList')}>
-                                <Icon name="chatbubble-ellipses-outline" size={30} color="#fff" />
-                            </TouchableOpacity>
+                            {/* Chat icon removed — Messages already has a
+                                dedicated tab in the bottom bar and tesst-App
+                                only kept Settings here. The Notification
+                                bell sits in the next row below. */}
                         </View>
                         {/* Profile Info inside blue box */}
                         <View style={styles.profileSection}>
