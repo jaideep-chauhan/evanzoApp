@@ -2118,7 +2118,16 @@ export default function ChatScreen({ route, navigation }) {
                 </View>
 
                 <View style={styles.headerActions}>
-                    <TouchableOpacity style={styles.headerAction}>
+                    <TouchableOpacity
+                        style={styles.headerAction}
+                        onPress={() => navigation.navigate('ChatInfo', {
+                            chatId,
+                            chatName,
+                            avatar,
+                            recipientId,
+                            isOnline,
+                        })}
+                    >
                         <Icon name="ellipsis-vertical" size={24} color="#fff" />
                     </TouchableOpacity>
                 </View>
