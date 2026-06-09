@@ -7,6 +7,8 @@ import VendorDetailsSection from './VendorDetailsSection';
 import { useRoute } from '@react-navigation/native';
 import chatService from '../../../services/chatService';
 import { useAuth } from '../../../context/AuthContext';
+import preSavedMessageService from '../../../services/preSavedMessageService';
+import Icon from 'react-native-vector-icons/Ionicons';
 
 const dummyReviews = [
     {
@@ -40,6 +42,31 @@ export default function VendorChat({ navigation }) {
     const offerSectionRef = useRef(null);
     const [quoteText, setQuoteText] = useState('');
     const [isSubmittingQuote, setIsSubmittingQuote] = useState(false);
+    const [loadingQuickMessage, setLoadingQuickMessage] = useState(false);
+
+    // Pre-fill the quote input with the user's saved Quick Message template.
+    // Same surface ChatScreen uses; lives in profile settings. If the user
+    // never created one, surface a friendly hint instead of silently failing.
+    const handleQuickMessage = async () => {
+        if (loadingQuickMessage) return;
+        setLoadingQuickMessage(true);
+        try {
+            const response = await preSavedMessageService.getPreSavedMessage();
+            if (response?.success && response.data?.message_template) {
+                setQuoteText(response.data.message_template);
+            } else {
+                Alert.alert(
+                    'No Quick Message',
+                    "You haven't created a quick message template yet. Add one in Profile → Settings → Pre-saved Messages.",
+                );
+            }
+        } catch (error) {
+            console.error('❌ Quick message fetch failed:', error);
+            Alert.alert('Error', 'Failed to load your quick message template.');
+        } finally {
+            setLoadingQuickMessage(false);
+        }
+    };
 
     const scrollToOffer = route.params?.scrollToOffer;
     const vendor = route.params?.vendor;
@@ -208,6 +235,20 @@ export default function VendorChat({ navigation }) {
                 {/* Quote Section - Sticky Bottom */}
                 <View style={styles.quoteSectionContainer}>
                     <View style={styles.quoteSection}>
+                        {/* Quick Message — pre-fills the input with the
+                            user's saved template (set up in profile). */}
+                        <TouchableOpacity
+                            style={styles.quickBtn}
+                            onPress={handleQuickMessage}
+                            disabled={loadingQuickMessage || isSubmittingQuote}
+                            accessibilityLabel="Insert quick message"
+                        >
+                            {loadingQuickMessage ? (
+                                <ActivityIndicator size="small" color="#2C3D5B" />
+                            ) : (
+                                <Icon name="flash-outline" size={20} color="#2C3D5B" />
+                            )}
+                        </TouchableOpacity>
                         <TextInput
                             style={styles.quoteInput}
                             placeholder="Send a quote request"
@@ -269,6 +310,15 @@ const styles = StyleSheet.create({
         backgroundColor: '#2C3D5B',
         padding: 16,
         borderRadius: 50,
+    },
+    quickBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#fff',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 8,
     },
     quoteInput: {
         flex: 1,
