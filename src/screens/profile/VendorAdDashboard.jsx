@@ -117,15 +117,9 @@ export default function VendorAdDashboard({ navigation }) {
                             pointerEvents="none"
                         >
                         </ImageBackground>
-                        <View style={styles.header}>
-                            <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
-                                <Icon name="settings-outline" size={30} color="#fff" />
-                            </TouchableOpacity>
-                            {/* Chat icon removed — Messages already has a
-                                dedicated tab in the bottom bar and tesst-App
-                                only kept Settings here. The Notification
-                                bell sits in the next row below. */}
-                        </View>
+                        {/* Header icons removed — Settings + Notification
+                            entry points still exist below the avatar; the
+                            top-of-banner row is intentionally bare. */}
                         {/* Profile Info inside blue box */}
                         <View style={styles.profileSection}>
                             {user?.profile_pic ? (
