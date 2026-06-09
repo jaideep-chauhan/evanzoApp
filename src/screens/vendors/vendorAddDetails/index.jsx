@@ -235,31 +235,35 @@ export default function VendorChat({ navigation }) {
                 {/* Quote Section - Sticky Bottom */}
                 <View style={styles.quoteSectionContainer}>
                     <View style={styles.quoteSection}>
-                        {/* Quick Message — pre-fills the input with the
-                            user's saved template (set up in profile). */}
-                        <TouchableOpacity
-                            style={styles.quickBtn}
-                            onPress={handleQuickMessage}
-                            disabled={loadingQuickMessage || isSubmittingQuote}
-                            accessibilityLabel="Insert quick message"
-                        >
-                            {loadingQuickMessage ? (
-                                <ActivityIndicator size="small" color="#2C3D5B" />
-                            ) : (
-                                <Icon name="flash-outline" size={20} color="#2C3D5B" />
-                            )}
-                        </TouchableOpacity>
-                        <TextInput
-                            style={styles.quoteInput}
-                            placeholder="Send a quote request"
-                            placeholderTextColor="#ccc"
-                            value={quoteText}
-                            onChangeText={setQuoteText}
-                            multiline
-                            maxLength={500}
-                            textAlignVertical="top"
-                            editable={!isSubmittingQuote}
-                        />
+                        {/* Input + Quick Message button share a rounded
+                            wrapper so the flash icon sits flush against the
+                            right edge of the input. Send button stays
+                            outside the wrapper. */}
+                        <View style={styles.inputWrapper}>
+                            <TextInput
+                                style={styles.quoteInput}
+                                placeholder="Send a quote request"
+                                placeholderTextColor="#ccc"
+                                value={quoteText}
+                                onChangeText={setQuoteText}
+                                multiline
+                                maxLength={500}
+                                textAlignVertical="top"
+                                editable={!isSubmittingQuote}
+                            />
+                            <TouchableOpacity
+                                style={styles.quickMsgBtn}
+                                onPress={handleQuickMessage}
+                                disabled={loadingQuickMessage || isSubmittingQuote}
+                                accessibilityLabel="Insert quick message"
+                            >
+                                {loadingQuickMessage ? (
+                                    <ActivityIndicator size="small" color="#2C3D5B" />
+                                ) : (
+                                    <Icon name="flash" size={16} color="#2C3D5B" />
+                                )}
+                            </TouchableOpacity>
+                        </View>
                         <TouchableOpacity
                             style={[styles.sendBtn, isSubmittingQuote && styles.sendBtnDisabled]}
                             onPress={handleSendQuote}
@@ -311,27 +315,35 @@ const styles = StyleSheet.create({
         padding: 16,
         borderRadius: 50,
     },
-    quickBtn: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#fff',
-        justifyContent: 'center',
+    inputWrapper: {
+        flex: 1,
+        flexDirection: 'row',
         alignItems: 'center',
-        marginRight: 8,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        borderColor: '#ccc',
+        borderWidth: 1,
+        borderRadius: 12,
+        marginRight: 10,
+        paddingRight: 8,
+        overflow: 'hidden',
     },
     quoteInput: {
         flex: 1,
-        backgroundColor: 'transparent',
-        borderColor: '#ccc',
-        borderWidth: 1,
-        borderRadius: 10,
-        paddingVertical: 12,
+        paddingVertical: 10,
         paddingHorizontal: 12,
         color: '#fff',
-        marginRight: 10,
-        minHeight: 45,
-        maxHeight: 100,
+        fontSize: 14,
+        minHeight: 40,
+        maxHeight: 80,
+    },
+    quickMsgBtn: {
+        backgroundColor: '#FFD700',
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginLeft: 4,
     },
     sendBtn: {
         backgroundColor: '#fff',
