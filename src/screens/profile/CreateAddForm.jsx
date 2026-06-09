@@ -28,23 +28,11 @@ import categoryService from '../../services/categoryService';
 import { CustomSuccessModal } from '../../components/CustomSuccessModal';
 import { CustomToast } from '../../components/CustomToast';
 import ImageEditorModal from '../../components/ImageEditorModal';
-import LocationSearchModal from '../vendors/LocationSearchModal';
+import LocationSelector from '../../components/LocationSelector';
 import { icons } from '../../assets/icons';
 
-// Translate a Nominatim payload into the flat shape the backend expects.
-// Returns null for the structured fields when the user picked a popular
-// location (which only has a formatted string).
-const extractLocationFields = (structured) => {
-    if (!structured) return null;
-    const addr = structured.address || {};
-    return {
-        country: addr.country || null,
-        state: addr.state || addr.state_district || addr.region || null,
-        city: addr.city || addr.town || addr.village || addr.municipality || addr.hamlet || null,
-        latitude: structured.lat ?? null,
-        longitude: structured.lon ?? null,
-    };
-};
+// extractLocationFields() removed — LocationSelector now emits a flat
+// payload that maps 1:1 onto the backend shape, so no translation needed.
 import CategorySelectionModalEnhanced from '../vendors/CategorySelectionModalEnhanced';
 
 // ---- Module-level fallback option lists ---------------------------------
@@ -104,7 +92,6 @@ const CreateAddForm = ({ type, onClose }) => {
     // Structured location data captured when the user picks an API result.
     // Stays null when only a free-text / popular-location string was picked.
     const [eventLocationData, setEventLocationData] = useState(null); // { country, state, city, latitude, longitude }
-    const [showEventLocationModal, setShowEventLocationModal] = useState(false);
     const [date, setDate] = useState(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [dateSelected, setDateSelected] = useState(false);
@@ -124,7 +111,6 @@ const CreateAddForm = ({ type, onClose }) => {
     const [companyName, setCompanyName] = useState('');
     const [vendorLocation, setVendorLocation] = useState('Ontario, Canada');
     const [vendorLocationData, setVendorLocationData] = useState(null); // { country, state, city, latitude, longitude }
-    const [showVendorLocationModal, setShowVendorLocationModal] = useState(false);
     const [selectedTags, setSelectedTags] = useState([]);
     const [availableTags, setAvailableTags] = useState([]); // Dynamic tags based on selected category
     const [offers, setOffers] = useState([{ amount: '', discount: '' }]);
@@ -963,17 +949,21 @@ const CreateAddForm = ({ type, onClose }) => {
 
                         <View style={styles.fieldGroupPro}>
                             <Text style={styles.labelPro}>Location</Text>
-                            <TouchableOpacity
-                                style={[styles.inputPro, styles.locationPickerBtn]}
-                                onPress={() => setShowEventLocationModal(true)}
-                                activeOpacity={0.8}
-                            >
-                                <Image source={icons.location} style={styles.locationPickerIcon} />
-                                <Text style={location ? styles.dateText : styles.placeholderText} numberOfLines={1}>
-                                    {location || 'Choose location'}
-                                </Text>
-                                <Icon name="search" size={18} color="#ffffff80" style={{ marginLeft: 'auto' }} />
-                            </TouchableOpacity>
+                            <LocationSelector
+                                initialCountry={eventLocationData?.country || ''}
+                                initialState={eventLocationData?.state || ''}
+                                initialCity={eventLocationData?.city || ''}
+                                onLocationChange={(payload) => {
+                                    setLocation(payload?.formattedLocation || '');
+                                    setEventLocationData({
+                                        country: payload?.country || null,
+                                        state: payload?.state || null,
+                                        city: payload?.city || null,
+                                        latitude: payload?.latitude ?? null,
+                                        longitude: payload?.longitude ?? null,
+                                    });
+                                }}
+                            />
                         </View>
 
                         <View style={styles.fieldGroupPro}>
@@ -1233,17 +1223,21 @@ const CreateAddForm = ({ type, onClose }) => {
                         </View>
                         <View style={styles.fieldGroupPro}>
                             <Text style={styles.labelPro}>Location</Text>
-                            <TouchableOpacity
-                                style={[styles.inputPro, styles.locationPickerBtn]}
-                                onPress={() => setShowVendorLocationModal(true)}
-                                activeOpacity={0.8}
-                            >
-                                <Image source={icons.location} style={styles.locationPickerIcon} />
-                                <Text style={vendorLocation ? styles.dateText : styles.placeholderText} numberOfLines={1}>
-                                    {vendorLocation || 'Choose location'}
-                                </Text>
-                                <Icon name="search" size={18} color="#ffffff80" style={{ marginLeft: 'auto' }} />
-                            </TouchableOpacity>
+                            <LocationSelector
+                                initialCountry={vendorLocationData?.country || ''}
+                                initialState={vendorLocationData?.state || ''}
+                                initialCity={vendorLocationData?.city || ''}
+                                onLocationChange={(payload) => {
+                                    setVendorLocation(payload?.formattedLocation || '');
+                                    setVendorLocationData({
+                                        country: payload?.country || null,
+                                        state: payload?.state || null,
+                                        city: payload?.city || null,
+                                        latitude: payload?.latitude ?? null,
+                                        longitude: payload?.longitude ?? null,
+                                    });
+                                }}
+                            />
                         </View>
 
                         <View style={styles.fieldGroupPro}>
@@ -1666,27 +1660,9 @@ const CreateAddForm = ({ type, onClose }) => {
                 onDone={handleImageEditorDone}
             />
 
-            <LocationSearchModal
-                visible={showVendorLocationModal}
-                onClose={() => setShowVendorLocationModal(false)}
-                currentLocation={vendorLocation}
-                screenType="vendors"
-                onLocationSelect={(formatted, structured) => {
-                    setVendorLocation(formatted || '');
-                    setVendorLocationData(extractLocationFields(structured));
-                }}
-            />
-
-            <LocationSearchModal
-                visible={showEventLocationModal}
-                onClose={() => setShowEventLocationModal(false)}
-                currentLocation={location}
-                screenType="events"
-                onLocationSelect={(formatted, structured) => {
-                    setLocation(formatted || '');
-                    setEventLocationData(extractLocationFields(structured));
-                }}
-            />
+            {/* LocationSearchModal blocks removed — LocationSelector is
+                now inline at each Location field and owns its own picker
+                modal internally. */}
 
             {/* Submission progress — covers compression + upload. Driven by
                 handleSubmit; the overlay's own internals decide whether to
