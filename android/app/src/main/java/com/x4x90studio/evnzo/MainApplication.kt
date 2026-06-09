@@ -1,4 +1,4 @@
-package com.yourteam.evnzo
+package com.x4x90studio.evnzo
 
 import android.app.Application
 import com.facebook.react.PackageList

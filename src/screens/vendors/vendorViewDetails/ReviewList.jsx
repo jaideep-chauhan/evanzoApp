@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -14,7 +14,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import VendorCard from '../VendorCard';
 import vendorDetailsService from '../../../services/vendorDetailsService';
-import { useRoute } from '@react-navigation/native';
+import { useRoute, useFocusEffect } from '@react-navigation/native';
 import { getImageSource } from '../../../utils/imageUtils';
 import img from '../../../assets/images/dummy.png';
 
@@ -206,6 +206,18 @@ export default function ReviewList({ navigation }) {
             fetchReviews();
         }
     }, [vendorId]);
+
+    // Refetch on every focus, so coming back from the Write-a-Review screen
+    // (or from any push that mutated reviews) shows fresh data without a
+    // manual pull-to-refresh.
+    useFocusEffect(
+        useCallback(() => {
+            if (vendorId) {
+                fetchReviews();
+            }
+            return undefined;
+        }, [vendorId]),
+    );
 
     const fetchReviews = async (isRefresh = false) => {
         if (!vendorId) {

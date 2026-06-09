@@ -194,23 +194,32 @@ const ProfileCardCarousel = ({ vendorId }) => {
     }, [extendedData.length]);
     
     const handleScrollEnd = (event) => {
+        // The wrap-around clones only exist when we built `extendedData` with
+        // the head/tail clones — i.e. when data.length > 1. With 0 or 1 real
+        // items there's nothing to wrap to, and calling scrollToIndex with
+        // any non-zero index throws "out of range". Bail early in that case.
+        if (!scrollRef.current || extendedData.length <= 1) return;
+
         const offsetX = event.nativeEvent.contentOffset.x;
         const index = Math.round(offsetX / (CARD_WIDTH + 10));
-        
+
+        // Final safety net: clamp every target index into the actual range
+        // before handing it to FlatList, so a stray race can never re-trigger
+        // the invariant.
+        const safeScroll = (target) => {
+            const max = extendedData.length - 1;
+            const clamped = Math.max(0, Math.min(max, target));
+            scrollRef.current.scrollToIndex({ index: clamped, animated: false });
+        };
+
         if (index === 0) {
-            // If scrolled to the clone at the beginning, jump to the last real item
+            // Scrolled to the head clone → jump to the last real item.
             currentIndex.current = data.length;
-            scrollRef.current.scrollToIndex({ 
-                index: data.length, 
-                animated: false 
-            });
+            safeScroll(data.length);
         } else if (index === extendedData.length - 1) {
-            // If scrolled to the clone at the end, jump to the first real item
+            // Scrolled to the tail clone → jump to the first real item.
             currentIndex.current = 1;
-            scrollRef.current.scrollToIndex({ 
-                index: 1, 
-                animated: false 
-            });
+            safeScroll(1);
         } else {
             currentIndex.current = index;
         }

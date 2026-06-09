@@ -1,4 +1,4 @@
-package com.yourteam.evnzo
+package com.x4x90studio.evnzo
 
 import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.NativeModule

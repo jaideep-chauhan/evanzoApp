@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
     View,
     Text,
@@ -34,12 +35,24 @@ const ActionIcons = ({ vendor, navigation }) => {
     useEffect(() => {
         // Don't reset saved state immediately, let checkSavedStatus determine it
         setIsLoading(false);
-        
+
         // Check if vendor is saved from backend/storage
         checkSavedStatus();
         // Fetch reviews
         fetchReviews();
     }, [vendor]); // Re-run when vendor prop changes
+
+    // Refetch on every focus too, so returning from the AllReviews screen
+    // after submitting a new review shows the updated rating + count without
+    // a manual refresh. The mount effect above handles the first paint;
+    // this handles every subsequent return-to-screen.
+    useFocusEffect(
+        useCallback(() => {
+            fetchReviews();
+            checkSavedStatus();
+            return undefined;
+        }, [vendor]),
+    );
 
     const checkSavedStatus = async () => {
         const vendorId = vendor?._original?.vendor_ad_id || 
