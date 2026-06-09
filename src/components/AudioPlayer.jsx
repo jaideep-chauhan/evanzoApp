@@ -8,8 +8,14 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import Sound from 'react-native-sound';
+import audioManager from '../services/audioManager';
+
+// Stable id per <AudioPlayer> so audioManager can coordinate pauses
+// across the chat thread.
+let _audioPlayerSeq = 0;
 
 const AudioPlayer = ({ audioUrl, duration, isMe }) => {
+    const audioIdRef = useRef(`audio-${++_audioPlayerSeq}`);
     const [isPlaying, setIsPlaying] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
@@ -19,11 +25,27 @@ const AudioPlayer = ({ audioUrl, duration, isMe }) => {
     const intervalRef = useRef(null);
 
     useEffect(() => {
-        // Enable playback in silence mode (iOS)
-        // Use 'Playback' for normal playback, 'Ambient' for background
-        Sound.setCategory('Playback', true); // true enables mixing with other audio
+        // iOS AVAudioSession setup. `mixWithOthers: false` REPLACES the
+        // current session category, which is what we need: after the
+        // VoiceRecorder's native module puts the session in record-only
+        // mode, mixing-true would keep it there and playback would fail
+        // with OSStatus -10875 (kAudioSessionIncompatibleCategory). false
+        // forces a switch back to Playback.
+        Sound.setCategory('Playback', false);
+
+        // Register with the global audio manager so playing a new voice
+        // note auto-pauses any other one currently playing in this thread.
+        const id = audioIdRef.current;
+        audioManager.register(id, () => {
+            if (soundRef.current && isPlaying) {
+                soundRef.current.pause();
+                setIsPlaying(false);
+                if (intervalRef.current) clearInterval(intervalRef.current);
+            }
+        });
 
         return () => {
+            audioManager.unregister(id);
             if (soundRef.current) {
                 soundRef.current.release();
                 soundRef.current = null;
@@ -32,6 +54,7 @@ const AudioPlayer = ({ audioUrl, duration, isMe }) => {
                 clearInterval(intervalRef.current);
             }
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const loadSound = () => {
@@ -67,10 +90,22 @@ const AudioPlayer = ({ audioUrl, duration, isMe }) => {
                     if (intervalRef.current) {
                         clearInterval(intervalRef.current);
                     }
+                    audioManager.onStop(audioIdRef.current);
                 }
             } else {
                 // Play
                 setIsLoading(true);
+
+                // Re-assert Playback category right before playing — the
+                // VoiceRecorder native module may have flipped the session
+                // to record-only since this component mounted. Without
+                // this, OSStatus -10875 fires on play.
+                Sound.setCategory('Playback', false);
+
+                // Tell the audio manager we're starting — it pauses any
+                // other AudioPlayer currently playing in this thread so
+                // they don't fight for the audio session.
+                audioManager.onPlay(audioIdRef.current);
 
                 // If sound is already loaded, reset it
                 if (soundRef.current) {
@@ -100,6 +135,7 @@ const AudioPlayer = ({ audioUrl, duration, isMe }) => {
                     if (intervalRef.current) {
                         clearInterval(intervalRef.current);
                     }
+                    audioManager.onStop(audioIdRef.current);
                 });
 
                 setIsPlaying(true);
