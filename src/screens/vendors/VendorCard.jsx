@@ -213,7 +213,20 @@ export default function VendorCard({
                     </View>
                 </View>
                 <View style={styles.nameBlock}>
-                    <Text style={[styles.vendorName, { color: theme.colors.primary }]}>{name}</Text>
+                    {/* Name row — vendor name on the left, rating pill on
+                        the right, both vertically centered on the same line. */}
+                    <View style={styles.nameRow}>
+                        <Text
+                            style={[styles.vendorName, { color: theme.colors.primary }]}
+                            numberOfLines={1}
+                        >
+                            {name}
+                        </Text>
+                        <View style={[styles.ratingBox, { backgroundColor: theme.colors.tabBackground }]}>
+                            <StarIcon size={14} color={theme.colors.primary} />
+                            <Text style={[styles.ratingText, { color: theme.colors.primary }]}>{rating}</Text>
+                        </View>
+                    </View>
                     <View style={styles.tagRow}>
                         {/* Category pill — intrinsic width, can't shrink */}
                         <View style={styles.tagWithIcon}>
@@ -233,10 +246,6 @@ export default function VendorCard({
                             </View>
                         )}
                     </View>
-                </View>
-                <View style={[styles.ratingBox, { backgroundColor: theme.colors.tabBackground }]}>
-                    <StarIcon size={14} color={theme.colors.primary} />
-                    <Text style={[styles.ratingText, { color: theme.colors.primary }]}>{rating}</Text>
                 </View>
             </View>
 
@@ -394,10 +403,17 @@ const styles = StyleSheet.create({
         flex: 1,
         marginLeft: 10,
     },
+    nameRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 4,
+        gap: 8,
+    },
     vendorName: {
         fontSize: 18,
         fontWeight: '700',
-        marginBottom: 4,
+        flexShrink: 1, // long names ellipsize instead of pushing the pill off-screen
     },
     tagRow: {
         flexDirection: 'row',
