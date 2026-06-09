@@ -52,6 +52,29 @@ import NotificationInbox from '../screens/notifications/NotificationInbox';
 // User Profile Screen
 import UserProfile from '../screens/profile/UserProfile';
 
+import { withProtectedScreen } from '../components/ProtectedScreen';
+
+// Guest gating for every screen that legitimately requires a signed-in
+// user. Chat / settings / saved / notifications / moderation / write-review.
+// Public-content routes (Main, VendorAddDetail, EventDetailView, AllReviews,
+// Search, info pages) are deliberately NOT wrapped — those are guest-safe.
+const ChatGuarded            = withProtectedScreen(ChatScreen,        'Sign in to chat with vendors');
+const ChatListGuarded        = withProtectedScreen(ChatList,          'Sign in to view your messages');
+const ReviewGuarded          = withProtectedScreen(Review,            'Sign in to leave a review');
+const SavedVendorsGuarded    = withProtectedScreen(SavedVendors,      'Sign in to view your saved vendors');
+const SettingsGuarded        = withProtectedScreen(Settings,          'Sign in to access settings');
+const SecurityGuarded        = withProtectedScreen(Security,          'Sign in to manage security settings');
+const NotificationsGuarded   = withProtectedScreen(Notifications,     'Sign in to manage notification preferences');
+const PrivacyGuarded         = withProtectedScreen(Privacy,           'Sign in to manage privacy settings');
+const ChangePasswordGuarded  = withProtectedScreen(ChangePassword,    'Sign in to change your password');
+const BlockedUsersGuarded    = withProtectedScreen(BlockedUsers,      'Sign in to manage blocked users');
+const SafetyGuarded          = withProtectedScreen(Safety,            'Sign in to access safety controls');
+const LoginHistoryGuarded    = withProtectedScreen(LoginHistory,      'Sign in to view your login history');
+const ChatInfoGuarded        = withProtectedScreen(ChatInfoScreen,    'Sign in to view chat details');
+const MediaLinksGuarded      = withProtectedScreen(MediaLinksScreen,  'Sign in to view shared media');
+const NotificationInboxGuarded = withProtectedScreen(NotificationInbox, 'Sign in to view your notifications');
+const UserProfileGuarded     = withProtectedScreen(UserProfile,       'Sign in to view profile');
+
 const Stack = createNativeStackNavigator();
 
 const MainNavigator = () => {
@@ -171,17 +194,21 @@ const MainNavigator = () => {
                         <Stack.Screen name="Main" component={TabNavigator} />
                         <Stack.Screen name="TaskDetail" component={TaskDetail} />
 
-                        {/* Chat Screens */}
+                        {/* Chat Screens — VendorChat is the vendor-detail
+                            page (public browsing surface even though the
+                            route is named "Chat"), so it stays unguarded.
+                            Actual messaging surfaces are guest-gated. */}
                         <Stack.Screen name="Chat" component={VendorChat} />
-                        <Stack.Screen name="ChatList" component={ChatList} />
-                        <Stack.Screen name="ChatScreen" component={ChatScreen} />
-                        <Stack.Screen name="ChatInfo" component={ChatInfoScreen} />
-                        <Stack.Screen name="MediaLinks" component={MediaLinksScreen} />
+                        <Stack.Screen name="ChatList" component={ChatListGuarded} />
+                        <Stack.Screen name="ChatScreen" component={ChatGuarded} />
+                        <Stack.Screen name="ChatInfo" component={ChatInfoGuarded} />
+                        <Stack.Screen name="MediaLinks" component={MediaLinksGuarded} />
 
 
-                        {/* Vendor View Details */}
+                        {/* Vendor View Details — AllReviews is public read,
+                            Review (write) is guest-gated. */}
                         <Stack.Screen name="AllReviews" component={AllReviewsScreen} />
-                        <Stack.Screen name="Review" component={Review} />
+                        <Stack.Screen name="Review" component={ReviewGuarded} />
 
                         {/* Vendor Add Detail Screen */}
                         <Stack.Screen name="VendorAddDetail" component={VendorChat} />
@@ -196,33 +223,35 @@ const MainNavigator = () => {
 
                         {/* Received-notifications inbox (NOT the settings screen
                             registered as "Notifications" below). */}
-                        <Stack.Screen name="NotificationInbox" component={NotificationInbox} />
+                        <Stack.Screen name="NotificationInbox" component={NotificationInboxGuarded} />
 
                         {/* Profile Screens */}
-                        <Stack.Screen name="SavedVendors" component={SavedVendors} />
+                        <Stack.Screen name="SavedVendors" component={SavedVendorsGuarded} />
 
-                        {/* Settings Screens */}
-                        <Stack.Screen name="Settings" component={Settings} />
-                        <Stack.Screen name="Security" component={Security} />
-                        <Stack.Screen name="Notifications" component={Notifications} />
-                        <Stack.Screen name="Privacy" component={Privacy} />
+                        {/* Settings Screens — HelpSupport / TermsPolicies /
+                            TermsOfUse / PrivacyPolicy / ReportProblem are
+                            informational and stay guest-readable. */}
+                        <Stack.Screen name="Settings" component={SettingsGuarded} />
+                        <Stack.Screen name="Security" component={SecurityGuarded} />
+                        <Stack.Screen name="Notifications" component={NotificationsGuarded} />
+                        <Stack.Screen name="Privacy" component={PrivacyGuarded} />
                         <Stack.Screen name="HelpSupport" component={HelpSupport} />
                         <Stack.Screen name="TermsPolicies" component={TermsPolicies} />
                         <Stack.Screen name="ReportProblem" component={ReportProblem} />
-                        <Stack.Screen name="ChangePassword" component={ChangePassword} />
+                        <Stack.Screen name="ChangePassword" component={ChangePasswordGuarded} />
                         <Stack.Screen name="TermsOfUse" component={TermsOfUse} />
                         <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicy} />
 
-                        {/* Moderation flow */}
-                        <Stack.Screen name="BlockedUsers" component={BlockedUsers} />
-                        <Stack.Screen name="Safety" component={Safety} />
-                        <Stack.Screen name="LoginHistory" component={LoginHistory} />
+                        {/* Moderation flow — guest-gated */}
+                        <Stack.Screen name="BlockedUsers" component={BlockedUsersGuarded} />
+                        <Stack.Screen name="Safety" component={SafetyGuarded} />
+                        <Stack.Screen name="LoginHistory" component={LoginHistoryGuarded} />
 
-                        {/* Event Detail Screen */}
+                        {/* Event Detail Screen — public browsing */}
                         <Stack.Screen name="EventDetailView" component={EventDetailViewEnhanced} />
 
-                        {/* User Profile Screen */}
-                        <Stack.Screen name="UserProfile" component={UserProfile} />
+                        {/* User Profile Screen — guest-gated */}
+                        <Stack.Screen name="UserProfile" component={UserProfileGuarded} />
 
                         {/* Auth screens — registered globally so any guest
                             screen can `navigation.navigate('Login')` when a

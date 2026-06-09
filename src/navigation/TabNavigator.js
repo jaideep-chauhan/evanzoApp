@@ -19,6 +19,12 @@ import Events from '../screens/events';
 import Profile from '../screens/profile/index';
 import ChatList from '../screens/chat/ChatList';
 import { useTheme } from '../ThemeContext';
+import { withProtectedScreen } from '../components/ProtectedScreen';
+
+// Tabs that need a signed-in user. Guests get the LoginPrompt component
+// instead of the actual screen content. Vendors / Events stay public.
+const ProtectedChatList = withProtectedScreen(ChatList, 'Sign in to view your messages');
+const ProtectedProfile  = withProtectedScreen(Profile,  'Sign in to access your profile');
 
 
 
@@ -236,8 +242,8 @@ const TabNavigator = () => {
             >
                 <Tab.Screen name="Vendors" component={Vendor} />
                 <Tab.Screen name="Events" component={Events} />
-                <Tab.Screen name="Messages" component={ChatList} />
-                <Tab.Screen name="Profile" component={Profile} />
+                <Tab.Screen name="Messages" component={ProtectedChatList} />
+                <Tab.Screen name="Profile" component={ProtectedProfile} />
             </Tab.Navigator>
         </View>
     );
