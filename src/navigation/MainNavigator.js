@@ -29,6 +29,10 @@ import ReportProblem from '../screens/settings/ReportProblem';
 import ChangePassword from '../screens/settings/ChangePassword';
 import TermsOfUse from '../screens/settings/TermsOfUse';
 import PrivacyPolicy from '../screens/settings/PrivacyPolicy';
+// Moderation screens (block/report flow, login history)
+import BlockedUsers from '../screens/settings/BlockedUsers';
+import Safety from '../screens/settings/Safety';
+import LoginHistory from '../screens/settings/LoginHistory';
 
 // Event Detail Screen
 import EventDetailViewEnhanced from '../screens/events/EventDetailViewEnhanced';
@@ -203,6 +207,11 @@ const MainNavigator = () => {
                         <Stack.Screen name="ChangePassword" component={ChangePassword} />
                         <Stack.Screen name="TermsOfUse" component={TermsOfUse} />
                         <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicy} />
+
+                        {/* Moderation flow */}
+                        <Stack.Screen name="BlockedUsers" component={BlockedUsers} />
+                        <Stack.Screen name="Safety" component={Safety} />
+                        <Stack.Screen name="LoginHistory" component={LoginHistory} />
 
                         {/* Event Detail Screen */}
                         <Stack.Screen name="EventDetailView" component={EventDetailViewEnhanced} />
