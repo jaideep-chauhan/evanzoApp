@@ -88,9 +88,9 @@ export default function SearchHeader({ onSearchChange, searchValue = '', searchT
 
                     <TouchableOpacity
                         style={[styles.iconCircle, { backgroundColor: theme.colors.lightBackground + '50' }]}
-                        onPress={() => navigation.navigate('ChatList')}
+                        onPress={() => navigation.navigate('NotificationInbox')}
                     >
-                        <Icon name="chatbubble-ellipses-outline" size={30} color="#fff" />
+                        <Icon name="notifications-outline" size={30} color="#fff" />
                     </TouchableOpacity>
                 </View>
 

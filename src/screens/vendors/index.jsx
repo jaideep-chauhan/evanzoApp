@@ -751,9 +751,9 @@ export default function Vendor() {
                     </View>
                     <TouchableOpacity
                         style={[styles.stickyChatIcon, { backgroundColor: theme.colors.primary }]}
-                        onPress={() => navigation.navigate('ChatList')}
+                        onPress={() => navigation.navigate('NotificationInbox')}
                     >
-                        <Icon name="chatbubble-ellipses-outline" size={24} color="#fff" />
+                        <Icon name="notifications-outline" size={24} color="#fff" />
                     </TouchableOpacity>
                 </View>
             </Animated.View>
