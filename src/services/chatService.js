@@ -184,8 +184,9 @@ class ChatService {
     }
   }
 
-  // Send a message
-  async sendMessage(chatId, content, messageType = 'text', attachments = null) {
+  // Send a message. `replyToMessageId` and `metadata` are optional; pass
+  // either when needed. Backend (chat.service.js:331) accepts both.
+  async sendMessage(chatId, content, messageType = 'text', attachments = null, replyToMessageId = null, metadata = null) {
     try {
       const messageData = {
         content,
@@ -194,6 +195,14 @@ class ChatService {
 
       if (attachments) {
         messageData.attachments = attachments;
+      }
+
+      if (replyToMessageId) {
+        messageData.reply_to_message_id = replyToMessageId;
+      }
+
+      if (metadata) {
+        messageData.metadata = metadata;
       }
 
       const response = await api.post(`/chat/${chatId}/messages`, messageData);

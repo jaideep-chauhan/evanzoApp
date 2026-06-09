@@ -72,6 +72,9 @@ export default function ChatScreen({ route, navigation }) {
     const [showMessageOptions, setShowMessageOptions] = useState(false);
     const [selectedMessage, setSelectedMessage] = useState(null);
     const [reactionPickerPosition, setReactionPickerPosition] = useState(null);
+    // Reply-to-message state. When non-null, the input shows a sticky
+    // preview banner and the next send carries reply_to_message_id.
+    const [replyingToMessage, setReplyingToMessage] = useState(null);
     const [showImagePreview, setShowImagePreview] = useState(false);
     const [previewImageUrl, setPreviewImageUrl] = useState(null);
     const [previewImageName, setPreviewImageName] = useState(null);
@@ -542,6 +545,13 @@ export default function ChatScreen({ route, navigation }) {
 
         const messageText = newMessage.trim();
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+
+        // Snapshot the reply target now and clear state immediately so the
+        // user can compose the next message while this one is still in
+        // flight. Server-side reference uses message_id; fall back to id
+        // for optimistic-message replies.
+        const replyTarget = replyingToMessage;
+        const replyToMessageId = replyTarget?.message_id || replyTarget?.id || null;
         
         console.log('🚀 ===== STARTING MESSAGE SEND =====');
         console.log('📝 Message send initiated with:', {
@@ -571,7 +581,12 @@ export default function ChatScreen({ route, navigation }) {
             status: 'sending',
             senderId: currentUserId,
             createdAt: new Date().toISOString(), // Add for consistent sorting
-            reactions: [] // Initialize with empty reactions array
+            reactions: [], // Initialize with empty reactions array
+            // Reply metadata — both the FK and the full snapshot so the
+            // optimistic bubble can render the quoted text without a
+            // server round-trip.
+            reply_to_message_id: replyToMessageId,
+            repliedMessage: replyTarget,
         };
 
         console.log('📤 Creating optimistic message:', optimisticMessage);
@@ -591,6 +606,7 @@ export default function ChatScreen({ route, navigation }) {
             return [...prev, optimisticMessage];
         });
         setNewMessage('');
+        setReplyingToMessage(null); // Clear reply preview now that send is queued
         setIsSending(true);
 
         // Stop typing indicator
@@ -600,11 +616,13 @@ export default function ChatScreen({ route, navigation }) {
             console.log('🌐 About to call API sendMessage with:', {
                 chatId: chatId,
                 messageText: messageText,
-                messageType: 'text'
+                messageType: 'text',
+                replyToMessageId,
             });
-            
-            // Send via API
-            const result = await chatService.sendMessage(chatId, messageText);
+
+            // Send via API — pass reply_to_message_id so the backend can
+            // persist the reply linkage.
+            const result = await chatService.sendMessage(chatId, messageText, 'text', null, replyToMessageId);
             
             console.log('📤 ===== API RESPONSE RECEIVED =====');
             console.log('📤 Full API result:', JSON.stringify(result, null, 2));
@@ -1578,6 +1596,15 @@ export default function ChatScreen({ route, navigation }) {
         }, 300);
     };
 
+    // Tapped "Reply" in the message-options modal. Stashes the selected
+    // message in state so the input renders a quoted-preview banner and
+    // the next send call attaches reply_to_message_id.
+    const handleReplyToMessage = () => {
+        if (selectedMessage) {
+            setReplyingToMessage(selectedMessage);
+        }
+    };
+
     // Handle reaction press on existing reaction
     const handleReactionPress = async (messageId, emoji) => {
         try {
@@ -1869,6 +1896,26 @@ export default function ChatScreen({ route, navigation }) {
                     delayLongPress={500}
                 >
                     <View style={[styles.messageBubble, isMe ? [styles.myBubble] : styles.theirBubble]}>
+                    {/* Quoted message preview — only rendered if this
+                        bubble is itself a reply. Uses the optimistic
+                        `repliedMessage` snapshot when present (set on the
+                        sending side); falls back to a generic 'Message'
+                        label if only the FK survived a round-trip. */}
+                    {(item.reply_to_message_id || item.repliedMessage) && (
+                        <View style={styles.repliedMessageContainer}>
+                            <View style={styles.repliedMessageBar} />
+                            <View style={styles.repliedMessageContent}>
+                                <Text style={styles.repliedMessageSender}>
+                                    {item.repliedMessage?.isMe
+                                        ? 'You'
+                                        : (item.repliedMessage?.sender?.first_name || 'User')}
+                                </Text>
+                                <Text style={styles.repliedMessageText} numberOfLines={1}>
+                                    {item.repliedMessage?.text || item.repliedMessage?.content || 'Message'}
+                                </Text>
+                            </View>
+                        </View>
+                    )}
                     {item.messageType === 'image' && item.attachments?.[0] ? (
                         <TouchableOpacity onPress={() => handleImagePreview(item.attachments[0])}>
                             <Image
@@ -2162,6 +2209,30 @@ export default function ChatScreen({ route, navigation }) {
                 />
             </ImageBackground>
 
+            {/* Sticky reply preview — shows the quoted message just above
+                the input bar while replyingToMessage is non-null. Tap the
+                X to cancel before sending. */}
+            {replyingToMessage && (
+                <View style={styles.replyPreview}>
+                    <View style={styles.replyPreviewBar} />
+                    <View style={styles.replyPreviewBody}>
+                        <Text style={styles.replyPreviewLabel}>
+                            Replying to {replyingToMessage.isMe ? 'yourself' : (replyingToMessage.sender?.first_name || 'User')}
+                        </Text>
+                        <Text style={styles.replyPreviewText} numberOfLines={1}>
+                            {replyingToMessage.text || replyingToMessage.content || 'Message'}
+                        </Text>
+                    </View>
+                    <TouchableOpacity
+                        onPress={() => setReplyingToMessage(null)}
+                        style={styles.replyPreviewClose}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                        <Icon name="close" size={20} color="#888" />
+                    </TouchableOpacity>
+                </View>
+            )}
+
             {/* Sticky Input Bar */}
             <View style={styles.inputSectionContainer}>
                 <View style={styles.inputSection}>
@@ -2333,6 +2404,7 @@ export default function ChatScreen({ route, navigation }) {
                 currentUserId={currentUserId}
                 onDelete={handleDeleteMessage}
                 onReact={handleShowReactionPicker}
+                onReply={handleReplyToMessage}
                 onCopy={() => {
                     // Copy is handled in the modal
                 }}
@@ -2718,6 +2790,70 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 4,
         elevation: 5,
+    },
+    // Reply preview banner styles (sticky above the input)
+    replyPreview: {
+        flexDirection: 'row',
+        alignItems: 'stretch',
+        backgroundColor: '#F4F6FB',
+        borderTopWidth: 1,
+        borderTopColor: '#E0E4EC',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+    },
+    replyPreviewBar: {
+        width: 3,
+        borderRadius: 2,
+        backgroundColor: '#2C3D5B',
+        marginRight: 10,
+    },
+    replyPreviewBody: {
+        flex: 1,
+        justifyContent: 'center',
+    },
+    replyPreviewLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#2C3D5B',
+        marginBottom: 2,
+    },
+    replyPreviewText: {
+        fontSize: 13,
+        color: '#5A6478',
+    },
+    replyPreviewClose: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 6,
+    },
+    // Quoted-message render inside a reply bubble
+    repliedMessageContainer: {
+        flexDirection: 'row',
+        alignItems: 'stretch',
+        backgroundColor: 'rgba(0,0,0,0.06)',
+        borderRadius: 8,
+        paddingVertical: 6,
+        paddingHorizontal: 8,
+        marginBottom: 6,
+    },
+    repliedMessageBar: {
+        width: 3,
+        borderRadius: 2,
+        marginRight: 8,
+        backgroundColor: '#2C3D5B',
+    },
+    repliedMessageContent: {
+        flex: 1,
+    },
+    repliedMessageSender: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#2C3D5B',
+        marginBottom: 2,
+    },
+    repliedMessageText: {
+        fontSize: 12,
+        color: '#5A6478',
     },
     inputSection: {
         flexDirection: 'row',

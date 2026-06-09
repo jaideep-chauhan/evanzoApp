@@ -17,6 +17,7 @@ const MessageOptionsModal = ({
     currentUserId,
     onDelete,
     onReact,
+    onReply,
     onCopy,
 }) => {
     const isMyMessage = message?.senderId === currentUserId || message?.isMe;
@@ -82,6 +83,11 @@ const MessageOptionsModal = ({
         onClose();
     };
 
+    const handleReply = () => {
+        if (onReply) onReply();
+        onClose();
+    };
+
     return (
         <Modal
             visible={visible}
@@ -116,6 +122,20 @@ const MessageOptionsModal = ({
                             </View>
                             <Text style={styles.optionText}>React</Text>
                         </TouchableOpacity>
+
+                        {/* Reply */}
+                        {onReply && (
+                            <TouchableOpacity
+                                style={styles.option}
+                                onPress={handleReply}
+                                activeOpacity={0.7}
+                            >
+                                <View style={styles.optionIcon}>
+                                    <Icon name="arrow-undo-outline" size={24} color="#2C3D5B" />
+                                </View>
+                                <Text style={styles.optionText}>Reply</Text>
+                            </TouchableOpacity>
+                        )}
 
                         {/* Copy (only for text messages) */}
                         {message?.messageType === 'text' && (
