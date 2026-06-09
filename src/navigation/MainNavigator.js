@@ -48,7 +48,7 @@ import UserProfile from '../screens/profile/UserProfile';
 const Stack = createNativeStackNavigator();
 
 const MainNavigator = () => {
-    const { isLoading: authLoading, isAuthenticated, logout } = useAuth();
+    const { isLoading: authLoading, logout } = useAuth();
     const [isReady, setIsReady] = useState(false);
     const [splashTimerDone, setSplashTimerDone] = useState(false);
     const [appState, setAppState] = useState(AppState.currentState);
@@ -152,28 +152,15 @@ const MainNavigator = () => {
                     animation: 'fade',
                     animationDuration: 300
                 }}
-                initialRouteName={isAuthenticated ? "Main" : "Login"}
+                // Guest-mode flow: the app always opens on Main (the tab navigator).
+                // Login / Register / forgot-password screens are registered too, so
+                // anywhere in the app that needs auth can `navigation.navigate('Login')`
+                // and come back when done. Apple Guideline 5.1.1 also requires that
+                // guests can browse without being forced to authenticate first.
+                initialRouteName="Main"
             >
-                {!isAuthenticated ? (
-                    // Auth Stack - Only shown when not authenticated
                     <>
-                        <Stack.Screen
-                            name="Login"
-                            component={LoginScreen}
-                            options={{
-                                animation: 'fade',
-                                animationDuration: 500
-                            }}
-                        />
-                        <Stack.Screen name="Register" component={Register} />
-                        <Stack.Screen name="ForgotPassword" component={ForgotPassword} />
-                        <Stack.Screen name="ResetPassword" component={ResetPassword} />
-                        <Stack.Screen name="OTPVerify" component={OTPVerify} />
-                    </>
-                ) : (
-                    // Protected Stack - Only shown when authenticated
-                    <>
-                        {/* Main App Screens */}
+                        {/* Always-accessible Main shell (Vendors / Events / etc.) */}
                         <Stack.Screen name="Main" component={TabNavigator} />
                         <Stack.Screen name="TaskDetail" component={TaskDetail} />
 
@@ -222,8 +209,22 @@ const MainNavigator = () => {
 
                         {/* User Profile Screen */}
                         <Stack.Screen name="UserProfile" component={UserProfile} />
+
+                        {/* Auth screens — registered globally so any guest
+                            screen can `navigation.navigate('Login')` when a
+                            sign-in-required action is tapped. They're pushed
+                            modally (no initial-route) instead of replacing
+                            the main shell. */}
+                        <Stack.Screen
+                            name="Login"
+                            component={LoginScreen}
+                            options={{ animation: 'fade', animationDuration: 500 }}
+                        />
+                        <Stack.Screen name="Register" component={Register} />
+                        <Stack.Screen name="ForgotPassword" component={ForgotPassword} />
+                        <Stack.Screen name="ResetPassword" component={ResetPassword} />
+                        <Stack.Screen name="OTPVerify" component={OTPVerify} />
                     </>
-                )}
             </Stack.Navigator>
         </NavigationContainer>
     );
