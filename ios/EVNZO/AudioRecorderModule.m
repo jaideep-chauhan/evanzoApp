@@ -198,9 +198,27 @@ RCT_EXPORT_METHOD(stopRecording:(RCTPromiseResolveBlock)resolve
     if (_audioRecorder && _audioRecorder.isRecording) {
         [_audioRecorder stop];
 
-        // Deactivate audio session
+        // Reset the session category to Playback BEFORE deactivating so
+        // anything that activates the session next (e.g. react-native-sound
+        // playing a voice note back) finds it in a playback-compatible
+        // state. Leaving it on PlayAndRecord causes Sound.play() to fail
+        // with OSStatus -10875 (kAudioSessionIncompatibleCategory).
+        AVAudioSession *session = [AVAudioSession sharedInstance];
         NSError *error = nil;
-        [[AVAudioSession sharedInstance] setActive:NO error:&error];
+        [session setCategory:AVAudioSessionCategoryPlayback error:&error];
+        if (error) {
+            NSLog(@"⚠️ [AudioRecorder] Failed to reset category: %@", error.localizedDescription);
+            error = nil;
+        }
+
+        // NotifyOthersOnDeactivation lets other audio apps know they can
+        // resume — recommended by Apple whenever you deactivate.
+        [session setActive:NO
+              withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation
+                    error:&error];
+        if (error) {
+            NSLog(@"⚠️ [AudioRecorder] Failed to deactivate session: %@", error.localizedDescription);
+        }
 
         resolve(@{
             @"success": @YES,
@@ -227,8 +245,15 @@ RCT_EXPORT_METHOD(cancelRecording:(RCTPromiseResolveBlock)resolve
         [_audioRecorder stop];
         [_audioRecorder deleteRecording];
 
+        // Same fix as stopRecording — reset category to Playback before
+        // deactivating so the next playback isn't blocked by -10875.
+        AVAudioSession *session = [AVAudioSession sharedInstance];
         NSError *error = nil;
-        [[AVAudioSession sharedInstance] setActive:NO error:&error];
+        [session setCategory:AVAudioSessionCategoryPlayback error:&error];
+        if (error) error = nil;
+        [session setActive:NO
+              withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation
+                    error:&error];
 
         _audioRecorder = nil;
         _audioFilePath = nil;
