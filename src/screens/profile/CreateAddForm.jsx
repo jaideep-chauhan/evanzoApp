@@ -665,8 +665,8 @@ const CreateAddForm = ({ type, onClose }) => {
                     clearDraft();
                     setModalState({
                         visible: true,
-                        title: 'Success! Waiting for Approval',
-                        message: 'Your event ad has been created successfully and is now waiting for approval from the Evanzo team. Once approved, it will be visible to all vendors.',
+                        title: 'Event Ad Posted',
+                        message: 'Your event ad is now live and visible to vendors.',
                         type: 'success'
                     });
                 } else {
@@ -771,8 +771,8 @@ const CreateAddForm = ({ type, onClose }) => {
                     clearDraft();
                     setModalState({
                         visible: true,
-                        title: 'Success! Waiting for Approval',
-                        message: 'Your vendor ad has been created successfully and is now waiting for approval from the Evanzo team. Once approved, it will be visible to all users.',
+                        title: 'Vendor Ad Posted',
+                        message: 'Your vendor ad is now live and visible to users.',
                         type: 'success'
                     });
                 } else {
@@ -1133,7 +1133,7 @@ const CreateAddForm = ({ type, onClose }) => {
                             </View>
                             {type === 'vendor' && photos.length > 0 && (
                                 <Text style={styles.photoCount}>
-                                    {photos.length} / 10 photos (minimum)
+                                    {photos.length} / 5 photos (minimum)
                                 </Text>
                             )}
                         </View>
@@ -1207,7 +1207,7 @@ const CreateAddForm = ({ type, onClose }) => {
                             )}
                             {type === 'vendor' && photos.length > 0 && (
                                 <Text style={styles.photoCount}>
-                                    {photos.length} / 10 photos (minimum)
+                                    {photos.length} / 5 photos (minimum)
                                 </Text>
                             )}
                         </View>
@@ -1300,7 +1300,7 @@ const CreateAddForm = ({ type, onClose }) => {
                             ))}
                         </View>
                         <View style={styles.fieldGroupPro}>
-                            <Text style={styles.labelPro}>In Photos (min. 10 photos)</Text>
+                            <Text style={styles.labelPro}>In Photos (min. 5 photos)</Text>
                             <View style={styles.attachmentRowPro}>
                                 {photos.length > 0 && (
                                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -1340,7 +1340,7 @@ const CreateAddForm = ({ type, onClose }) => {
                             </View>
                             {type === 'vendor' && photos.length > 0 && (
                                 <Text style={styles.photoCount}>
-                                    {photos.length} / 10 photos (minimum)
+                                    {photos.length} / 5 photos (minimum)
                                 </Text>
                             )}
                         </View>
