@@ -179,14 +179,21 @@ class VendorService {
     // Create vendor ad. FormData (file upload) path uses native fetch via
     // authFetch — axios's XHR layer breaks multipart on Android. The
     // non-FormData path stays on axios.
-    async createVendorAd(vendorData) {
+    // onUploadProgress (optional) is called with a 0-100 number so the
+    // form can drive a progress UI. fetch can't surface real upload bytes,
+    // so we approximate: 10 right before the network call, 100 once we
+    // have a response. Real per-chunk progress lives in the compression
+    // step on the form side.
+    async createVendorAd(vendorData, onUploadProgress = null) {
         try {
             if (vendorData instanceof FormData) {
+                if (onUploadProgress) onUploadProgress(10);
                 const res = await authFetch(`${API_BASE_URL}/vendor_ad`, {
                     method: 'POST',
                     body: vendorData,
                 });
                 const data = await res.json().catch(() => ({}));
+                if (onUploadProgress) onUploadProgress(100);
                 if (!res.ok) {
                     return {
                         success: false,

@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
     View,
     Text,
@@ -17,6 +18,8 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { openImagePickerWithCropper, IMAGE_DIMENSIONS } from '../../utils/imageCropperUtils';
+import { compressImagesChunked, COMPRESSION_PRESETS } from '../../utils/imageCompressionUtil';
+import { UploadProgressOverlay } from '../../components/UploadProgressBar';
 import { useTheme } from '../../ThemeContext';
 // import img from '../../assets/images/dummy.png'; // Removed unused import
 import vendorService from '../../services/vendorService';
@@ -43,6 +46,45 @@ const extractLocationFields = (structured) => {
     };
 };
 import CategorySelectionModalEnhanced from '../vendors/CategorySelectionModalEnhanced';
+
+// ---- Module-level fallback option lists ---------------------------------
+// Keep the form usable when the categories / services / event-types API
+// is slow or unavailable. Mirrors tesst-App's defaults so anything saved
+// against these labels round-trips with the backend.
+const SERVICE_TO_CATEGORY_MAP = {
+    'Photography': ['Photography', 'Videography'],
+    'Catering': ['Catering', 'Food & Beverage'],
+    'Music': ['DJ', 'Live Music', 'Sound System'],
+    'Decoration': ['Decoration', 'Florist'],
+    'Venue': ['Venue', 'Event Space'],
+    'Transport': ['Transport', 'Car Rental'],
+};
+
+const CATEGORIES = [
+    'Photography', 'Videography', 'Catering', 'DJ', 'Live Music', 'Decoration',
+    'Florist', 'Venue', 'Transport', 'Beauty & Styling', 'Bartender', 'Entertainer',
+];
+
+const TAG_OPTIONS = [
+    'Wedding', 'Birthday', 'Corporate', 'Anniversary', 'Engagement', 'Baby Shower',
+    'Graduation', 'Festival', 'Private Party', 'Other',
+];
+
+const SERVICE_OPTIONS = [
+    'Photography', 'Catering', 'Music', 'Decoration', 'Venue', 'Transport',
+];
+
+const FALLBACK_EVENT_TYPE_OPTIONS = [
+    'Wedding', 'Birthday', 'Corporate Event', 'Anniversary', 'Engagement',
+    'Baby Shower', 'Graduation', 'Festival', 'Private Party', 'Other',
+];
+
+const EVENT_TYPE_TAG_OPTIONS = {
+    'Wedding': ['Indian', 'Christian', 'Traditional', 'Modern', 'Destination'],
+    'Birthday': ['Kids', 'Adult', 'Theme', 'Surprise'],
+    'Corporate Event': ['Conference', 'Product Launch', 'Team Building', 'Award Ceremony'],
+    'Festival': ['Music', 'Cultural', 'Food', 'Holiday'],
+};
 
 const CreateAddForm = ({ type, onClose }) => {
     const theme = useTheme();
@@ -99,6 +141,101 @@ const CreateAddForm = ({ type, onClose }) => {
     // Image editor modal
     const [showImageEditor, setShowImageEditor] = useState(false);
     const [tempSelectedImages, setTempSelectedImages] = useState([]);
+
+    // Submission progress — drives the <UploadProgressOverlay>. Stages:
+    // 'idle' → 'compressing' (chunked image compression) → 'uploading' (POST)
+    const [uploadStage, setUploadStage] = useState('idle');
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [compressionProgress, setCompressionProgress] = useState({ percent: 0, current: 0, total: 0 });
+
+    // Draft autosave / restore. We persist the in-progress form to
+    // AsyncStorage under a per-type key (event vs vendor) and re-hydrate
+    // anything ≤ 24h old when the user re-opens the form. Cleared on
+    // successful submit.
+    const DRAFT_KEY = `@evanzo_ad_draft_${type}`;
+    const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+    const [draftRestored, setDraftRestored] = useState(false);
+
+    // Restore a draft on mount (≤ 24h old). Only fires once per session;
+    // a saved draft from a different `type` lives under its own key so the
+    // event and vendor forms never cross-contaminate.
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const saved = await AsyncStorage.getItem(DRAFT_KEY);
+                if (cancelled || !saved) {
+                    setDraftRestored(true);
+                    return;
+                }
+                const draft = JSON.parse(saved);
+                const age = Date.now() - (draft.savedAt || 0);
+                if (age > DRAFT_MAX_AGE_MS) {
+                    await AsyncStorage.removeItem(DRAFT_KEY);
+                    setDraftRestored(true);
+                    return;
+                }
+                // Hydrate every field if present. We deliberately avoid
+                // restoring `photos` because the picker uris are temporary
+                // file paths that may no longer exist next session.
+                if (type === 'event') {
+                    if (draft.service) setService(draft.service);
+                    if (draft.selectedEventType) setSelectedEventType(draft.selectedEventType);
+                    if (draft.customEventType) setCustomEventType(draft.customEventType);
+                    if (draft.eventTags) setEventTags(draft.eventTags);
+                    if (draft.location) setLocation(draft.location);
+                    if (draft.eventLocationData) setEventLocationData(draft.eventLocationData);
+                    if (draft.duration) setDuration(draft.duration);
+                    if (draft.budget) setBudget(draft.budget);
+                    if (draft.description) setDescription(draft.description);
+                } else {
+                    if (draft.companyName) setCompanyName(draft.companyName);
+                    if (draft.vendorDescription) setVendorDescription(draft.vendorDescription);
+                    if (draft.vendorLocation) setVendorLocation(draft.vendorLocation);
+                    if (draft.vendorLocationData) setVendorLocationData(draft.vendorLocationData);
+                    if (draft.selectedTags) setSelectedTags(draft.selectedTags);
+                    if (draft.offers) setOffers(draft.offers);
+                }
+                setDraftRestored(true);
+            } catch (e) {
+                console.warn('Draft restore failed:', e?.message);
+                setDraftRestored(true);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [DRAFT_KEY, type]);
+
+    // Autosave the in-progress draft. Lightly debounced via a setTimeout
+    // chain so we don't hammer AsyncStorage on every keystroke. Skips while
+    // the initial restore is still in flight to avoid clobbering with empty
+    // state before the restore lands.
+    useEffect(() => {
+        if (!draftRestored) return;
+        const handle = setTimeout(() => {
+            const draft =
+                type === 'event'
+                    ? {
+                          service, selectedEventType, customEventType, eventTags,
+                          location, eventLocationData, duration, budget, description,
+                          savedAt: Date.now(),
+                      }
+                    : {
+                          companyName, vendorDescription, vendorLocation,
+                          vendorLocationData, selectedTags, offers,
+                          savedAt: Date.now(),
+                      };
+            AsyncStorage.setItem(DRAFT_KEY, JSON.stringify(draft)).catch(() => {});
+        }, 600);
+        return () => clearTimeout(handle);
+    }, [
+        draftRestored, type, DRAFT_KEY,
+        // event fields
+        service, selectedEventType, customEventType, eventTags, location,
+        eventLocationData, duration, budget, description,
+        // vendor fields
+        companyName, vendorDescription, vendorLocation, vendorLocationData,
+        selectedTags, offers,
+    ]);
 
     // Fetch vendor categories on mount
     useEffect(() => {
@@ -482,8 +619,38 @@ const CreateAddForm = ({ type, onClose }) => {
                 if (budget) formData.append('budget', budget);
                 formData.append('description', description || '');
 
+                // Compress photos in small chunks before uploading. Cuts
+                // upload time on big galleries and keeps memory usage low.
+                let compressedPhotos = photos;
+                if (photos.length > 0) {
+                    setUploadStage('compressing');
+                    try {
+                        compressedPhotos = await compressImagesChunked(
+                            photos,
+                            COMPRESSION_PRESETS?.AD_PHOTOS || {},
+                            // util emits either a number (percent) per
+                            // image or an object {completed,total,percent}
+                            // after each chunk — normalise both shapes.
+                            (p) => {
+                                if (typeof p === 'number') {
+                                    setCompressionProgress((prev) => ({ ...prev, percent: p }));
+                                } else if (p && typeof p === 'object') {
+                                    setCompressionProgress({
+                                        current: p.completed || 0,
+                                        total: p.total || 0,
+                                        percent: p.percent || 0,
+                                    });
+                                }
+                            },
+                        );
+                    } catch (e) {
+                        console.warn('Image compression failed, sending originals:', e?.message);
+                        compressedPhotos = photos;
+                    }
+                }
+
                 // Add photo files (backend expects 'attachments' field name for events)
-                photos.forEach((photo, index) => {
+                compressedPhotos.forEach((photo, index) => {
                     formData.append('attachments', {
                         uri: photo.uri,
                         type: photo.type || 'image/jpeg',
@@ -491,9 +658,13 @@ const CreateAddForm = ({ type, onClose }) => {
                     });
                 });
 
-                console.log('Uploading event ad with', photos.length, 'photos');
+                console.log('Uploading event ad with', compressedPhotos.length, 'photos');
 
-                const response = await eventService.createEventAd(formData);
+                setUploadStage('uploading');
+                setUploadProgress(0);
+                const response = await eventService.createEventAd(formData, (percent) => {
+                    setUploadProgress(percent);
+                });
                 
                 console.log('=== EVENT AD CREATION RESPONSE ===');
                 console.log('Response:', response);
@@ -505,6 +676,7 @@ const CreateAddForm = ({ type, onClose }) => {
                 console.log('==================================');
 
                 if (response.success) {
+                    clearDraft();
                     setModalState({
                         visible: true,
                         title: 'Success! Waiting for Approval',
@@ -562,8 +734,37 @@ const CreateAddForm = ({ type, onClose }) => {
                 formData.append('services_offered', JSON.stringify(selectedTags));
                 formData.append('offers', JSON.stringify(validOffers));
 
+                // Compress photos in small chunks before uploading.
+                let compressedPhotos = photos;
+                if (photos.length > 0) {
+                    setUploadStage('compressing');
+                    try {
+                        compressedPhotos = await compressImagesChunked(
+                            photos,
+                            COMPRESSION_PRESETS?.AD_PHOTOS || {},
+                            // util emits either a number (percent) per
+                            // image or an object {completed,total,percent}
+                            // after each chunk — normalise both shapes.
+                            (p) => {
+                                if (typeof p === 'number') {
+                                    setCompressionProgress((prev) => ({ ...prev, percent: p }));
+                                } else if (p && typeof p === 'object') {
+                                    setCompressionProgress({
+                                        current: p.completed || 0,
+                                        total: p.total || 0,
+                                        percent: p.percent || 0,
+                                    });
+                                }
+                            },
+                        );
+                    } catch (e) {
+                        console.warn('Image compression failed, sending originals:', e?.message);
+                        compressedPhotos = photos;
+                    }
+                }
+
                 // Add photo files (backend expects 'photos' field name)
-                photos.forEach((photo, index) => {
+                compressedPhotos.forEach((photo, index) => {
                     formData.append('photos', {
                         uri: photo.uri,
                         type: photo.type || 'image/jpeg',
@@ -571,11 +772,16 @@ const CreateAddForm = ({ type, onClose }) => {
                     });
                 });
 
-                console.log('Uploading vendor ad with', photos.length, 'photos');
+                console.log('Uploading vendor ad with', compressedPhotos.length, 'photos');
 
-                const response = await vendorService.createVendorAd(formData);
+                setUploadStage('uploading');
+                setUploadProgress(0);
+                const response = await vendorService.createVendorAd(formData, (percent) => {
+                    setUploadProgress(percent);
+                });
 
                 if (response.success) {
+                    clearDraft();
                     setModalState({
                         visible: true,
                         title: 'Success! Waiting for Approval',
@@ -591,8 +797,17 @@ const CreateAddForm = ({ type, onClose }) => {
             setToastState({ visible: true, message: 'An unexpected error occurred. Please try again.', type: 'error' });
         } finally {
             setIsLoading(false);
+            setUploadStage('idle');
+            setUploadProgress(0);
+            setCompressionProgress({ percent: 0, current: 0, total: 0 });
         }
     };
+
+    // Wipe the saved draft after a successful submit so the next time the
+    // user opens the form they get a clean state, not a stale auto-restore.
+    const clearDraft = useCallback(() => {
+        AsyncStorage.removeItem(DRAFT_KEY).catch(() => {});
+    }, [DRAFT_KEY]);
 
     const handleCancel = () => {
         if (onClose) onClose();
@@ -771,25 +986,48 @@ const CreateAddForm = ({ type, onClose }) => {
                                 </Text>
                                 <Icon name="calendar" size={20} color="#ffffff80" />
                             </TouchableOpacity>
-                            {showDatePicker && Platform.OS === 'ios' && (
-                                <View style={styles.datePickerContainer}>
-                                    <DateTimePicker
-                                        value={date}
-                                        mode="date"
-                                        display="spinner"
-                                        onChange={(event, selectedDate) => {
-                                            setShowDatePicker(false);
-                                            if (selectedDate) {
-                                                setDate(selectedDate);
-                                                setDateSelected(true);
-                                            }
-                                        }}
-                                        minimumDate={new Date()}
-                                        themeVariant="dark"
-                                        textColor="#ffffff"
-                                        style={styles.datePicker}
-                                    />
-                                </View>
+                            {/* iOS: wrap the spinner in a sheet Modal with
+                                explicit Cancel / Done buttons. Without this
+                                the picker auto-dismisses after the first
+                                scroll, which makes precise dates impossible. */}
+                            {Platform.OS === 'ios' && (
+                                <Modal
+                                    visible={showDatePicker}
+                                    transparent
+                                    animationType="slide"
+                                    onRequestClose={() => setShowDatePicker(false)}
+                                >
+                                    <View style={styles.dateModalBackdrop}>
+                                        <View style={styles.dateModalSheet}>
+                                            <View style={styles.dateModalHeader}>
+                                                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                                                    <Text style={styles.dateModalCancel}>Cancel</Text>
+                                                </TouchableOpacity>
+                                                <Text style={styles.dateModalTitle}>Select Date</Text>
+                                                <TouchableOpacity
+                                                    onPress={() => {
+                                                        setDateSelected(true);
+                                                        setShowDatePicker(false);
+                                                    }}
+                                                >
+                                                    <Text style={styles.dateModalDone}>Done</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                            <DateTimePicker
+                                                value={date}
+                                                mode="date"
+                                                display="spinner"
+                                                onChange={(event, selectedDate) => {
+                                                    if (selectedDate) setDate(selectedDate);
+                                                }}
+                                                minimumDate={new Date()}
+                                                themeVariant="light"
+                                                textColor="#1a1a1a"
+                                                style={styles.datePicker}
+                                            />
+                                        </View>
+                                    </View>
+                                </Modal>
                             )}
                             {showDatePicker && Platform.OS === 'android' && (
                                 <DateTimePicker
@@ -1448,6 +1686,15 @@ const CreateAddForm = ({ type, onClose }) => {
                     setEventLocationData(extractLocationFields(structured));
                 }}
             />
+
+            {/* Submission progress — covers compression + upload. Driven by
+                handleSubmit; the overlay's own internals decide whether to
+                show the compression bar or the upload bar based on stage. */}
+            <UploadProgressOverlay
+                visible={uploadStage !== 'idle'}
+                stage={uploadStage}
+                progress={uploadStage === 'compressing' ? compressionProgress.percent : uploadProgress}
+            />
         </KeyboardAvoidingView>
     );
 };
@@ -1971,5 +2218,40 @@ const styles = StyleSheet.create({
     },
     datePicker: {
         backgroundColor: 'transparent',
+    },
+    // iOS date picker sheet
+    dateModalBackdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        justifyContent: 'flex-end',
+    },
+    dateModalSheet: {
+        backgroundColor: '#fff',
+        borderTopLeftRadius: 16,
+        borderTopRightRadius: 16,
+        paddingBottom: 24,
+    },
+    dateModalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#EFEFF0',
+    },
+    dateModalTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#1a1a1a',
+    },
+    dateModalCancel: {
+        fontSize: 16,
+        color: '#8E8E93',
+    },
+    dateModalDone: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#2C3D5B',
     },
 });

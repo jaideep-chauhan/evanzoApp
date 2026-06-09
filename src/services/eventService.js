@@ -20,14 +20,19 @@ const formatDuration = (raw) => {
 class EventService {
     // Create event ad. Multipart upload routes through authFetch (native
     // fetch + refresh-on-401), same reason as createVendorAd.
-    async createEventAd(eventData) {
+    // Mirror createVendorAd's onUploadProgress contract: 10 right before
+    // POST, 100 on response. Real upload-byte progress isn't exposed by
+    // fetch; per-image progress lives in the compression step.
+    async createEventAd(eventData, onUploadProgress = null) {
         try {
             if (eventData instanceof FormData) {
+                if (onUploadProgress) onUploadProgress(10);
                 const res = await authFetch(`${API_BASE_URL}/event_ad`, {
                     method: 'POST',
                     body: eventData,
                 });
                 const data = await res.json().catch(() => ({}));
+                if (onUploadProgress) onUploadProgress(100);
                 if (!res.ok) {
                     return {
                         success: false,
