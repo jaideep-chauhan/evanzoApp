@@ -59,12 +59,18 @@ android {
             signingConfig signingConfigs.debug
             // Speed up local-emulator dev: only build native libs for the
             // emulator's ABI (x86_64 on Intel Macs / modern emulators).
-            // Without this the gradle build compiles C++ codegen four
-            // times (armeabi-v7a, arm64-v8a, x86, x86_64) — 20+ minutes
-            // on a clean build. Change to "arm64-v8a" if running on a
-            // physical Android device over USB / wireless debugging.
+            // ndk.abiFilters limits which compiled libs get bundled into
+            // the APK, but CMake still compiles all ABIs by default —
+            // externalNativeBuild.cmake.abiFilters is what actually
+            // prevents the compile and is the real time saver.
+            // Change to "arm64-v8a" for a physical device over USB.
             ndk {
                 abiFilters "x86_64"
+            }
+            externalNativeBuild {
+                cmake {
+                    abiFilters "x86_64"
+                }
             }
         }
         release {
@@ -76,6 +82,11 @@ android {
             // cuts the AAB size roughly in half.
             ndk {
                 abiFilters "armeabi-v7a", "arm64-v8a"
+            }
+            externalNativeBuild {
+                cmake {
+                    abiFilters "armeabi-v7a", "arm64-v8a"
+                }
             }
         }
     }
