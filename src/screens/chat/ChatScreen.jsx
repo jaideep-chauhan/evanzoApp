@@ -106,6 +106,12 @@ export default function ChatScreen({ route, navigation }) {
     const [downloadProgress, setDownloadProgress] = useState({}); // mediaId → 0-100
     const [cacheReady, setCacheReady] = useState(false);
 
+    // Older-message pagination — inverted FlatList's onEndReached fires
+    // when the user scrolls to the visual top (= oldest in the array),
+    // which is where we fetch the next page from.
+    const [loadingMoreMessages, setLoadingMoreMessages] = useState(false);
+    const [hasMoreMessages, setHasMoreMessages] = useState(true);
+
     const theme = useTheme();
 
     // Initialize chat and socket connection
@@ -878,9 +884,11 @@ export default function ChatScreen({ route, navigation }) {
                 replyToMessageId,
             });
 
-            // Send via API — pass reply_to_message_id so the backend can
-            // persist the reply linkage.
-            const result = await chatService.sendMessage(chatId, messageText, 'text', null, replyToMessageId);
+            // Send via API with retry — pass reply_to_message_id so the
+            // backend can persist the reply linkage. sendMessageWithRetry
+            // transparently retries on timeout (up to 2 retries, 1s/2s
+            // backoff). Non-timeout failures bubble straight through.
+            const result = await sendMessageWithRetry(chatId, messageText, replyToMessageId);
             
             console.log('📤 ===== API RESPONSE RECEIVED =====');
             console.log('📤 Full API result:', JSON.stringify(result, null, 2));
@@ -957,6 +965,187 @@ export default function ChatScreen({ route, navigation }) {
         // If timestamp is already formatted string (like "10:30 AM"), return it
         if (!timestamp) return '';
         return timestamp;
+    };
+
+    // -------------------- Date separators --------------------
+    // Renders a "Today" / "Yesterday" / "Monday, Jan 5, 2025" pill
+    // above the first message of each new day in the thread.
+
+    const formatDateSeparator = (timestamp) => {
+        if (!timestamp) return '';
+        let date;
+        if (typeof timestamp === 'number' || (typeof timestamp === 'string' && !isNaN(timestamp))) {
+            date = new Date(parseInt(timestamp));
+        } else {
+            date = new Date(timestamp);
+        }
+        if (isNaN(date.getTime())) return '';
+
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+
+        const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const yesterdayOnly = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+
+        if (dateOnly.getTime() === todayOnly.getTime()) return 'Today';
+        if (dateOnly.getTime() === yesterdayOnly.getTime()) return 'Yesterday';
+        return date.toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+        });
+    };
+
+    const getDateKey = (timestamp) => {
+        if (!timestamp) return '';
+        let date;
+        if (typeof timestamp === 'number' || (typeof timestamp === 'string' && !isNaN(timestamp))) {
+            date = new Date(parseInt(timestamp));
+        } else {
+            date = new Date(timestamp);
+        }
+        if (isNaN(date.getTime())) return '';
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    };
+
+    // True when the current message starts a new calendar day relative
+    // to the chronologically previous (older) message.
+    const shouldShowDateSeparator = (currentMessage, previousMessage) => {
+        if (!previousMessage) return true;
+        return getDateKey(currentMessage.createdAt) !== getDateKey(previousMessage.createdAt);
+    };
+
+    // -------------------- Send retry --------------------
+    // Wraps chatService.sendMessage with up to 2 retries on timeout-class
+    // failures (ECONNABORTED / "timeout" in message). Exponential backoff:
+    // 1s before retry 1, 2s before retry 2. Other errors bubble up
+    // immediately so callers can mark the bubble as failed.
+    const sendMessageWithRetry = async (chatId, messageText, replyToMessageId = null, retryCount = 0) => {
+        try {
+            return await chatService.sendMessage(chatId, messageText, 'text', null, replyToMessageId);
+        } catch (error) {
+            const isTimeout = error.code === 'ECONNABORTED' || (error.message || '').includes('timeout');
+            if (isTimeout && retryCount < 2) {
+                const delay = (retryCount + 1) * 1000;
+                await new Promise((resolve) => setTimeout(resolve, delay));
+                return sendMessageWithRetry(chatId, messageText, replyToMessageId, retryCount + 1);
+            }
+            throw error;
+        }
+    };
+
+    // Manual retry from a tap on a "failed" bubble. Re-sends the same
+    // text and re-uses the temp id so the UI doesn't get a new bubble.
+    const retryMessage = async (failedMessage) => {
+        if (!failedMessage || failedMessage.status !== 'failed') return;
+        const messageText = failedMessage.failedText || failedMessage.text;
+        const tempId = failedMessage.id;
+
+        setMessages((prev) =>
+            prev.map((msg) => (msg.id === tempId ? { ...msg, status: 'sending' } : msg))
+        );
+
+        try {
+            const result = await chatService.sendMessage(chatId, messageText);
+            if (result.success && result.data) {
+                setMessages((prev) =>
+                    prev.map((msg) =>
+                        msg.id === tempId
+                            ? {
+                                  ...msg,
+                                  id: result.data.message_id,
+                                  status: 'sent',
+                                  createdAt: result.data.created_at,
+                                  senderId: result.data.sender_id,
+                              }
+                            : msg
+                    )
+                );
+            } else {
+                setMessages((prev) =>
+                    prev.map((msg) => (msg.id === tempId ? { ...msg, status: 'failed' } : msg))
+                );
+                Alert.alert('Retry Failed', result.message || 'Failed to send message.');
+            }
+        } catch (_e) {
+            setMessages((prev) =>
+                prev.map((msg) => (msg.id === tempId ? { ...msg, status: 'failed' } : msg))
+            );
+            Alert.alert('Retry Failed', 'Network error. Please try again.');
+        }
+    };
+
+    // -------------------- Pagination --------------------
+    // Fetches the next page of older messages and prepends them to the
+    // thread. Hooked into the FlatList's onEndReached — because the list
+    // is `inverted`, the visual top of the screen is the END of the
+    // array, so onEndReached fires there.
+    const loadOlderMessages = async () => {
+        if (loadingMoreMessages || !hasMoreMessages || messages.length === 0) return;
+
+        try {
+            setLoadingMoreMessages(true);
+            const oldestMessage = messages[0];
+            const effectiveUserId = currentUserIdRef.current || currentUserId;
+            const result = await chatService.getChatMessages(chatId, {
+                before: oldestMessage?.id,
+                limit: 30,
+            });
+
+            if (!result.success || !result.data?.results) return;
+            const olderMessages = result.data.results;
+
+            if (olderMessages.length < 30) setHasMoreMessages(false);
+            if (olderMessages.length === 0) return;
+
+            // Filter messages deleted-for-me, mirror what loadMessages
+            // does.
+            const visibleMessages = olderMessages.filter((msg) => {
+                const deletedFor = msg.metadata?.deleted_for || [];
+                return (
+                    !deletedFor.includes(String(effectiveUserId)) &&
+                    !deletedFor.includes(Number(effectiveUserId))
+                );
+            });
+
+            // Format to the local shape — same projection loadMessages
+            // applies. Kept inline to avoid extracting and re-wiring.
+            const formattedOlder = visibleMessages.map((msg) => {
+                const isMyMessage = String(msg.sender_id) === String(effectiveUserId);
+                const processedAttachments = chatService.processAttachments(msg.attachments);
+                return {
+                    id: msg.message_id,
+                    text: msg.content,
+                    timestamp: chatService.formatTime(msg.created_at),
+                    isMe: isMyMessage,
+                    messageType: msg.message_type || 'text',
+                    status: msg.status || 'sent',
+                    attachments: processedAttachments,
+                    sender: msg.sender,
+                    senderId: msg.sender_id,
+                    reactions: msg.reactions || [],
+                    createdAt: msg.created_at,
+                    duration:
+                        (msg.message_type === 'audio' && (msg.metadata?.duration || msg.attachments?.[0]?.metadata?.duration)) || 0,
+                    reply_to_message_id: msg.reply_to_message_id || null,
+                };
+            });
+
+            setMessages((prev) => {
+                const existingIds = new Set(prev.map((m) => m.id));
+                const uniqueOlder = formattedOlder.filter((m) => !existingIds.has(m.id));
+                const merged = [...uniqueOlder, ...prev];
+                merged.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+                return merged;
+            });
+        } catch (e) {
+            console.warn('loadOlderMessages failed:', e?.message);
+        } finally {
+            setLoadingMoreMessages(false);
+        }
     };
 
     const requestGalleryPermission = async () => {
@@ -2128,25 +2317,62 @@ export default function ChatScreen({ route, navigation }) {
         );
     };
 
-    const renderMessage = ({ item }) => {
+    const renderMessage = ({ item, index }) => {
         const isMe = item.isMe;
         // Always show timestamp if it exists
         const showTimestamp = item.timestamp && item.timestamp.length > 0;
 
+        // Date separator — render above the first message of each
+        // calendar day. displayMessages is inverted, so index+1 is the
+        // chronologically older neighbour.
+        const olderMessage = displayMessages[index + 1] || null;
+        const separatorText = shouldShowDateSeparator(item, olderMessage)
+            ? formatDateSeparator(item.createdAt)
+            : '';
+
+        // Tap-to-retry footer on failed bubbles. Only rendered if the
+        // status is 'failed'; pressing it kicks off the same retry path
+        // sendMessage would have used.
+        const failedFooter =
+            item.status === 'failed' ? (
+                <TouchableOpacity onPress={() => retryMessage(item)} style={styles.retryFooter}>
+                    <Icon name="refresh" size={12} color="#C62828" />
+                    <Text style={styles.retryFooterText}>Failed — tap to retry</Text>
+                </TouchableOpacity>
+            ) : null;
+
         // Check if message is deleted
         if (item.deleted && item.text === 'This message was deleted') {
             return (
-                <View style={[styles.messageContainer, isMe ? styles.myMessage : styles.theirMessage]}>
-                    <View style={[styles.messageBubble, styles.deletedBubble]}>
-                        <Text style={styles.deletedText}>
-                            <Icon name="ban" size={12} color="#999" /> This message was deleted
-                        </Text>
+                <View>
+                    {separatorText ? (
+                        <View style={styles.dateSeparatorRow}>
+                            <View style={styles.dateSeparatorPill}>
+                                <Text style={styles.dateSeparatorText}>{separatorText}</Text>
+                            </View>
+                        </View>
+                    ) : null}
+                    <View style={[styles.messageContainer, isMe ? styles.myMessage : styles.theirMessage]}>
+                        <View style={[styles.messageBubble, styles.deletedBubble]}>
+                            <Text style={styles.deletedText}>
+                                <Icon name="ban" size={12} color="#999" /> This message was deleted
+                            </Text>
+                        </View>
                     </View>
                 </View>
             );
         }
 
         return (
+            <View>
+                {separatorText ? (
+                    <View style={styles.dateSeparatorRow}>
+                        <View style={styles.dateSeparatorPill}>
+                            <Text style={styles.dateSeparatorText}>{separatorText}</Text>
+                        </View>
+                    </View>
+                ) : null}
+                {failedFooter}
             <View style={[styles.messageContainer, isMe ? styles.myMessage : styles.theirMessage]}>
                 <TouchableOpacity
                     activeOpacity={0.9}
@@ -2289,6 +2515,7 @@ export default function ChatScreen({ route, navigation }) {
                     )}
                     <MessageStatus status={item.status} isMe={isMe} />
                 </View>
+            </View>
             </View>
         );
     };
@@ -2453,10 +2680,25 @@ export default function ChatScreen({ route, navigation }) {
                     contentContainerStyle={styles.messagesContainer}
                     showsVerticalScrollIndicator={false}
                     inverted
+                    // Pagination — inverted FlatList's onEndReached
+                    // triggers at the visual TOP of the screen (= oldest
+                    // messages in the data array). Pulls the next 30.
+                    onEndReached={loadOlderMessages}
+                    onEndReachedThreshold={0.5}
                     // Inverted flips header/footer visually:
                     // ListHeaderComponent renders at the BOTTOM (below newest message).
                     // That's where the typing indicator belongs (WhatsApp-style).
                     ListHeaderComponent={renderTypingIndicator}
+                    // ListFooterComponent on an inverted list renders at
+                    // the TOP — perfect spot for the "loading older" pill.
+                    ListFooterComponent={
+                        loadingMoreMessages ? (
+                            <View style={styles.loadingOlderRow}>
+                                <ActivityIndicator size="small" color="#999" />
+                                <Text style={styles.loadingOlderText}>Loading older messages…</Text>
+                            </View>
+                        ) : null
+                    }
                     ListEmptyComponent={
                         isLoading ? null : (
                             <View style={styles.emptyContainer}>
@@ -3112,6 +3354,48 @@ const styles = StyleSheet.create({
     repliedMessageText: {
         fontSize: 12,
         color: '#5A6478',
+    },
+    // Date separator pill
+    dateSeparatorRow: {
+        alignItems: 'center',
+        marginVertical: 10,
+    },
+    dateSeparatorPill: {
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 12,
+        backgroundColor: 'rgba(0,0,0,0.45)',
+    },
+    dateSeparatorText: {
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    // Tap-to-retry footer on failed bubbles
+    retryFooter: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-end',
+        gap: 4,
+        marginTop: 2,
+        marginRight: 12,
+    },
+    retryFooterText: {
+        color: '#C62828',
+        fontSize: 11,
+        fontWeight: '600',
+    },
+    // Inline loader rendered at the visual top of the (inverted) list
+    loadingOlderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        gap: 8,
+    },
+    loadingOlderText: {
+        fontSize: 12,
+        color: '#999',
     },
     inputSection: {
         flexDirection: 'row',
