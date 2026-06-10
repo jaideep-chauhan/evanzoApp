@@ -25,7 +25,12 @@ import socketService from '../../services/socketService';
 import chatService from '../../services/chatService';
 import api from '../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CameraRoll } from '@react-native-camera-roll/camera-roll';
 import DocumentPicker from 'react-native-document-picker';
+
+// Persisted map of remote-url → on-device path so media in this chat
+// doesn't have to re-download every time you scroll past it.
+const FILE_CACHE_KEY = '@evanzo_file_cache_mapping';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import FileViewer from 'react-native-file-viewer';
 import RNFS from 'react-native-fs';
@@ -90,6 +95,16 @@ export default function ChatScreen({ route, navigation }) {
     const currentUserIdRef = useRef(null); // Add ref to maintain userId consistency
     const selectedMessageRef = useRef(null); // Add ref to preserve selected message during async operations
     const textInputRef = useRef(null); // Add ref for text input to maintain focus
+
+    // File cache plumbing — in-memory mirror of FILE_CACHE_KEY, plus
+    // per-message state for already-downloaded media and in-flight
+    // download progress. cacheReady gates the load-time bulk check so
+    // we don't race against AsyncStorage.
+    const fileCacheRef = useRef({});
+    const [downloadedMedia, setDownloadedMedia] = useState({}); // url → local fileUri
+    const [downloadProgress, setDownloadProgress] = useState({}); // mediaId → 0-100
+    const [cacheReady, setCacheReady] = useState(false);
+
     const theme = useTheme();
 
     // Initialize chat and socket connection
@@ -127,6 +142,228 @@ export default function ChatScreen({ route, navigation }) {
             socketService.off('message-deleted');
         };
     }, []);
+
+    // -------------------- File download cache --------------------
+    // Persistent cache of remote-url → on-device path. Reads route
+    // through getFileCacheMapping() which keeps an in-memory mirror so
+    // the second access in the same session is sync-ish. Writes hit
+    // AsyncStorage immediately.
+
+    const getFileCacheMapping = async (forceReload = false) => {
+        if (!forceReload && Object.keys(fileCacheRef.current).length > 0) {
+            return fileCacheRef.current;
+        }
+        try {
+            const cache = await AsyncStorage.getItem(FILE_CACHE_KEY);
+            const parsed = cache ? JSON.parse(cache) : {};
+            fileCacheRef.current = parsed;
+            return parsed;
+        } catch (_) {
+            return {};
+        }
+    };
+
+    const setFileCacheMapping = async (url, localPath) => {
+        try {
+            fileCacheRef.current[url] = localPath;
+            await AsyncStorage.setItem(FILE_CACHE_KEY, JSON.stringify(fileCacheRef.current));
+        } catch (_) {}
+    };
+
+    // Stable per-URL filename inside DocumentDirectory (persistent — iOS
+    // won't auto-evict it the way it can with CachesDirectory).
+    const getCachedFilePath = (url, name) => {
+        const urlHash = url.split('/').pop()?.split('?')[0] || Date.now().toString();
+        const ext = name?.split('.').pop() || '';
+        const baseName = (name || 'file')
+            .replace(/\.[^/.]+$/, '')
+            .replace(/[^a-zA-Z0-9]/g, '_')
+            .substring(0, 50);
+        return `${RNFS.DocumentDirectoryPath}/evanzo_media/${baseName}_${urlHash}.${ext}`;
+    };
+
+    const ensureMediaDirectory = async () => {
+        const mediaDir = `${RNFS.DocumentDirectoryPath}/evanzo_media`;
+        const exists = await RNFS.exists(mediaDir);
+        if (!exists) {
+            await RNFS.mkdir(mediaDir);
+        }
+    };
+
+    // Returns the cached fileUri if usable, null otherwise. ph:// (Camera
+    // Roll asset) URIs are always considered present.
+    const isFileCached = async (url, name) => {
+        const cache = await getFileCacheMapping();
+        const cachedPath = cache[url];
+        if (!cachedPath) return null;
+        try {
+            if (cachedPath.startsWith('ph://')) return cachedPath;
+            const pathForRNFS = cachedPath.replace('file://', '');
+            const exists = await RNFS.exists(pathForRNFS);
+            if (exists) {
+                const stat = await RNFS.stat(pathForRNFS);
+                if (stat.size > 100) return cachedPath;
+            }
+        } catch (_) {
+            delete fileCacheRef.current[url];
+        }
+        return null;
+    };
+
+    // Fire-and-forget background download. Used when a new media message
+    // arrives via socket — pre-caches so the tap-to-open is instant.
+    const cacheFileInBackground = async (url, name) => {
+        if (!url || !name) return null;
+        try {
+            const already = await isFileCached(url, name);
+            if (already) return already;
+            const localPath = getCachedFilePath(url, name);
+            const result = await RNFS.downloadFile({
+                fromUrl: url,
+                toFile: localPath,
+                background: true,
+                discretionary: true,
+            }).promise;
+            if (result.statusCode === 200) {
+                await setFileCacheMapping(url, localPath);
+                return localPath;
+            }
+        } catch (_) {}
+        return null;
+    };
+
+    // Foreground download with progress callbacks + Camera Roll save.
+    // Used by the explicit "download / view" tap from the UI. mediaId is
+    // a stable key per-message so downloadProgress[mediaId] drives the
+    // bubble's spinner.
+    const downloadMedia = async (url, name, mediaId) => {
+        if (!url) return null;
+        try {
+            const cached = await isFileCached(url, name || 'media');
+            if (cached) {
+                const fileUri = cached.startsWith('file://') || cached.startsWith('ph://')
+                    ? cached
+                    : `file://${cached}`;
+                setDownloadedMedia(prev => ({ ...prev, [url]: fileUri }));
+                return fileUri;
+            }
+
+            await ensureMediaDirectory();
+            const localPath = getCachedFilePath(url, name || 'media');
+            setDownloadProgress(prev => ({ ...prev, [mediaId]: 1 }));
+
+            let totalContentLength = 0;
+            const downloadTask = RNFS.downloadFile({
+                fromUrl: url,
+                toFile: localPath,
+                background: false,
+                discretionary: false,
+                cacheable: false,
+                begin: (res) => {
+                    totalContentLength = res.contentLength || 0;
+                    setDownloadProgress(prev => ({ ...prev, [mediaId]: 5 }));
+                },
+                progress: (res) => {
+                    const contentLen = res.contentLength || totalContentLength;
+                    const percent = contentLen > 0
+                        ? Math.min(99, Math.round((res.bytesWritten / contentLen) * 100))
+                        : Math.min(99, Math.round(res.bytesWritten / 100000));
+                    setDownloadProgress(prev => ({ ...prev, [mediaId]: percent }));
+                },
+                progressInterval: 50,
+                progressDivider: 1,
+            });
+
+            const result = await downloadTask.promise;
+            setDownloadProgress(prev => {
+                const next = { ...prev };
+                delete next[mediaId];
+                return next;
+            });
+
+            if (result.statusCode === 200) {
+                const exists = await RNFS.exists(localPath);
+                const stat = exists ? await RNFS.stat(localPath) : null;
+                if (exists && stat?.size > 100) {
+                    const fileUri = localPath.startsWith('file://') ? localPath : `file://${localPath}`;
+                    // WhatsApp-style: also save to Camera Roll so the
+                    // user can find it in Photos and it survives an app
+                    // reinstall. Falls through to the plain fileUri if
+                    // Camera Roll save fails (permission denied / etc.).
+                    let galleryUri = fileUri;
+                    try {
+                        const ext = (name || '').toLowerCase().split('.').pop();
+                        const isVideo = ['mp4', 'mov', 'avi', 'mkv', 'm4v'].includes(ext);
+                        const saved = await CameraRoll.saveAsset(fileUri, {
+                            type: isVideo ? 'video' : 'photo',
+                            album: 'EVNZO',
+                        });
+                        galleryUri = saved?.node?.image?.uri || saved || fileUri;
+                    } catch (_) {}
+                    await setFileCacheMapping(url, galleryUri);
+                    setDownloadedMedia(prev => ({ ...prev, [url]: galleryUri }));
+                    return galleryUri;
+                }
+            }
+        } catch (_) {
+            setDownloadProgress(prev => {
+                const next = { ...prev };
+                delete next[mediaId];
+                return next;
+            });
+        }
+        return null;
+    };
+
+    // Bulk-resolve cache state for every media message in the thread.
+    // Called once after loadMessages so the UI can render already-
+    // downloaded media (image/video/document/file) without per-bubble
+    // round-trips.
+    const loadCachedMediaStatus = async (messages) => {
+        const mediaMessages = messages.filter(
+            (m) => ['image', 'video', 'document', 'file'].includes(m.messageType) && m.attachments?.[0]
+        );
+        if (mediaMessages.length === 0) return;
+        const cache = await getFileCacheMapping(true);
+        const cachedMedia = {};
+        for (const msg of mediaMessages) {
+            const url = msg.attachments[0].url || msg.attachments[0].uri;
+            const altUrl = msg.attachments[0].uri || msg.attachments[0].url;
+            if (!url || url.startsWith('file://') || url.startsWith('ph://')) continue;
+            const cachedPath = cache[url] || cache[altUrl];
+            if (!cachedPath) continue;
+            try {
+                if (cachedPath.startsWith('ph://')) {
+                    cachedMedia[url] = cachedPath;
+                    continue;
+                }
+                const pathForCheck = cachedPath.replace('file://', '');
+                const exists = await RNFS.exists(pathForCheck);
+                if (exists) {
+                    const stat = await RNFS.stat(pathForCheck);
+                    if (stat.size > 100) {
+                        cachedMedia[url] = cachedPath.startsWith('file://') ? cachedPath : `file://${cachedPath}`;
+                    }
+                } else {
+                    delete fileCacheRef.current[url];
+                    await AsyncStorage.setItem(FILE_CACHE_KEY, JSON.stringify(fileCacheRef.current));
+                }
+            } catch (_) {}
+        }
+        setDownloadedMedia(prev => ({ ...prev, ...cachedMedia }));
+    };
+
+    // Preload the mapping + create the media dir on mount.
+    useEffect(() => {
+        (async () => {
+            await ensureMediaDirectory();
+            await getFileCacheMapping();
+            setCacheReady(true);
+        })();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // -------------------- end file download cache --------------------
 
     const initializeChat = async () => {
         try {
@@ -349,6 +586,14 @@ export default function ChatScreen({ route, navigation }) {
                 // long threads (50 newest is enough for the open-first-paint).
                 const toCache = sortedMessages.slice(-50);
                 setCached(chatCacheKey(chatIdToLoad || chatId), toCache).catch(() => {});
+
+                // Resolve which media in this thread is already on disk so
+                // the next render can short-circuit downloads. Runs after
+                // setMessages so the UI paints first; fileCacheRef is
+                // already preloaded by the mount effect.
+                loadCachedMediaStatus(sortedMessages).catch((e) =>
+                    console.warn('loadCachedMediaStatus failed:', e?.message)
+                );
             }
         } catch (error) {
             console.error('Failed to load messages:', error);
@@ -440,7 +685,19 @@ export default function ChatScreen({ route, navigation }) {
 
                 return [...prev, newMsg];
             });
-            
+
+            // If the incoming message is media, fire-and-forget a background
+            // download so the file is on disk by the time the user taps it.
+            if (
+                ['image', 'video', 'document', 'file'].includes(newMsg.messageType) &&
+                newMsg.attachments?.[0]?.url
+            ) {
+                cacheFileInBackground(
+                    newMsg.attachments[0].url,
+                    newMsg.attachments[0].name || 'file'
+                ).catch(() => {});
+            }
+
             // Mark as read since chat is open
             chatService.markMessageAsRead(data.message.message_id);
 
