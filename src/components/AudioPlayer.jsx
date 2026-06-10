@@ -1,21 +1,21 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
     View,
     Text,
     TouchableOpacity,
     StyleSheet,
     ActivityIndicator,
+    Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import Sound from 'react-native-sound';
+import RNFS from 'react-native-fs';
 import audioManager from '../services/audioManager';
+import { fixLocalUrl } from '../services/api';
 
-// Stable id per <AudioPlayer> so audioManager can coordinate pauses
-// across the chat thread.
-let _audioPlayerSeq = 0;
-
-const AudioPlayer = ({ audioUrl, duration, isMe }) => {
-    const audioIdRef = useRef(`audio-${++_audioPlayerSeq}`);
+const AudioPlayer = ({ audioUrl: rawAudioUrl, duration, isMe }) => {
+    // Fix old local IP addresses in the URL
+    const audioUrl = useMemo(() => fixLocalUrl(rawAudioUrl), [rawAudioUrl]);
     const [isPlaying, setIsPlaying] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
@@ -24,28 +24,35 @@ const AudioPlayer = ({ audioUrl, duration, isMe }) => {
     const soundRef = useRef(null);
     const intervalRef = useRef(null);
 
+    // Generate unique ID for this audio player instance
+    const audioId = useMemo(() => audioUrl || `audio_${Date.now()}_${Math.random()}`, [audioUrl]);
+
+    // Stop playback function (called by audioManager when another audio starts)
+    const stopPlayback = useCallback(() => {
+        if (soundRef.current) {
+            soundRef.current.pause();
+            soundRef.current.setCurrentTime(0);
+        }
+        setIsPlaying(false);
+        setCurrentTime(0);
+        if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+        }
+    }, []);
+
     useEffect(() => {
-        // iOS AVAudioSession setup. `mixWithOthers: false` REPLACES the
-        // current session category, which is what we need: after the
-        // VoiceRecorder's native module puts the session in record-only
-        // mode, mixing-true would keep it there and playback would fail
-        // with OSStatus -10875 (kAudioSessionIncompatibleCategory). false
-        // forces a switch back to Playback.
+        // Enable playback in silence mode (iOS)
+        // Use 'Playback' for normal playback - don't mix with other audio to avoid conflicts
         Sound.setCategory('Playback', false);
 
-        // Register with the global audio manager so playing a new voice
-        // note auto-pauses any other one currently playing in this thread.
-        const id = audioIdRef.current;
-        audioManager.register(id, () => {
-            if (soundRef.current && isPlaying) {
-                soundRef.current.pause();
-                setIsPlaying(false);
-                if (intervalRef.current) clearInterval(intervalRef.current);
-            }
-        });
+        // Register this audio player with the audio manager
+        audioManager.register(audioId, stopPlayback);
 
         return () => {
-            audioManager.unregister(id);
+            // Unregister from audio manager
+            audioManager.unregister(audioId);
+
             if (soundRef.current) {
                 soundRef.current.release();
                 soundRef.current = null;
@@ -54,25 +61,129 @@ const AudioPlayer = ({ audioUrl, duration, isMe }) => {
                 clearInterval(intervalRef.current);
             }
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [audioId, stopPlayback]);
+
+    // Download remote audio file to local cache for reliable playback on iOS
+    const downloadAudioToCache = async (url) => {
+        try {
+            // Generate a cache filename from the URL - ensure it has .m4a extension
+            let urlHash = url.split('/').pop() || `audio_${Date.now()}.m4a`;
+            // Ensure the file has proper extension
+            if (!urlHash.endsWith('.m4a') && !urlHash.endsWith('.mp3') && !urlHash.endsWith('.wav')) {
+                urlHash = `${urlHash}.m4a`;
+            }
+            const cacheDir = RNFS.CachesDirectoryPath;
+            const localPath = `${cacheDir}/${urlHash}`;
+
+
+            // Check if file already exists in cache
+            const exists = await RNFS.exists(localPath);
+            if (exists) {
+                const fileInfo = await RNFS.stat(localPath);
+                // Return file:// URL for iOS
+                return Platform.OS === 'ios' ? localPath : `file://${localPath}`;
+            }
+
+
+            // Download the file
+            const downloadResult = await RNFS.downloadFile({
+                fromUrl: url,
+                toFile: localPath,
+                background: false,
+                discretionary: false,
+            }).promise;
+
+
+            if (downloadResult.statusCode === 200) {
+                const fileInfo = await RNFS.stat(localPath);
+                // Return file:// URL for iOS
+                return Platform.OS === 'ios' ? localPath : `file://${localPath}`;
+            } else {
+                throw new Error(`Download failed: ${downloadResult.statusCode}`);
+            }
+        } catch (error) {
+            throw error;
+        }
+    };
 
     const loadSound = () => {
-        return new Promise((resolve, reject) => {
-            console.log('Loading audio from:', audioUrl);
+        return new Promise(async (resolve, reject) => {
+            // Validate and fix URL if needed
+            let validUrl = audioUrl;
 
-            // For remote URLs, pass null as basePath
-            // For local files, pass empty string
-            const isRemoteUrl = audioUrl.startsWith('http://') || audioUrl.startsWith('https://');
-            const basePath = isRemoteUrl ? null : '';
+            // Fix various malformed URL patterns
+            if (validUrl) {
+                // Fix duplicate domain (e.g., https://api.evnzo.com.evnzo.com -> https://api.evnzo.com)
+                if (validUrl.includes('api.evnzo.com.evnzo.com')) {
+                    validUrl = validUrl.replace('api.evnzo.com.evnzo.com', 'api.evnzo.com');
+                }
 
-            const sound = new Sound(audioUrl, basePath, (error) => {
+                // Fix malformed protocol (e.g., https:/.evnzo.com -> https://api.evnzo.com)
+                if (validUrl.includes('https:/.') || validUrl.includes('https:/e')) {
+                    // Extract just the path starting from /uploads or /api
+                    const uploadsIndex = validUrl.indexOf('/uploads');
+                    const apiIndex = validUrl.indexOf('/api/uploads');
+                    const pathStart = apiIndex !== -1 ? apiIndex : uploadsIndex;
+
+                    if (pathStart !== -1) {
+                        let path = validUrl.substring(pathStart);
+                        // Remove /api prefix if present since static files don't need it
+                        if (path.startsWith('/api/uploads')) {
+                            path = path.replace('/api/uploads', '/uploads');
+                        }
+                        validUrl = `https://api.evnzo.com${path}`;
+                    }
+                }
+            }
+
+            // Ensure URL has proper protocol
+            if (validUrl && !validUrl.startsWith('http://') && !validUrl.startsWith('https://') && !validUrl.startsWith('file://')) {
+                // If it's a path starting with /, prepend the base URL
+                if (validUrl.startsWith('/')) {
+                    validUrl = `https://api.evnzo.com${validUrl}`;
+                }
+            }
+
+
+            if (!validUrl) {
+                reject(new Error('No valid audio URL'));
+                return;
+            }
+
+            const isRemoteUrl = validUrl.startsWith('http://') || validUrl.startsWith('https://');
+            let audioPath = validUrl;
+            let basePath = isRemoteUrl ? null : '';
+
+
+            // On iOS, download remote audio files to cache for reliable playback
+            // This fixes the OSStatus -10875 error with M4A files
+            if (isRemoteUrl) {
+                try {
+                    audioPath = await downloadAudioToCache(validUrl);
+                    basePath = ''; // Local file, empty base path
+                } catch (downloadError) {
+                    // Fall back to direct streaming
+                    audioPath = validUrl;
+                    basePath = null;
+                }
+            }
+
+
+            // Add timeout for loading audio
+            const loadTimeout = setTimeout(() => {
+                reject(new Error('Audio load timeout'));
+            }, 30000); // 30 second timeout
+
+            const sound = new Sound(audioPath, basePath, (error) => {
+                clearTimeout(loadTimeout);
                 if (error) {
-                    console.error('Failed to load sound:', error);
+                    // If the error is about file type, try with different extension hint
+                    if (error.code === 'ENSOSSTATUSERRORDOMAIN-10875' ||
+                        (error.message && error.message.includes('10875'))) {
+                    }
                     reject(error);
                     return;
                 }
-                console.log('Sound loaded successfully, duration:', sound.getDuration());
                 setTotalDuration(Math.floor(sound.getDuration()));
                 soundRef.current = sound;
                 resolve(sound);
@@ -87,50 +198,26 @@ const AudioPlayer = ({ audioUrl, duration, isMe }) => {
                 if (soundRef.current) {
                     soundRef.current.pause();
                     setIsPlaying(false);
+                    // Notify audio manager that this audio stopped
+                    audioManager.onStop(audioId);
                     if (intervalRef.current) {
                         clearInterval(intervalRef.current);
+                        intervalRef.current = null;
                     }
-                    audioManager.onStop(audioIdRef.current);
                 }
             } else {
                 // Play
                 setIsLoading(true);
 
-                // Re-assert Playback category right before playing.
-                // Sound.setCategory is fire-and-forget JS → native, so we
-                // yield to the event loop afterwards to give the iOS bridge
-                // a tick to actually flip AVAudioSession before the
-                // RNSound prepare runs. Without this delay, prepare can
-                // fail with OSStatus -10875 (kAudioSessionIncompatible
-                // Category) on the simulator and occasionally on device.
-                Sound.setCategory('Playback', false);
-                await new Promise((r) => setTimeout(r, 0));
-
-                // Tell the audio manager we're starting — it pauses any
-                // other AudioPlayer currently playing in this thread so
-                // they don't fight for the audio session.
-                audioManager.onPlay(audioIdRef.current);
+                // Notify audio manager - this will stop any other playing audio
+                audioManager.onPlay(audioId);
 
                 // If sound is already loaded, reset it
                 if (soundRef.current) {
                     soundRef.current.setCurrentTime(0);
                 } else {
-                    // Load the sound. If prepare fails with -10875, the
-                    // session category JS just asked for hasn't landed
-                    // yet — retry once after a longer settle.
-                    try {
-                        await loadSound();
-                    } catch (e) {
-                        const code = e?.code || '';
-                        const msg = (e?.message || '').toString();
-                        const isSessionMismatch =
-                            code.includes('-10875') || msg.includes('-10875');
-                        if (!isSessionMismatch) throw e;
-                        console.log('AudioPlayer: -10875 on prepare, retrying after settle');
-                        Sound.setCategory('Playback', false);
-                        await new Promise((r) => setTimeout(r, 150));
-                        await loadSound();
-                    }
+                    // Load the sound
+                    await loadSound();
                 }
 
                 if (!soundRef.current) {
@@ -139,9 +226,7 @@ const AudioPlayer = ({ audioUrl, duration, isMe }) => {
 
                 soundRef.current.play((success) => {
                     if (success) {
-                        console.log('Playback finished successfully');
                     } else {
-                        console.log('Playback failed - reloading sound');
                         // Release and reload the sound for next play
                         if (soundRef.current) {
                             soundRef.current.release();
@@ -150,10 +235,12 @@ const AudioPlayer = ({ audioUrl, duration, isMe }) => {
                     }
                     setIsPlaying(false);
                     setCurrentTime(0);
+                    // Notify audio manager that playback finished
+                    audioManager.onStop(audioId);
                     if (intervalRef.current) {
                         clearInterval(intervalRef.current);
+                        intervalRef.current = null;
                     }
-                    audioManager.onStop(audioIdRef.current);
                 });
 
                 setIsPlaying(true);
@@ -169,9 +256,10 @@ const AudioPlayer = ({ audioUrl, duration, isMe }) => {
                 }, 100);
             }
         } catch (error) {
-            console.error('Error playing audio:', error);
             setIsLoading(false);
             setIsPlaying(false);
+            // Notify audio manager of stop on error
+            audioManager.onStop(audioId);
             // Release sound on error
             if (soundRef.current) {
                 soundRef.current.release();
