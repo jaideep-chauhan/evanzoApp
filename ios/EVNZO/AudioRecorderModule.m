@@ -135,6 +135,27 @@ RCT_EXPORT_METHOD(startRecording:(RCTPromiseResolveBlock)resolve
 
             NSLog(@"🎙️ [AudioRecorder] Record method returned: %d", success);
 
+            // Simulator can be flaky here — AVAudioRecorder occasionally
+            // returns NO on first try because the AVAudioSession is in a
+            // weird state left over from react-native-sound's playback.
+            // Reset the session and try once more before giving up.
+            if (!success) {
+                NSLog(@"⚠️ [AudioRecorder] record returned NO, resetting session and retrying once");
+                NSError *retryErr = nil;
+                [audioSession setActive:NO
+                            withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation
+                                  error:&retryErr];
+                retryErr = nil;
+                [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord
+                              withOptions:AVAudioSessionCategoryOptionDefaultToSpeaker
+                                    error:&retryErr];
+                retryErr = nil;
+                [audioSession setActive:YES error:&retryErr];
+                [self->_audioRecorder prepareToRecord];
+                success = [self->_audioRecorder record];
+                NSLog(@"🔁 [AudioRecorder] Retry record returned: %d", success);
+            }
+
             if (success) {
                 NSLog(@"✅ [AudioRecorder] Recording started successfully!");
 
@@ -147,7 +168,7 @@ RCT_EXPORT_METHOD(startRecording:(RCTPromiseResolveBlock)resolve
 
                 resolve(@{@"success": @YES});
             } else {
-                NSLog(@"❌ [AudioRecorder] Failed to start recording");
+                NSLog(@"❌ [AudioRecorder] Failed to start recording (after retry)");
                 reject(@"recording_start_error", @"Failed to start recording - check microphone availability", nil);
             }
         });

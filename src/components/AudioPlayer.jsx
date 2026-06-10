@@ -96,11 +96,15 @@ const AudioPlayer = ({ audioUrl, duration, isMe }) => {
                 // Play
                 setIsLoading(true);
 
-                // Re-assert Playback category right before playing — the
-                // VoiceRecorder native module may have flipped the session
-                // to record-only since this component mounted. Without
-                // this, OSStatus -10875 fires on play.
+                // Re-assert Playback category right before playing.
+                // Sound.setCategory is fire-and-forget JS → native, so we
+                // yield to the event loop afterwards to give the iOS bridge
+                // a tick to actually flip AVAudioSession before the
+                // RNSound prepare runs. Without this delay, prepare can
+                // fail with OSStatus -10875 (kAudioSessionIncompatible
+                // Category) on the simulator and occasionally on device.
                 Sound.setCategory('Playback', false);
+                await new Promise((r) => setTimeout(r, 0));
 
                 // Tell the audio manager we're starting — it pauses any
                 // other AudioPlayer currently playing in this thread so
@@ -111,8 +115,22 @@ const AudioPlayer = ({ audioUrl, duration, isMe }) => {
                 if (soundRef.current) {
                     soundRef.current.setCurrentTime(0);
                 } else {
-                    // Load the sound
-                    await loadSound();
+                    // Load the sound. If prepare fails with -10875, the
+                    // session category JS just asked for hasn't landed
+                    // yet — retry once after a longer settle.
+                    try {
+                        await loadSound();
+                    } catch (e) {
+                        const code = e?.code || '';
+                        const msg = (e?.message || '').toString();
+                        const isSessionMismatch =
+                            code.includes('-10875') || msg.includes('-10875');
+                        if (!isSessionMismatch) throw e;
+                        console.log('AudioPlayer: -10875 on prepare, retrying after settle');
+                        Sound.setCategory('Playback', false);
+                        await new Promise((r) => setTimeout(r, 150));
+                        await loadSound();
+                    }
                 }
 
                 if (!soundRef.current) {
