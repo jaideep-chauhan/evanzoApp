@@ -21,7 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import SearchHeader from './SearchHeader';
 import Tabs from './Tabs';
 import VendorCard from './VendorCard';
-import LocationSearchModal from './LocationSearchModal';
+import LocationSelector from '../../components/LocationSelector';
 import CategorySelectionModalEnhanced from './CategorySelectionModalEnhanced';
 import PreSavedMessage from '../profile/PreSavedMessage';
 import img from '../../assets/images/dummy.png'; // Fallback image
@@ -758,12 +758,17 @@ export default function Vendor() {
                 </View>
             </Animated.View>
 
-            {/* Location Search Modal */}
-            <LocationSearchModal
+            {/* Location picker — same component used by the Create Ad form,
+                driven externally by the Location filter chip. The picker
+                emits a payload like {formattedLocation, country, state, ...};
+                we collapse it to a single string for the listing filter. */}
+            <LocationSelector
+                externallyControlled
                 visible={showLocationModal}
                 onClose={() => setShowLocationModal(false)}
-                onLocationSelect={handleLocationSelect}
-                currentLocation={selectedLocation}
+                onLocationChange={(payload) =>
+                    handleLocationSelect(payload?.formattedLocation || null)
+                }
             />
 
             {/* Pre Save Modal */}

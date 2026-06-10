@@ -1,21 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTheme } from '../../ThemeContext';
 
 export default function Tabs({ tabs = [], onTabPress, defaultActive }) {
     const theme = useTheme();
-    const [activeIndex, setActiveIndex] = useState(
-        typeof defaultActive === 'number' && defaultActive >= 0 && defaultActive < tabs.length ? defaultActive : null
-    );
 
-    useEffect(() => {
-        if (typeof defaultActive === 'number' && defaultActive >= 0 && defaultActive < tabs.length) {
-            setActiveIndex(defaultActive);
-        }
-    }, [defaultActive, tabs.length]);
+    // The active highlight is fully parent-controlled. A tap only opens the
+    // filter modal — it does NOT mark the tab active. The tab turns active
+    // only after the parent flips `defaultActive` because a real filter
+    // value was chosen. Closing the modal without choosing leaves the
+    // parent's activeTab untouched, so the tab correctly stays inactive.
+    const activeIndex =
+        typeof defaultActive === 'number' && defaultActive >= 0 && defaultActive < tabs.length
+            ? defaultActive
+            : null;
 
     const handlePress = (index) => {
-        setActiveIndex(index);
         onTabPress && onTabPress(tabs[index], index);
     };
 

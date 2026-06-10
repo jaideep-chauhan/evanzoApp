@@ -1356,6 +1356,27 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
+  - react-native-cameraroll (7.10.2):
+    - DoubleConversion
+    - glog
+    - hermes-engine
+    - RCT-Folly (= 2024.11.18.00)
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - Yoga
   - react-native-compressor (1.13.0):
     - DoubleConversion
     - glog
@@ -1420,6 +1441,27 @@ PODS:
     - ReactCommon/turbomodule/core
     - Yoga
   - react-native-document-picker (9.3.1):
+    - DoubleConversion
+    - glog
+    - hermes-engine
+    - RCT-Folly (= 2024.11.18.00)
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - Yoga
+  - react-native-geolocation (3.4.0):
     - DoubleConversion
     - glog
     - hermes-engine
@@ -1994,7 +2036,7 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
-  - RNDateTimePicker (8.5.0):
+  - RNDateTimePicker (8.6.0):
     - DoubleConversion
     - glog
     - hermes-engine
@@ -2122,6 +2164,27 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - TOCropViewController (~> 2.8.0)
+    - Yoga
+  - RNKeychain (10.0.0):
+    - DoubleConversion
+    - glog
+    - hermes-engine
+    - RCT-Folly (= 2024.11.18.00)
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
     - Yoga
   - RNLocalize (3.6.0):
     - DoubleConversion
@@ -2331,10 +2394,12 @@ DEPENDENCIES:
   - React-Mapbuffer (from `../node_modules/react-native/ReactCommon`)
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
   - "react-native-blur (from `../node_modules/@react-native-community/blur`)"
+  - "react-native-cameraroll (from `../node_modules/@react-native-camera-roll/camera-roll`)"
   - react-native-compressor (from `../node_modules/react-native-compressor`)
   - react-native-contacts (from `../node_modules/react-native-contacts`)
   - react-native-date-picker (from `../node_modules/react-native-date-picker`)
   - react-native-document-picker (from `../node_modules/react-native-document-picker`)
+  - "react-native-geolocation (from `../node_modules/@react-native-community/geolocation`)"
   - react-native-image-picker (from `../node_modules/react-native-image-picker`)
   - "react-native-progress-bar-android (from `../node_modules/@react-native-community/progress-bar-android`)"
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
@@ -2383,6 +2448,7 @@ DEPENDENCIES:
   - RNGoogleMobileAds (from `../node_modules/react-native-google-mobile-ads`)
   - "RNGoogleSignin (from `../node_modules/@react-native-google-signin/google-signin`)"
   - RNImageCropPicker (from `../node_modules/react-native-image-crop-picker`)
+  - RNKeychain (from `../node_modules/react-native-keychain`)
   - RNLocalize (from `../node_modules/react-native-localize`)
   - "RNNotifee (from `../node_modules/@notifee/react-native`)"
   - RNScreens (from `../node_modules/react-native-screens`)
@@ -2497,6 +2563,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/microtasks"
   react-native-blur:
     :path: "../node_modules/@react-native-community/blur"
+  react-native-cameraroll:
+    :path: "../node_modules/@react-native-camera-roll/camera-roll"
   react-native-compressor:
     :path: "../node_modules/react-native-compressor"
   react-native-contacts:
@@ -2505,6 +2573,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-date-picker"
   react-native-document-picker:
     :path: "../node_modules/react-native-document-picker"
+  react-native-geolocation:
+    :path: "../node_modules/@react-native-community/geolocation"
   react-native-image-picker:
     :path: "../node_modules/react-native-image-picker"
   react-native-progress-bar-android:
@@ -2601,6 +2671,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/@react-native-google-signin/google-signin"
   RNImageCropPicker:
     :path: "../node_modules/react-native-image-crop-picker"
+  RNKeychain:
+    :path: "../node_modules/react-native-keychain"
   RNLocalize:
     :path: "../node_modules/react-native-localize"
   RNNotifee:
@@ -2675,10 +2747,12 @@ SPEC CHECKSUMS:
   React-Mapbuffer: 8b09f543e16b4b46f014113e90dfa7a8d75892b6
   React-microtasksnativemodule: c552278ee39f89a9fc4ffbe0bf9316d1cf3c8729
   react-native-blur: 6782cb12b39a0200ad2a782fb9a5529c2c83c33b
+  react-native-cameraroll: 507590e3787c4215126ebedf0392b6aa4d1e2b98
   react-native-compressor: f0ae2b52452d1ebb320dc0da11cdfe03df59a201
   react-native-contacts: a9b0fcc6951611329f80dcf98080de83a40d66eb
   react-native-date-picker: 88d5c7fc7a0e9f27edd698e35b8365c8bc2a8fc6
   react-native-document-picker: 6d3991d663e28714988c41696490e6fb1c525fbc
+  react-native-geolocation: 457c6cc4462cffdfc4e63a2b52ec95497eab79cc
   react-native-image-picker: 3a03f96b11ef2b727d3d58a7ed009900b0a56a52
   react-native-progress-bar-android: 092e6a794f158642692f25c8839d9aa8eb779afb
   react-native-safe-area-context: 4a867695ce0b837b7fedc90c5629d4322be4222f
@@ -2718,7 +2792,7 @@ SPEC CHECKSUMS:
   RNCCheckbox: 471ebdc33884c084f362615c1ef3507496cc07f1
   RNCClipboard: 4d8c76e488f1491e5235901b7028ff53a678bd94
   RNCPicker: 2b130b544885a6db38c17358ae52096ca0e5e791
-  RNDateTimePicker: 4207253470d70ed609c0cda368aac0efefb5652e
+  RNDateTimePicker: bd15bf50938cf7129e45608036d23a9eb65ce63a
   RNFastImage: 5c9c9fed9c076e521b3f509fe79e790418a544e8
   RNFBApp: 29f12d21b6166565e03b4ae36bc070498d6e159d
   RNFBMessaging: b670e479f1c567278f53398061d604754379f530
@@ -2727,6 +2801,7 @@ SPEC CHECKSUMS:
   RNGoogleMobileAds: 543668d8581051d5b282d978cafac6cbacbae662
   RNGoogleSignin: dd7ff863f8c9760d3f0fb86bcfa86cf28e322e33
   RNImageCropPicker: 69f597860692556dba373c36145b7d8383196aba
+  RNKeychain: 774184659ed098fd715a4976d44e2003c829934f
   RNLocalize: 8b2335fce314155cc15f03530e68b0bf228a2612
   RNNotifee: 4a6ee5c7deaf00e005050052d73ee6315dff7ec9
   RNScreens: 6fccc0cccca74cac6db36944aa4298f11ae465b5

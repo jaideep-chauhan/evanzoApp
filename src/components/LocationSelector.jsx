@@ -25,13 +25,29 @@ const LocationSelector = ({
     initialCity = '',
     style,
     inputStyle,
+    // Externally-controlled mode for list-screen filters:
+    //   <LocationSelector externallyControlled visible={open} onClose={...} />
+    // Skips rendering the trigger button and uses parent-driven visibility,
+    // so the same picker UI is reused without the inline dropdown button.
+    externallyControlled = false,
+    visible: visibleProp,
+    onClose,
 }) => {
     const [selected, setSelected] = useState(() => {
         // Show initial value if any of the initial fields were provided
         const display = [initialCity, initialState, initialCountry].filter(Boolean).join(', ');
         return display ? { display_name: display, name: initialCity || initialState || initialCountry } : null;
     });
-    const [showModal, setShowModal] = useState(false);
+    const [internalShow, setInternalShow] = useState(false);
+    // Parent controls visibility when externallyControlled, else this component owns it.
+    const showModal = externallyControlled ? !!visibleProp : internalShow;
+    const setShowModal = (next) => {
+        if (externallyControlled) {
+            if (!next && onClose) onClose();
+        } else {
+            setInternalShow(next);
+        }
+    };
     const [query, setQuery] = useState('');
     const [results, setResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -120,22 +136,28 @@ const LocationSelector = ({
 
     return (
         <View style={[styles.container, style]}>
-            <TouchableOpacity
-                style={[styles.dropdownButton, inputStyle]}
-                onPress={() => setShowModal(true)}
-                activeOpacity={0.8}
-            >
-                <View style={styles.dropdownContent}>
-                    <Text style={styles.dropdownLabel}>Location</Text>
-                    <Text
-                        style={[styles.dropdownText, !selected && styles.placeholderText]}
-                        numberOfLines={1}
-                    >
-                        {selected?.display_name || 'Search city, region or country'}
-                    </Text>
-                </View>
-                <Icon name="search" size={20} color="#ffffff80" />
-            </TouchableOpacity>
+            {/* Trigger button is only for inline (Create Ad) usage. In
+                externally-controlled mode the parent (a filter chip on the
+                listing page) decides when the modal opens, so we skip the
+                button entirely. */}
+            {!externallyControlled && (
+                <TouchableOpacity
+                    style={[styles.dropdownButton, inputStyle]}
+                    onPress={() => setShowModal(true)}
+                    activeOpacity={0.8}
+                >
+                    <View style={styles.dropdownContent}>
+                        <Text style={styles.dropdownLabel}>Location</Text>
+                        <Text
+                            style={[styles.dropdownText, !selected && styles.placeholderText]}
+                            numberOfLines={1}
+                        >
+                            {selected?.display_name || 'Search city, region or country'}
+                        </Text>
+                    </View>
+                    <Icon name="search" size={20} color="#ffffff80" />
+                </TouchableOpacity>
+            )}
 
             <Modal
                 visible={showModal}

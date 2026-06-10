@@ -20,7 +20,7 @@ import { BANNER_LIST_INTERVAL } from '../../services/adsConfig';
 const EVENTS_CACHE_KEY = 'events:public';
 import Tabs from '../vendors/Tabs';
 import EventCard from './EventCard';
-import LocationSearchModal from '../vendors/LocationSearchModal';
+import LocationSelector from '../../components/LocationSelector';
 import DateRangePickerModal from '../vendors/DateRangePickerModal';
 import CategorySelectionModalEnhanced from '../vendors/CategorySelectionModalEnhanced';
 import { useNavigation } from '@react-navigation/native';
@@ -414,7 +414,11 @@ export default function Events() {
 
     const handleTabPress = (tabLabel, tabIndex) => {
         console.log('Selected tab:', tabLabel);
-        setActiveTab(tabIndex);
+        // Don't activate the tab here — that's what was causing closed-
+        // without-selecting modals to leave the tab stuck active.
+        // The per-filter select handlers (handleLocationSelect,
+        // handleDateRangeSelect, handleCategorySelect) flip activeTab
+        // only when a real value is committed.
 
         if (tabLabel === 'Location') {
             setShowLocationModal(true);
@@ -724,6 +728,10 @@ export default function Events() {
                                         <TouchableOpacity
                                             onPress={() => {
                                                 setSelectedDateRange(null);
+                                                // De-highlight the Date tab when its chip is cleared,
+                                                // mirroring how clearing the Location/Category chips
+                                                // resets their respective tabs.
+                                                setActiveTab(null);
                                                 const newFilters = { ...currentFilters };
                                                 delete newFilters.dateFrom;
                                                 delete newFilters.dateTo;
@@ -875,13 +883,15 @@ export default function Events() {
                 </Animated.View>
             )}
 
-            {/* Location Search Modal */}
-            <LocationSearchModal
+            {/* Location picker — same component used by the Create Ad form,
+                driven externally by the Location filter chip. */}
+            <LocationSelector
+                externallyControlled
                 visible={showLocationModal}
                 onClose={() => setShowLocationModal(false)}
-                onLocationSelect={handleLocationSelect}
-                currentLocation={selectedLocation}
-                screenType="events"
+                onLocationChange={(payload) =>
+                    handleLocationSelect(payload?.formattedLocation || null)
+                }
             />
 
             {/* Date Range Picker Modal */}
