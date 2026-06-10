@@ -1,5 +1,6 @@
 import io from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureStorage } from '../utils/secureStorage';
 import { API_BASE_URL } from './api';
 import notificationService from './notificationService';
 import { AppState } from 'react-native';
@@ -24,7 +25,7 @@ class SocketService {
 
   async refreshTokenIfNeeded() {
     try {
-      const refreshToken = await AsyncStorage.getItem('refreshToken');
+      const refreshToken = await secureStorage.getItem('refreshToken');
       if (!refreshToken) {
         console.error('❌ No refresh token found');
         return null;
@@ -48,8 +49,8 @@ class SocketService {
         const { accessToken, refreshToken: newRefreshToken } = data.tokens;
         
         // Store new tokens
-        await AsyncStorage.setItem('authToken', accessToken);
-        await AsyncStorage.setItem('refreshToken', newRefreshToken);
+        await secureStorage.setItem('authToken', accessToken);
+        await secureStorage.setItem('refreshToken', newRefreshToken);
         
         console.log('✅ Token refreshed successfully');
         return accessToken;
@@ -90,7 +91,7 @@ class SocketService {
 
     try {
       // Get auth token
-      let token = await AsyncStorage.getItem('authToken');
+      let token = await secureStorage.getItem('authToken');
       if (!token) {
         console.error('❌ No auth token found in AsyncStorage');
         this.connectionState = 'error';

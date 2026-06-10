@@ -13,6 +13,7 @@
 
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureStorage } from '../utils/secureStorage';
 import { API_BASE_URL } from './api';
 
 // Shared in-flight refresh promise. If a refresh is already running,
@@ -23,7 +24,7 @@ const startRefresh = () => {
     if (refreshPromise) return refreshPromise;
 
     refreshPromise = (async () => {
-        const refreshToken = await AsyncStorage.getItem('refreshToken');
+        const refreshToken = await secureStorage.getItem('refreshToken');
         if (!refreshToken) throw new Error('No refresh token');
 
         const res = await axios.post(
@@ -43,8 +44,8 @@ const startRefresh = () => {
         const newRefresh = tokens.refreshToken;
         if (!newAccess) throw new Error('Refresh response missing accessToken');
 
-        await AsyncStorage.setItem('authToken', newAccess);
-        if (newRefresh) await AsyncStorage.setItem('refreshToken', newRefresh);
+        await secureStorage.setItem('authToken', newAccess);
+        if (newRefresh) await secureStorage.setItem('refreshToken', newRefresh);
         return newAccess;
     })().finally(() => {
         // Clear so the next 401 can refresh again
@@ -75,7 +76,7 @@ const buildHeaders = (init, token) => {
  *   surface "Session expired" / etc. We do not navigate or clear state.
  */
 export const authFetch = async (url, init = {}) => {
-    const token = await AsyncStorage.getItem('authToken');
+    const token = await secureStorage.getItem('authToken');
 
     let res = await fetch(url, { ...init, headers: buildHeaders(init, token) });
     if (res.status !== 401) return res;

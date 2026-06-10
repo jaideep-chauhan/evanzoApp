@@ -12,6 +12,7 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureStorage } from '../../../utils/secureStorage';
 import bg1 from '../../../assets/images/smallHeader.jpg';
 import vendorDetailsService from '../../../services/vendorDetailsService';
 
@@ -64,7 +65,7 @@ const ActionIcons = ({ vendor, navigation }) => {
             try {
                 setIsCheckingStatus(true);
                 
-                const authToken = await AsyncStorage.getItem('authToken');
+                const authToken = await secureStorage.getItem('authToken');
                 if (!authToken) {
                     setIsSaved(false);
                     return;

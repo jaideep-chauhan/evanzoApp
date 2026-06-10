@@ -28,8 +28,16 @@ export async function logout() {
         console.log('🔒 Auth context logout completed');
     } else {
         console.log('🔒 No auth context logout, using fallback...');
-        // Fallback: Clear all stored data manually
-        await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'userData', 'userId', 'accessToken', 'user', 'tempRegistrationData']);
+        // Fallback: Clear all stored data manually. Tokens live in
+        // Keychain/Keystore; everything else is in AsyncStorage.
+        try {
+            const { secureStorage } = require('../utils/secureStorage');
+            await secureStorage.removeItem('authToken');
+            await secureStorage.removeItem('refreshToken');
+        } catch (e) {
+            console.warn('🔒 secureStorage fallback clear skipped:', e?.message);
+        }
+        await AsyncStorage.multiRemove(['userData', 'userId', 'accessToken', 'user', 'tempRegistrationData']);
         console.log('🔒 Fallback logout completed');
     }
     

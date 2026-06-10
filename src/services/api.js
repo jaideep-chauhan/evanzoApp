@@ -1,6 +1,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { secureStorage } from '../utils/secureStorage';
 
 // Production URL - LIVE SERVER (ACTIVE)
 const BASE_URL = 'https://api.evnzo.com/api';
@@ -83,7 +84,7 @@ api.interceptors.request.use(
             config.headers['Content-Type'] = 'application/json';
         }
 
-        const token = await AsyncStorage.getItem('authToken');
+        const token = await secureStorage.getItem('authToken');
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
@@ -132,7 +133,7 @@ api.interceptors.response.use(
                 isRefreshing = true;
 
                 try {
-                    const refreshToken = await AsyncStorage.getItem('refreshToken');
+                    const refreshToken = await secureStorage.getItem('refreshToken');
 
                     if (!refreshToken) {
                         processQueue(error, null);
@@ -164,9 +165,9 @@ api.interceptors.response.use(
 
                     const { accessToken, refreshToken: newRefreshToken } = response.data.tokens;
 
-                    await AsyncStorage.setItem('authToken', accessToken);
+                    await secureStorage.setItem('authToken', accessToken);
                     if (newRefreshToken) {
-                        await AsyncStorage.setItem('refreshToken', newRefreshToken);
+                        await secureStorage.setItem('refreshToken', newRefreshToken);
                     }
 
                     // Update the authorization header for all pending requests

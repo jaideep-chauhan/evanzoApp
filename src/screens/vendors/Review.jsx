@@ -18,6 +18,7 @@ import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import vendorDetailsService from '../../services/vendorDetailsService';
 import { useAuth } from '../../context/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureStorage } from '../../utils/secureStorage';
 
 const Review = () => {
     const [rating, setRating] = useState(0);
@@ -60,7 +61,7 @@ const Review = () => {
         
         try {
             // Debug auth state
-            const authToken = await AsyncStorage.getItem('authToken');
+            const authToken = await secureStorage.getItem('authToken');
             const userData = await AsyncStorage.getItem('userData');
             const userId = await AsyncStorage.getItem('userId');
             

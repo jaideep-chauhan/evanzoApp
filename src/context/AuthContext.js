@@ -4,6 +4,7 @@ import api, { resetRefreshState } from '../services/api';
 import { setAuthLogout } from '../services/navigationService';
 import socialAuthService from '../services/socialAuthService';
 import socketService from '../services/socketService';
+import { secureStorage, migrateFromAsyncStorage } from '../utils/secureStorage';
 
 const AuthContext = createContext({});
 
@@ -29,7 +30,17 @@ export const AuthProvider = ({ children }) => {
 
     const checkAuthState = async () => {
         try {
-            const token = await AsyncStorage.getItem('authToken');
+            // One-time migration: copy any tokens still in AsyncStorage
+            // (from before this commit) into Keychain/Keystore. Idempotent
+            // — if both keys are already migrated, getItem returns null
+            // and the helper no-ops. Safe to call on every startup.
+            try {
+                await migrateFromAsyncStorage(AsyncStorage, ['authToken', 'refreshToken']);
+            } catch (e) {
+                console.warn('[AuthContext] Token migration skipped:', e?.message);
+            }
+
+            const token = await secureStorage.getItem('authToken');
             const userData = await AsyncStorage.getItem('userData');
 
             if (token && userData) {
@@ -147,16 +158,16 @@ export const AuthProvider = ({ children }) => {
                 try {
                     // Clear any old data first - remove items individually to avoid multiRemove issues
                     try {
-                        await AsyncStorage.removeItem('authToken');
-                        await AsyncStorage.removeItem('refreshToken');
+                        await secureStorage.removeItem('authToken');
+                        await secureStorage.removeItem('refreshToken');
                         await AsyncStorage.removeItem('userData');
                     } catch (removeError) {
                         console.log("⚠️ Error removing old data (this is OK on first login):", removeError.message);
                     }
 
                     // Store NEW token and user data
-                    await AsyncStorage.setItem('authToken', accessToken);
-                    await AsyncStorage.setItem('refreshToken', refreshToken);
+                    await secureStorage.setItem('authToken', accessToken);
+                    await secureStorage.setItem('refreshToken', refreshToken);
                     await AsyncStorage.setItem('userData', JSON.stringify(user));
                     // Store userId separately for easy access
                     await AsyncStorage.setItem('userId', String(user?.user_id || user?.id));
@@ -196,7 +207,7 @@ export const AuthProvider = ({ children }) => {
                     const token = response.data.accessToken || response.data.token;
                     const user = response.data.user;
 
-                    await AsyncStorage.setItem('authToken', token);
+                    await secureStorage.setItem('authToken', token);
                     await AsyncStorage.setItem('userData', JSON.stringify(user));
                     await AsyncStorage.setItem('userId', String(user?.user_id || user?.id));
                     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
@@ -366,8 +377,8 @@ export const AuthProvider = ({ children }) => {
                 await AsyncStorage.removeItem('tempRegistrationData');
 
                 // Store token and user data
-                await AsyncStorage.setItem('authToken', accessToken);
-                await AsyncStorage.setItem('refreshToken', refreshToken);
+                await secureStorage.setItem('authToken', accessToken);
+                await secureStorage.setItem('refreshToken', refreshToken);
                 await AsyncStorage.setItem('userData', JSON.stringify(user));
                 await AsyncStorage.setItem('userId', String(user?.user_id || user?.id));
 
@@ -550,8 +561,8 @@ export const AuthProvider = ({ children }) => {
                 const { user, tokens } = result;
 
                 // Store tokens and user data
-                await AsyncStorage.setItem('authToken', tokens.accessToken);
-                await AsyncStorage.setItem('refreshToken', tokens.refreshToken);
+                await secureStorage.setItem('authToken', tokens.accessToken);
+                await secureStorage.setItem('refreshToken', tokens.refreshToken);
                 await AsyncStorage.setItem('userData', JSON.stringify(user));
                 await AsyncStorage.setItem('userId', String(user?.user_id || user?.id));
 
@@ -594,8 +605,8 @@ export const AuthProvider = ({ children }) => {
                 const { user, tokens } = result;
 
                 // Store tokens and user data
-                await AsyncStorage.setItem('authToken', tokens.accessToken);
-                await AsyncStorage.setItem('refreshToken', tokens.refreshToken);
+                await secureStorage.setItem('authToken', tokens.accessToken);
+                await secureStorage.setItem('refreshToken', tokens.refreshToken);
                 await AsyncStorage.setItem('userData', JSON.stringify(user));
                 await AsyncStorage.setItem('userId', String(user?.user_id || user?.id));
 
@@ -662,7 +673,10 @@ export const AuthProvider = ({ children }) => {
             }
 
             // Clear ALL auth-related data
-            await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'userData', 'tempRegistrationData', 'userId', 'accessToken', 'user']);
+            // Tokens live in Keychain/Keystore — clear them separately.
+            await secureStorage.removeItem('authToken');
+            await secureStorage.removeItem('refreshToken');
+            await AsyncStorage.multiRemove(['userData', 'tempRegistrationData', 'userId', 'accessToken', 'user']);
 
             // Clear API header
             delete api.defaults.headers.common['Authorization'];
@@ -690,7 +704,10 @@ export const AuthProvider = ({ children }) => {
 
             // Even if logout fails, clear local state and navigate
             resetRefreshState();
-            await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'userData', 'tempRegistrationData', 'userId', 'accessToken', 'user']);
+            // Tokens live in Keychain/Keystore — clear them separately.
+            await secureStorage.removeItem('authToken');
+            await secureStorage.removeItem('refreshToken');
+            await AsyncStorage.multiRemove(['userData', 'tempRegistrationData', 'userId', 'accessToken', 'user']);
             delete api.defaults.headers.common['Authorization'];
             setUser(null);
             setIsAuthenticated(false);

@@ -25,6 +25,7 @@ import socketService from '../../services/socketService';
 import chatService from '../../services/chatService';
 import api from '../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureStorage } from '../../utils/secureStorage';
 import { CameraRoll } from '@react-native-camera-roll/camera-roll';
 import DocumentPicker from 'react-native-document-picker';
 
@@ -395,8 +396,8 @@ export default function ChatScreen({ route, navigation }) {
             
             // Log all user-related data from storage
             const token = await AsyncStorage.getItem('token');
-            const authToken = await AsyncStorage.getItem('authToken');
-            const refreshToken = await AsyncStorage.getItem('refreshToken');
+            const authToken = await secureStorage.getItem('authToken');
+            const refreshToken = await secureStorage.getItem('refreshToken');
             const userData = await AsyncStorage.getItem('userData');
             const userProfile = await AsyncStorage.getItem('userProfile');
             
@@ -822,7 +823,7 @@ export default function ChatScreen({ route, navigation }) {
         });
         
         // Log current authentication state
-        const authToken = await AsyncStorage.getItem('authToken');
+        const authToken = await secureStorage.getItem('authToken');
         console.log('🔐 Current auth state during send:', {
             hasAuthToken: !!authToken,
             authTokenPreview: authToken ? authToken.substring(0, 20) + '...' : 'No token'

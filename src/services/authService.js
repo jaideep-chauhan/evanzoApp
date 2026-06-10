@@ -1,5 +1,6 @@
 import api from './api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureStorage } from '../utils/secureStorage';
 
 class AuthService {
     async login(username, password) {
@@ -10,10 +11,10 @@ class AuthService {
                 const { user, tokens } = response.data;
                 
                 await AsyncStorage.setItem('accessToken', tokens.accessToken);
-                await AsyncStorage.setItem('refreshToken', tokens.refreshToken);
+                await secureStorage.setItem('refreshToken', tokens.refreshToken);
                 await AsyncStorage.setItem('user', JSON.stringify(user));
                 await AsyncStorage.setItem('userId', String(user.user_id));
-                await AsyncStorage.setItem('authToken', tokens.accessToken);
+                await secureStorage.setItem('authToken', tokens.accessToken);
                 
                 return {
                     success: true,
@@ -156,9 +157,9 @@ class AuthService {
                 const { user, tokens } = response.data;
                 
                 await AsyncStorage.setItem('accessToken', tokens.accessToken);
-                await AsyncStorage.setItem('refreshToken', tokens.refreshToken);
+                await secureStorage.setItem('refreshToken', tokens.refreshToken);
                 await AsyncStorage.setItem('user', JSON.stringify(user));
-                
+
                 return {
                     success: true,
                     user,
@@ -167,8 +168,8 @@ class AuthService {
             }
             return { success: false, message: response.data.message };
         } catch (error) {
-            const errorMessage = error.response?.data?.message || 
-                               error.message || 
+            const errorMessage = error.response?.data?.message ||
+                               error.message ||
                                'OTP verification failed. Please try again.';
             return { success: false, message: errorMessage };
         }
@@ -192,7 +193,11 @@ class AuthService {
         } catch (error) {
             console.error('Logout error:', error);
         } finally {
-            await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'user']);
+            // Tokens live in Keychain/Keystore — clear them separately
+            // from the non-secret session keys.
+            await secureStorage.removeItem('authToken');
+            await secureStorage.removeItem('refreshToken');
+            await AsyncStorage.multiRemove(['accessToken', 'user']);
         }
     }
 
