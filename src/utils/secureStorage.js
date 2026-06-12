@@ -13,19 +13,57 @@
  */
 
 import * as Keychain from 'react-native-keychain';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Detect once whether the native Keychain module is actually linked. On iOS
+// builds where Pods are stale, `RNKeychainManager` is null and every Keychain
+// call throws "Cannot read property 'getGenericPasswordForOptions' of null".
+// We probe by attempting a trivial call inside a guarded block; if it throws,
+// we mark Keychain as unavailable and fall back to AsyncStorage for the rest
+// of the session. AsyncStorage is less secure than Keychain, but failing open
+// (no auth at all) breaks the app entirely — silent fallback keeps it usable.
+let keychainAvailable = null;
+const isKeychainUsable = async () => {
+  if (keychainAvailable !== null) return keychainAvailable;
+  try {
+    // getGenericPassword with a throwaway service is the cheapest probe.
+    // A native-module-missing error throws synchronously inside the promise.
+    await Keychain.getGenericPassword({ service: '__probe__' });
+    keychainAvailable = true;
+  } catch (err) {
+    const msg = String(err?.message || err);
+    if (msg.includes('getGenericPasswordForOptions') || msg.includes('null')) {
+      console.warn(
+        '[SecureStorage] Native Keychain module unavailable — falling back to AsyncStorage. Run `cd ios && pod install` and rebuild to restore Keychain-backed storage.',
+      );
+      keychainAvailable = false;
+    } else {
+      // Some other error (e.g. user cancelled biometric) — Keychain is fine.
+      keychainAvailable = true;
+    }
+  }
+  return keychainAvailable;
+};
+
+// AsyncStorage fallback keys are namespaced so they don't collide with other
+// AsyncStorage usage and stay obvious in a debug dump.
+const fallbackKey = (k) => `@evanzo/secure-fallback/${k}`;
 
 /**
  * Secure storage service for sensitive data
  * Uses device Keychain/Keystore for hardware-backed encryption
  */
 export const secureStorage = {
-  /**
-   * Store sensitive data securely
-   * @param {string} key - Unique identifier for the data
-   * @param {string} value - Data to store (will be encrypted)
-   * @returns {Promise<boolean>} Success status
-   */
   async setItem(key, value) {
+    if (!(await isKeychainUsable())) {
+      try {
+        await AsyncStorage.setItem(fallbackKey(key), String(value));
+        return true;
+      } catch (e) {
+        console.error(`[SecureStorage] AsyncStorage fallback setItem failed for "${key}":`, e);
+        return false;
+      }
+    }
     try {
       await Keychain.setGenericPassword(key, value, {
         service: key,
@@ -38,17 +76,18 @@ export const secureStorage = {
     }
   },
 
-  /**
-   * Retrieve securely stored data
-   * @param {string} key - Unique identifier for the data
-   * @returns {Promise<string|null>} Decrypted data or null if not found
-   */
   async getItem(key) {
+    if (!(await isKeychainUsable())) {
+      try {
+        return await AsyncStorage.getItem(fallbackKey(key));
+      } catch (e) {
+        console.error(`[SecureStorage] AsyncStorage fallback getItem failed for "${key}":`, e);
+        return null;
+      }
+    }
     try {
       const credentials = await Keychain.getGenericPassword({ service: key });
-      if (credentials && credentials.password) {
-        return credentials.password;
-      }
+      if (credentials && credentials.password) return credentials.password;
       return null;
     } catch (error) {
       console.error(`[SecureStorage] Error getting item for key "${key}":`, error);
@@ -56,12 +95,16 @@ export const secureStorage = {
     }
   },
 
-  /**
-   * Remove securely stored data
-   * @param {string} key - Unique identifier for the data to remove
-   * @returns {Promise<boolean>} Success status
-   */
   async removeItem(key) {
+    if (!(await isKeychainUsable())) {
+      try {
+        await AsyncStorage.removeItem(fallbackKey(key));
+        return true;
+      } catch (e) {
+        console.error(`[SecureStorage] AsyncStorage fallback removeItem failed for "${key}":`, e);
+        return false;
+      }
+    }
     try {
       await Keychain.resetGenericPassword({ service: key });
       return true;
@@ -71,12 +114,14 @@ export const secureStorage = {
     }
   },
 
-  /**
-   * Check if a key exists in secure storage
-   * @param {string} key - Unique identifier to check
-   * @returns {Promise<boolean>} True if key exists
-   */
   async hasItem(key) {
+    if (!(await isKeychainUsable())) {
+      try {
+        return (await AsyncStorage.getItem(fallbackKey(key))) != null;
+      } catch (_) {
+        return false;
+      }
+    }
     try {
       const credentials = await Keychain.getGenericPassword({ service: key });
       return !!credentials;

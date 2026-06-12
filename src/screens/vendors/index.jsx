@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Animated, ActivityIndicator, Alert } from 'react-native';
 import { VendorCardSkeleton, renderSkeletons } from '../../components/SkeletonLoader';
 import { getCached, setCached } from '../../services/listCacheService';
@@ -25,7 +25,7 @@ import LocationSelector from '../../components/LocationSelector';
 import CategorySelectionModalEnhanced from './CategorySelectionModalEnhanced';
 import PreSavedMessage from '../profile/PreSavedMessage';
 import img from '../../assets/images/dummy.png'; // Fallback image
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
 import CatererCard from './CatererCard';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -63,7 +63,7 @@ export default function Vendor() {
     // - Backend filters for approval_status='approved'
     // - Frontend adds an additional safety layer to ensure only approved ads are shown
     // - User's own ads (in Profile -> My Ads) can show all statuses (pending, approved, rejected)
-    const fetchVendors = async (filters = {}, resetResults = false, clearAllFilters = false) => {
+    const fetchVendors = async (filters = {}, resetResults = false, clearAllFilters = false, silent = false) => {
         if (isFetchingVendors) {
             console.log('Already fetching vendors, skipping...');
             return;
@@ -77,7 +77,11 @@ export default function Vendor() {
             setIsFetchingVendors(true);
             setNetworkError(false);
 
-            if (resetResults) {
+            // `silent` lets a focus-refresh / pull-to-refresh keep the
+            // existing list visible and swap it in place when the network
+            // returns. Without silent we flash a skeleton over real data
+            // every tab swap — the bad UX the user reported.
+            if (resetResults && !silent) {
                 setIsLoading(true);
             }
 
@@ -237,11 +241,15 @@ export default function Vendor() {
             setIsLoading(false);
         })();
 
-        // Initial fetch with a small delay to prevent race conditions
+        // Initial fetch with a small delay to prevent race conditions.
+        // silent=true → if cache hydration already painted a list, the
+        // skeleton WON'T flash over it. The initial `useState(true)` keeps
+        // the skeleton visible when there's no cache; the fetch's finally
+        // block flips it false when results land.
         const initialFetchTimeout = setTimeout(() => {
             if (isMounted && !isFetchingVendors) {
                 console.log('🚀 Initial vendor fetch on mount');
-                fetchVendors({}, true); // Always reset results on mount
+                fetchVendors({}, true, false, true);
             }
         }, 100);
 
@@ -265,8 +273,30 @@ export default function Vendor() {
         };
     }, []); // Empty dependency array ensures this runs only once on mount
 
-    // Note: Removed useFocusEffect that was causing continuous API calls 
-    // when no vendors found. Initial fetch on mount is sufficient.
+    // Refetch the list when the screen regains focus (e.g. after returning
+    // from a vendor detail page where a review/rating was submitted). We
+    // skip the FIRST focus because the mount useEffect above already fires
+    // the initial fetch; without this guard, every cold-open would fetch
+    // twice. We read currentFilters from a ref so the callback can stay
+    // with EMPTY deps — otherwise fetchVendors → setCurrentFilters →
+    // useCallback identity changes → useFocusEffect re-fires → infinite loop.
+    const isFirstFocusRef = useRef(true);
+    const currentFiltersRef = useRef(currentFilters);
+    useEffect(() => {
+        currentFiltersRef.current = currentFilters;
+    }, [currentFilters]);
+    useFocusEffect(
+        useCallback(() => {
+            if (isFirstFocusRef.current) {
+                isFirstFocusRef.current = false;
+                return undefined;
+            }
+            // silent=true → no skeleton flash, list stays visible until the
+            // fresh data lands and is swapped in place.
+            fetchVendors(currentFiltersRef.current, true, false, true);
+            return undefined;
+        }, []),
+    );
 
 
     // Note: Filtering is disabled for now to ensure vendors always show
@@ -667,7 +697,17 @@ export default function Vendor() {
                                                 console.log('📱 Navigating to existing chat:', existingChatResult.chatId);
                                                 navigation.navigate('ChatScreen', {
                                                     chatId: existingChatResult.chatId,
-                                                    chatName: vendor.name,
+                                                    // Show the vendor owner's personal name in
+                                                    // the chat header. owner_name is populated by
+                                                    // formatVendorForDisplay from the joined User
+                                                    // row in the backend response. Fall through
+                                                    // to the ad title only if no person name.
+                                                    chatName:
+                                                        vendor.owner_name ||
+                                                        vendor._original?.User?.full_name ||
+                                                        vendor._original?.user?.full_name ||
+                                                        vendor.company_name ||
+                                                        vendor.name,
                                                     avatar: 'https://randomuser.me/api/portraits/men/1.jpg',
                                                     isOnline: false,
                                                 });
@@ -676,7 +716,17 @@ export default function Vendor() {
                                                 console.log('📱 No existing chat, will create new one');
                                                 navigation.navigate('ChatScreen', {
                                                     recipientId: vendorUserId,
-                                                    chatName: vendor.name,
+                                                    // Show the vendor owner's personal name in
+                                                    // the chat header. owner_name is populated by
+                                                    // formatVendorForDisplay from the joined User
+                                                    // row in the backend response. Fall through
+                                                    // to the ad title only if no person name.
+                                                    chatName:
+                                                        vendor.owner_name ||
+                                                        vendor._original?.User?.full_name ||
+                                                        vendor._original?.user?.full_name ||
+                                                        vendor.company_name ||
+                                                        vendor.name,
                                                     avatar: 'https://randomuser.me/api/portraits/men/1.jpg',
                                                     isOnline: false,
                                                 });
@@ -691,7 +741,12 @@ export default function Vendor() {
                                             // Fallback: navigate directly with recipientId
                                             navigation.navigate('ChatScreen', {
                                                 recipientId: vendorUserId,
-                                                chatName: vendor.name,
+                                                chatName:
+                                                    vendor.owner_name ||
+                                                    vendor._original?.User?.full_name ||
+                                                    vendor._original?.user?.full_name ||
+                                                    vendor.company_name ||
+                                                    vendor.name,
                                                 avatar: 'https://randomuser.me/api/portraits/men/1.jpg',
                                                 isOnline: false,
                                             });

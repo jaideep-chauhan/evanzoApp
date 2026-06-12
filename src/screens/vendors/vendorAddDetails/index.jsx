@@ -165,9 +165,25 @@ export default function VendorChat({ navigation }) {
                         {
                             text: 'View Chat',
                             onPress: () => {
+                                // ChatScreen reads `chatName` from route.params,
+                                // not `chatTitle` — using the wrong key here
+                                // meant the title silently never appeared.
+                                // Also prefer the ad title (company_name) over
+                                // the vendor owner's personal display name.
+                                // Prefer the vendor owner's personal name
+                                // (owner_name from formatVendorForDisplay) so
+                                // the chat header shows the human, not the
+                                // ad title. Fall back to ad fields only if no
+                                // person name is available.
                                 navigation.navigate('ChatScreen', {
                                     chatId: chatId,
-                                    chatTitle: vendor?.name || vendor?.company_name || 'Vendor',
+                                    chatName:
+                                        vendor?.owner_name ||
+                                        vendor?._original?.User?.full_name ||
+                                        vendor?._original?.user?.full_name ||
+                                        vendor?.company_name ||
+                                        vendor?.name ||
+                                        'Vendor',
                                 });
                             }
                         },

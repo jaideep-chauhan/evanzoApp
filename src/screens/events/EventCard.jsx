@@ -167,7 +167,7 @@ export default function EventCard({ event, onGiveQuote }) {
                     <Text style={[styles.giveQuoteText, { color: theme.colors.primary }]}>GIVE A QUOTE</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.sendButton, { backgroundColor: theme.colors.primary }]} onPress={onGiveQuote}>
-                    <Icon name="paper-plane" size={16} color="#fff" style={{ transform: [{ rotate: '30deg' }] }} />
+                    <Icon name="paper-plane" size={16} color="#fff" style={{ transform: [{ rotate: '40deg' }] }} />
                 </TouchableOpacity>
             </View>
         </TouchableOpacity>

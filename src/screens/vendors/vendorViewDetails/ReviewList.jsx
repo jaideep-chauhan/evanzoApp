@@ -228,7 +228,10 @@ export default function ReviewList({ navigation }) {
         try {
             if (isRefresh) {
                 setRefreshing(true);
-            } else {
+            } else if (reviews.length === 0) {
+                // Only show the big loader on first paint. Subsequent focus
+                // refreshes (returning from the Write-a-Review screen) keep
+                // the existing list visible and swap in fresh data silently.
                 setIsLoading(true);
             }
 

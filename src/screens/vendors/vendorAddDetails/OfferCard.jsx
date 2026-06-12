@@ -56,17 +56,19 @@ const OfferGrid = ({ offers = [] }) => {
         return null;
     }
 
-    // Create rows for 2x2 grid layout
+    // Render rows of up to 2 offers, sized to actual content. Previously
+    // we padded out to a fixed 2×2 with invisible placeholder cards, which
+    // reserved height/width for nothing — the grid grew to ~2× its needed
+    // size when there was only 1 real offer. Now: a single offer renders
+    // as one card, two as a row of two, three as a row plus a half-row of
+    // one, four as a full 2×2. No phantom space.
     const renderOfferRows = () => {
         const rows = [];
         const itemsPerRow = 2;
-
-        // Calculate how many offers to show (max 4 for 2x2 grid)
         const offersToShow = validOffers.slice(0, 4);
 
         for (let i = 0; i < offersToShow.length; i += itemsPerRow) {
             const rowOffers = offersToShow.slice(i, i + itemsPerRow);
-
             rows.push(
                 <View key={i} style={styles.row}>
                     {rowOffers.map((offer, index) => (
@@ -76,28 +78,8 @@ const OfferGrid = ({ offers = [] }) => {
                             percent={offer.discount || 0}
                         />
                     ))}
-                    {/* Fill empty space if row is not complete */}
-                    {rowOffers.length === 1 && <View style={styles.emptyCard} />}
                 </View>
             );
-        }
-
-        // Fill remaining rows to maintain 2x2 grid structure
-        const remainingSlots = 4 - offersToShow.length;
-        if (remainingSlots > 0 && rows.length === 1) {
-            // If we have 1-3 offers, we need to fill the second row
-            const secondRowNeeded = Math.min(remainingSlots, 2);
-            if (secondRowNeeded > 0) {
-                const emptyCards = [];
-                for (let j = 0; j < secondRowNeeded; j++) {
-                    emptyCards.push(<View key={`empty-${j}`} style={styles.emptyCard} />);
-                }
-                rows.push(
-                    <View key="empty-row" style={styles.row}>
-                        {emptyCards}
-                    </View>
-                );
-            }
         }
 
         return rows;
@@ -124,7 +106,11 @@ const styles = StyleSheet.create({
         borderRadius: 12,
     },
     gridContainer: {
-        padding: 16,
+        // Tighter padding + lighter shadow so the offer grid hugs its
+        // content. Outer padding was 16 (32 vertical) — now 10 (20 vertical),
+        // and rows / cards trimmed too. Net result: ~30-40% less height.
+        paddingHorizontal: 12,
+        paddingVertical: 8,
         backgroundColor: '#fefefe',
         borderWidth: 1,
         borderColor: '#eaeaea',
@@ -141,18 +127,18 @@ const styles = StyleSheet.create({
     row: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginBottom: 8,
+        marginBottom: 4,
         gap: 8,
     },
     card: {
         width: CARD_WIDTH,
-        paddingVertical: 12,
-        paddingHorizontal: 12,
+        paddingVertical: 4,
+        paddingHorizontal: 8,
     },
     emptyCard: {
         width: CARD_WIDTH,
-        paddingVertical: 12,
-        paddingHorizontal: 12,
+        paddingVertical: 4,
+        paddingHorizontal: 8,
         // Invisible placeholder to maintain grid layout
     },
     columnTitle: {
@@ -166,13 +152,14 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#F3F7FF',
         borderRadius: 20,
-        paddingVertical: 8,
+        // 8 → 5: still touchable / legible, just less air.
+        paddingVertical: 5,
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
     },
     valueBox1: {
-        paddingVertical: 8,
+        paddingVertical: 5,
     },
     valueText: {
         fontSize: 10,

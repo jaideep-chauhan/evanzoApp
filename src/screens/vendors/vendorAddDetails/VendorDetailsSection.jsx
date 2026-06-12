@@ -74,7 +74,9 @@ export default function VendorDetailsSection({
                         showsHorizontalScrollIndicator={false}
                         style={styles.carousel}
                         nestedScrollEnabled={true}
-                        snapToInterval={SCREEN_WIDTH - 32}
+                        // Card has padding:16 on top of container's padding:16,
+                        // so the viewport here is SCREEN_WIDTH - 64, not -32.
+                        snapToInterval={SCREEN_WIDTH - 64}
                         decelerationRate="fast"
                         snapToAlignment="start"
                     >
@@ -200,10 +202,16 @@ const styles = StyleSheet.create({
     },
     carousel: {
         marginTop: 12,
-        height: SCREEN_WIDTH - 32,
+        // Square aspect — must match the photoWrapper width so the image
+        // sits flush in its viewport rather than overflowing horizontally.
+        height: SCREEN_WIDTH - 64,
     },
     photoWrapper: {
-        width: SCREEN_WIDTH - 32, // Full width minus padding
+        // SCREEN_WIDTH - 64 accounts for the container's 16px padding AND
+        // the card's 16px padding (32px total on each side). Sizing the
+        // wrapper to the actual carousel viewport keeps each slide
+        // perfectly centered horizontally instead of overflowing right.
+        width: SCREEN_WIDTH - 64,
         borderRadius: 12,
         overflow: 'hidden',
         shadowColor: '#000',
@@ -214,9 +222,8 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
     },
     photo: {
-        // Full width single image display
-        width: SCREEN_WIDTH - 32,
-        height: SCREEN_WIDTH - 32,
+        width: SCREEN_WIDTH - 64,
+        height: SCREEN_WIDTH - 64,
         borderRadius: 12,
         opacity: 1,
         backgroundColor: '#f0f0f0', // Add background color for loading state

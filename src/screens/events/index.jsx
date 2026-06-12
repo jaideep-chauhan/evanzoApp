@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
     StyleSheet,
     ScrollView,
@@ -23,7 +23,7 @@ import EventCard from './EventCard';
 import LocationSelector from '../../components/LocationSelector';
 import DateRangePickerModal from '../vendors/DateRangePickerModal';
 import CategorySelectionModalEnhanced from '../vendors/CategorySelectionModalEnhanced';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
 import SearchHeader from '../vendors/SearchHeader';
 import eventService from '../../services/eventService';
@@ -56,7 +56,7 @@ export default function Events() {
     // - Backend filters for approval_status='approved'
     // - Frontend adds an additional safety layer to ensure only approved ads are shown
     // - User's own ads (in Profile -> My Ads) can show all statuses (pending, approved, rejected)
-    const fetchEvents = async (filters = {}, resetResults = false, clearAllFilters = false) => {
+    const fetchEvents = async (filters = {}, resetResults = false, clearAllFilters = false, silent = false) => {
         if (isFetchingEvents) {
             console.log('Already fetching events, skipping...');
             return;
@@ -65,8 +65,12 @@ export default function Events() {
         try {
             setIsFetchingEvents(true);
             setNetworkError(false);
-            
-            if (resetResults) {
+
+            // `silent` lets a focus-refresh / pull-to-refresh keep the
+            // existing list visible and swap in the fresh data in place
+            // when the request returns. Without this, every tab swap or
+            // back-nav flashes a skeleton over real data.
+            if (resetResults && !silent) {
                 setIsLoading(true);
             }
 
@@ -283,11 +287,13 @@ export default function Events() {
             setIsLoading(false);
         })();
 
-        // Initial fetch with a small delay to prevent race conditions
+        // Initial fetch with a small delay to prevent race conditions.
+        // silent=true so a cache-hydrated list isn't replaced by a skeleton
+        // while the network request runs.
         const initialFetchTimeout = setTimeout(() => {
             if (isMounted && !isFetchingEvents) {
                 console.log('🚀 Initial event fetch on mount');
-                fetchEvents({}, true, false); // Reset results on mount
+                fetchEvents({}, true, false, true);
             }
         }, 100);
 
@@ -296,6 +302,30 @@ export default function Events() {
             clearTimeout(initialFetchTimeout);
         };
     }, []); // Empty dependency array ensures this runs only once on mount
+
+    // Refetch on focus so a rating/review submitted on a detail page is
+    // reflected when the user returns. First focus is skipped because the
+    // mount effect above already does the initial fetch. currentFilters is
+    // read via a ref so the callback can stay with empty deps — otherwise
+    // fetchEvents → setCurrentFilters → new useCallback → useFocusEffect
+    // re-fires → infinite loop.
+    const isFirstFocusRef = useRef(true);
+    const currentFiltersRef = useRef(currentFilters);
+    useEffect(() => {
+        currentFiltersRef.current = currentFilters;
+    }, [currentFilters]);
+    useFocusEffect(
+        useCallback(() => {
+            if (isFirstFocusRef.current) {
+                isFirstFocusRef.current = false;
+                return undefined;
+            }
+            // silent=true → keep current list visible, swap in fresh data
+            // when the network call completes.
+            fetchEvents(currentFiltersRef.current, true, false, true);
+            return undefined;
+        }, []),
+    );
 
     const dummyEvents = [
         {

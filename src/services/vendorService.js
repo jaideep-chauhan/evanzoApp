@@ -409,12 +409,24 @@ class VendorService {
             categoryName = categoryMap[vendor.category_id] || 'Service';
         }
 
+        // The backend now includes a joined User row (Sequelize default alias
+        // is `User` because we passed no `as:`). Expose the owner's personal
+        // name + avatar so chat handlers can show the human's name in the
+        // chat header instead of the ad title.
+        const ownerRow = vendor.User || vendor.user || vendor.owner || null;
+        const ownerName = ownerRow?.full_name
+            || [ownerRow?.first_name, ownerRow?.last_name].filter(Boolean).join(' ').trim()
+            || null;
+        const ownerProfilePic = ownerRow?.profile_pic || null;
+
         return {
             id: vendor.vendor_ad_id || vendor.id || vendor._id,
             vendor_ad_id: vendor.vendor_ad_id || vendor.id || vendor._id, // Add vendor_ad_id explicitly
             initials: initials,
             name: displayName,
             company_name: vendor.company_name || vendor.title, // Add company_name
+            owner_name: ownerName,             // vendor owner's person name
+            owner_profile_pic: ownerProfilePic, // vendor owner's avatar URL
             type: categoryName,
             rating: vendor.rating || 4.5,
             description: vendor.description || '',

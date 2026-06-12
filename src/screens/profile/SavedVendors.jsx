@@ -22,10 +22,12 @@ const SavedVendors = () => {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
-    // Load saved vendors
+    // Load saved vendors. Only flips the big loader when the list is
+    // currently empty — re-visits (after un-saving / saving from a detail
+    // page) refresh silently, keeping the existing cards visible.
     const loadSavedVendors = async () => {
         try {
-            setLoading(true);
+            if (savedVendors.length === 0) setLoading(true);
             
             // Try to get from backend first
             const response = await vendorDetailsService.getSavedVendors(1, 100);
