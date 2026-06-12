@@ -117,9 +117,27 @@ export default function VendorAdDashboard({ navigation }) {
                             pointerEvents="none"
                         >
                         </ImageBackground>
-                        {/* Header icons removed — Settings + Notification
-                            entry points still exist below the avatar; the
-                            top-of-banner row is intentionally bare. */}
+                        {/* Top-of-banner action row: Settings on the left,
+                            Notification bell on the right. Mirrors the
+                            SearchHeader pattern used on Vendors / Events so
+                            navigation to those settings/inbox screens is
+                            available from every tab. */}
+                        <View style={styles.headerTopRow}>
+                            <TouchableOpacity
+                                onPress={() => navigation.navigate('Settings')}
+                                style={styles.headerIconBtn}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                                <Icon name="settings-outline" size={26} color="#fff" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => navigation.navigate('NotificationInbox')}
+                                style={styles.headerIconBtn}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                                <Icon name="notifications-outline" size={26} color="#fff" />
+                            </TouchableOpacity>
+                        </View>
                         {/* Profile Info inside blue box */}
                         <View style={styles.profileSection}>
                             {user?.profile_pic ? (
@@ -174,19 +192,13 @@ export default function VendorAdDashboard({ navigation }) {
                             <Text style={[styles.secondaryText, { color: theme.colors.primary }]}>SAVED</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity
-                            style={styles.actionBtn}
-                            onPress={() => setShowPreSaved(true)}
-                        >
-                            <Text style={[styles.secondaryText, { color: theme.colors.primary }]}>MESSAGE</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={styles.bellBtn}
-                            onPress={() => navigation.navigate('NotificationInbox')}
-                        >
-                            <Icon name="notifications-outline" size={18} color={theme.colors.primary} />
-                        </TouchableOpacity>
+                        {/* MESSAGE button and notification bell removed
+                            from the action row — they used to live here
+                            below the location, but the top-of-header row
+                            (Settings + Notification icons) now covers the
+                            notification entry, and Quick Messages move to
+                            their own screen instead of being mixed with
+                            action chips. */}
                     </View>
 
 
@@ -245,9 +257,13 @@ export default function VendorAdDashboard({ navigation }) {
                 ) : activeTab === 'vendor' ? (
                     vendorAds.length > 0 ? (
                         vendorAds.map((vendor, idx) => {
+                            const vendorAdId =
+                                vendor._original?.vendor_ad_id ||
+                                vendor.vendor_ad_id ||
+                                vendor.id;
                             return (
                                 <VendorCard
-                                    key={vendor.id || idx}
+                                    key={vendorAdId || idx}
                                     initials={vendor.initials}
                                     name={vendor.name}
                                     type={vendor.type}
@@ -261,6 +277,23 @@ export default function VendorAdDashboard({ navigation }) {
                                     onChatPress={() => navigation && navigation.navigate ? navigation.navigate('Chat') : null}
                                     isFirst={idx === 0}
                                     isChat={false}
+                                    // Owner-only menu: Mark Complete + Delete
+                                    showOwnerActions
+                                    vendorAdId={vendorAdId}
+                                    status={vendor._original?.status || vendor.status}
+                                    onComplete={() => vendorList.refresh()}
+                                    onDelete={() => {
+                                        // Optimistic remove from the local
+                                        // list + persisted cache so the user
+                                        // doesn't see the card flash back
+                                        // before the next focus refresh.
+                                        vendorList.setData(
+                                            (vendorList.data || []).filter(
+                                                (v) =>
+                                                    (v._original?.vendor_ad_id || v.id) !== vendorAdId,
+                                            ),
+                                        );
+                                    }}
                                 />
                             );
                         })
@@ -512,6 +545,22 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 12,
         zIndex: 2,
+    },
+    headerTopRow: {
+        width: '100%',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        marginBottom: 8,
+        zIndex: 2,
+    },
+    headerIconBtn: {
+        padding: 6,
+        borderRadius: 22,
+        // Subtle translucent badge so the icons stay visible against the
+        // doodle background no matter what photo it lands on.
+        backgroundColor: 'rgba(255,255,255,0.18)',
     },
     logo: {
         width: 110,

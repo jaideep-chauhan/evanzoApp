@@ -5,7 +5,11 @@ import { getCached, setCached } from '../../services/listCacheService';
 import BannerAdView from '../../components/ads/BannerAdView';
 import { BANNER_LIST_INTERVAL } from '../../services/adsConfig';
 
-const VENDORS_CACHE_KEY = 'vendors:public';
+// v2 = formatted vendor objects now include owner_name + owner_profile_pic.
+// Bumping the key invalidates pre-existing cached rows that don't have those
+// fields, so the chat-icon handler doesn't fall back to the ad title until
+// the fresh fetch lands.
+const VENDORS_CACHE_KEY = 'vendors:public:v2';
 import {
     StyleSheet,
     SafeAreaView,

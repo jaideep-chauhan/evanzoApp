@@ -226,11 +226,14 @@ class VendorService {
         }
     }
 
-    // Update vendor ad
+    // Update vendor ad.
+    // Backend exposes only PUT /vendor_ad/:id (vendorAd.route.js:46) — there
+    // is no PATCH route, so the previous `api.patch(...)` always 404'd, which
+    // showed up to the user as "not found" when tapping Mark as Complete.
     async updateVendorAd(vendorAdId, updateData) {
         try {
-            const response = await api.patch(`/vendor_ad/${vendorAdId}`, updateData);
-            
+            const response = await api.put(`/vendor_ad/${vendorAdId}`, updateData);
+
             return {
                 success: true,
                 data: response.data.data || response.data,
@@ -238,7 +241,7 @@ class VendorService {
             };
         } catch (error) {
             console.error('Update vendor ad error:', error);
-            
+
             return {
                 success: false,
                 message: error.response?.data?.message || 'Failed to update vendor ad',

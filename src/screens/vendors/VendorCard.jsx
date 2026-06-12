@@ -8,7 +8,12 @@ import {
     Animated,
     Dimensions,
     ActivityIndicator,
+    Alert,
+    ActionSheetIOS,
+    Platform,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/Ionicons';
+import vendorService from '../../services/vendorService';
 import { StarIcon, CurrencyDollarIcon, TagIcon } from 'react-native-heroicons/solid';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
@@ -47,6 +52,14 @@ export default function VendorCard({
     fullVendorData, // Full vendor object with all data
     approval_status, // Approval status for the ad
     isCheckingChat = false, // Loading state for chat button
+    // Owner-only props. When `showOwnerActions` is true (profile / My Ads
+    // screen), the card renders a three-dot menu with Mark Complete + Delete.
+    // The parent passes vendorAdId so we know which backend row to mutate.
+    showOwnerActions = false,
+    vendorAdId,
+    status, // 'active' | 'completed' | 'cancelled' etc.
+    onComplete,
+    onDelete,
 }) {
     const navigation = useNavigation();
     const theme = useTheme();
@@ -191,6 +204,83 @@ export default function VendorCard({
         });
     };
 
+    // Owner-only actions: Mark as Complete + Delete. Mirrors the EventAdCard
+    // pattern so the My Ads tab gives consistent controls across ad types.
+    const markComplete = async () => {
+        if (!vendorAdId) {
+            Alert.alert('Error', 'Cannot update ad: ID missing.');
+            return;
+        }
+        try {
+            const res = await vendorService.updateVendorAd(vendorAdId, { status: 'completed' });
+            if (res.success) {
+                Alert.alert('Marked Complete', 'This ad is now hidden from the public list and tagged as completed in your profile.');
+                onComplete && onComplete();
+            } else {
+                Alert.alert('Error', res.message || 'Failed to mark as complete.');
+            }
+        } catch (e) {
+            Alert.alert('Error', e?.message || 'Failed to mark as complete.');
+        }
+    };
+
+    const confirmDelete = () => {
+        Alert.alert(
+            'Delete Ad',
+            'Are you sure you want to delete this vendor ad? This cannot be undone.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        if (!vendorAdId) {
+                            Alert.alert('Error', 'Cannot delete ad: ID missing.');
+                            return;
+                        }
+                        try {
+                            const res = await vendorService.deleteVendorAd(vendorAdId);
+                            if (res.success) {
+                                onDelete && onDelete();
+                            } else {
+                                Alert.alert('Error', res.message || 'Failed to delete ad.');
+                            }
+                        } catch (e) {
+                            Alert.alert('Error', e?.message || 'Failed to delete ad.');
+                        }
+                    },
+                },
+            ],
+        );
+    };
+
+    const handleMoreOptions = () => {
+        const isCompleted = status === 'completed';
+        // Don't offer Mark Complete again if already completed.
+        const options = isCompleted
+            ? ['Cancel', 'Delete']
+            : ['Cancel', 'Mark as Complete', 'Delete'];
+        const destructiveButtonIndex = isCompleted ? 1 : 2;
+        const cancelButtonIndex = 0;
+
+        if (Platform.OS === 'ios') {
+            ActionSheetIOS.showActionSheetWithOptions(
+                { options, cancelButtonIndex, destructiveButtonIndex },
+                (buttonIndex) => {
+                    if (buttonIndex === cancelButtonIndex) return;
+                    if (!isCompleted && buttonIndex === 1) markComplete();
+                    else if (buttonIndex === destructiveButtonIndex) confirmDelete();
+                },
+            );
+        } else {
+            // Android: simple Alert action list. ActionSheetIOS isn't available.
+            const buttons = [{ text: 'Cancel', style: 'cancel' }];
+            if (!isCompleted) buttons.push({ text: 'Mark as Complete', onPress: markComplete });
+            buttons.push({ text: 'Delete', style: 'destructive', onPress: confirmDelete });
+            Alert.alert('Ad options', undefined, buttons);
+        }
+    };
+
     return (
         <TouchableOpacity onPress={handleCardPress} style={styles.cardWrapper}>
             {/* Approval Status Banner for pending/rejected ads */}
@@ -202,6 +292,15 @@ export default function VendorCard({
                     <Text style={styles.approvalBannerText}>
                         {approval_status === 'pending' ? '⏳ Waiting for approval' : '❌ Rejected - Please review and resubmit'}
                     </Text>
+                </View>
+            )}
+
+            {/* COMPLETED badge — terminal state, shown to the owner only.
+                Approval banner takes precedence (an ad can't be both pending
+                and completed in practice). */}
+            {showOwnerActions && status === 'completed' && (
+                <View style={[styles.approvalBanner, { backgroundColor: '#2C3D5B' }]}>
+                    <Text style={styles.approvalBannerText}>✅ Completed</Text>
                 </View>
             )}
             
@@ -222,9 +321,29 @@ export default function VendorCard({
                         >
                             {name}
                         </Text>
-                        <View style={[styles.ratingBox, { backgroundColor: theme.colors.tabBackground }]}>
-                            <StarIcon size={14} color={theme.colors.primary} />
-                            <Text style={[styles.ratingText, { color: theme.colors.primary }]}>{rating}</Text>
+                        {/* Right cluster — rating pill + (optional) more
+                            menu, grouped so `space-between` on the parent
+                            row pushes them together as one right-aligned
+                            block. Without this wrapper, space-between would
+                            spread the three children evenly and the rating
+                            pill would land in the visual center. */}
+                        <View style={styles.rightCluster}>
+                            <View style={[styles.ratingBox, { backgroundColor: theme.colors.tabBackground }]}>
+                                <StarIcon size={14} color={theme.colors.primary} />
+                                <Text style={[styles.ratingText, { color: theme.colors.primary }]}>{rating}</Text>
+                            </View>
+                            {showOwnerActions && (
+                                <TouchableOpacity
+                                    style={styles.moreBtn}
+                                    onPress={(e) => {
+                                        e.stopPropagation && e.stopPropagation();
+                                        handleMoreOptions();
+                                    }}
+                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                >
+                                    <Icon name="ellipsis-vertical" size={18} color={theme.colors.primary} />
+                                </TouchableOpacity>
+                            )}
                         </View>
                     </View>
                     <View style={styles.tagRow}>
@@ -497,6 +616,13 @@ const styles = StyleSheet.create({
         fontSize: 12,
         marginLeft: 4,
         fontWeight: '600',
+    },
+    moreBtn: {
+        padding: 4,
+    },
+    rightCluster: {
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     card: {
         backgroundColor: '#fff',
