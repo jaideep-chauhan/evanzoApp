@@ -157,6 +157,35 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:453180956529:android:f619d6742a0b350962e0d0",
+        "android_client_info": {
+          "package_name": "com.evnzo.studio"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "453180956529-01a33o6m8pcv8djesn9n7fsmbedobppd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyATJajelrD9n43urhBAOFQFckwJwhF2Zzs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "453180956529-01a33o6m8pcv8djesn9n7fsmbedobppd.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"
