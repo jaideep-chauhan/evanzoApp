@@ -81,7 +81,9 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Allow camera access to take photos</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string></string>
+	<string>Evanzo uses your location to show nearby vendors and events, and to suggest the closest options when you create or browse ads.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Evanzo uses your location to show nearby vendors and events, and to suggest the closest options when you create or browse ads.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Allow gallery access to pick photos</string>
 	<key>NSMicrophoneUsageDescription</key>
