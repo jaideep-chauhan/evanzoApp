@@ -640,6 +640,7 @@ export default function Vendor() {
                                     vendorId={vendor._original?.vendor_ad_id || vendor.id}
                                     fullVendorData={vendor} // Pass the complete vendor object
                                     initials={vendor.initials}
+                                    ownerProfilePic={vendor.owner_profile_pic}
                                     name={vendor.name}
                                     type={vendor.type}
                                     rating={vendor.rating}
@@ -712,7 +713,11 @@ export default function Vendor() {
                                                         vendor._original?.user?.full_name ||
                                                         vendor.company_name ||
                                                         vendor.name,
-                                                    avatar: 'https://randomuser.me/api/portraits/men/1.jpg',
+                                                    avatar:
+                                                        vendor.owner_profile_pic ||
+                                                        vendor._original?.User?.profile_pic ||
+                                                        vendor._original?.user?.profile_pic ||
+                                                        null,
                                                     isOnline: false,
                                                 });
                                             } else {
@@ -731,7 +736,11 @@ export default function Vendor() {
                                                         vendor._original?.user?.full_name ||
                                                         vendor.company_name ||
                                                         vendor.name,
-                                                    avatar: 'https://randomuser.me/api/portraits/men/1.jpg',
+                                                    avatar:
+                                                        vendor.owner_profile_pic ||
+                                                        vendor._original?.User?.profile_pic ||
+                                                        vendor._original?.user?.profile_pic ||
+                                                        null,
                                                     isOnline: false,
                                                 });
                                                 
@@ -751,7 +760,11 @@ export default function Vendor() {
                                                     vendor._original?.user?.full_name ||
                                                     vendor.company_name ||
                                                     vendor.name,
-                                                avatar: 'https://randomuser.me/api/portraits/men/1.jpg',
+                                                avatar:
+                                                    vendor.owner_profile_pic ||
+                                                    vendor._original?.User?.profile_pic ||
+                                                    vendor._original?.user?.profile_pic ||
+                                                    null,
                                                 isOnline: false,
                                             });
                                         }

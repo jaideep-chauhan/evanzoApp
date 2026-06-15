@@ -59,7 +59,18 @@ const ProfileCard = ({ item, onPress }) => {
                 <Entypo name="cross" size={16} color="#333" />
             </TouchableOpacity>
 
-            <Image source={getImageSource()} style={styles.avatar} />
+            <View style={styles.avatarWrap}>
+                <Image source={getImageSource()} style={styles.avatar} />
+                {/* Small owner avatar overlaid on the corner — same idea as
+                    WhatsApp's group avatar with the sender chip. Renders only
+                    if the vendor owner has uploaded a profile pic. */}
+                {item.ownerProfilePic ? (
+                    <Image
+                        source={{ uri: item.ownerProfilePic }}
+                        style={styles.ownerAvatar}
+                    />
+                ) : null}
+            </View>
 
             <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
             <Text style={styles.role}>{item.role || item.type}</Text>
@@ -116,6 +127,13 @@ const ProfileCardCarousel = ({ vendorId }) => {
                             location: vendor.location || 'Location not specified',
                             rating: vendor.rating || 0,
                             image: Array.isArray(images) ? images[0] : images || vendor.image,
+                            // Owner avatar (small badge overlaid on the card).
+                            // Backend includes the User row on similar vendors
+                            // — same join used by the public list.
+                            ownerProfilePic:
+                                vendor.User?.profile_pic ||
+                                vendor.user?.profile_pic ||
+                                null,
                             type: vendor.type || vendor.category?.name,
                             description: vendor.description,
                             images: images,
@@ -329,12 +347,28 @@ const styles = StyleSheet.create({
         top: 12,
         right: 12,
     },
+    avatarWrap: {
+        alignSelf: 'center',
+        marginBottom: 12,
+        position: 'relative',
+    },
     avatar: {
         width: 60,
         height: 60,
         borderRadius: 30,
-        alignSelf: 'center',
-        marginBottom: 12,
+    },
+    // 24x24 circular badge anchored to the bottom-right of the main image,
+    // shows the vendor owner's personal profile pic.
+    ownerAvatar: {
+        position: 'absolute',
+        bottom: -2,
+        right: -2,
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        borderWidth: 2,
+        borderColor: '#fff',
+        backgroundColor: '#eee',
     },
     name: {
         textAlign: 'center',

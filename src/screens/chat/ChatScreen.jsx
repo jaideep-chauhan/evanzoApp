@@ -2637,7 +2637,18 @@ export default function ChatScreen({ route, navigation }) {
 
                 <View style={styles.headerContent}>
                     <View style={styles.avatarContainer}>
-                        <Image source={{ uri: avatar }} style={styles.headerAvatar} />
+                        {avatar ? (
+                            <Image source={{ uri: avatar }} style={styles.headerAvatar} />
+                        ) : (
+                            // No profile pic — render an initials circle in the
+                            // same shape/size so the layout stays stable. Uses
+                            // first letter of chatName (or "?" as a safe default).
+                            <View style={[styles.headerAvatar, { backgroundColor: 'rgba(255,255,255,0.25)', justifyContent: 'center', alignItems: 'center' }]}>
+                                <Text style={{ color: '#fff', fontWeight: '700' }}>
+                                    {(chatName || '?').trim().charAt(0).toUpperCase()}
+                                </Text>
+                            </View>
+                        )}
                         {isOnline && <View style={styles.onlineIndicator} />}
                     </View>
 

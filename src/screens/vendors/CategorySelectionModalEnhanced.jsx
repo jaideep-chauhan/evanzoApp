@@ -9,8 +9,10 @@ import {
     SafeAreaView,
     ActivityIndicator,
     ScrollView,
+    Image,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { getCategoryIcon } from '../../assets/icons';
 import { useTheme } from '../../ThemeContext';
 import categoryService from '../../services/categoryService';
 
@@ -164,15 +166,19 @@ export default function CategorySelectionModalEnhanced({
 
     const renderCategoryItem = ({ item }) => {
         const categoryName = item.name || item;
+        const iconSource = getCategoryIcon(categoryName);
 
         return (
             <TouchableOpacity
                 style={[
                     styles.categoryButton,
-                    { borderColor: theme.colors.primary + '33' }
+                    { borderColor: theme.colors.primary + '33', flexDirection: 'row', alignItems: 'center', gap: 8 }
                 ]}
                 onPress={() => handleCategoryClick(item)}
             >
+                {iconSource ? (
+                    <Image source={iconSource} style={{ width: 18, height: 18, resizeMode: 'contain' }} />
+                ) : null}
                 <Text style={[
                     styles.categoryText,
                     { color: theme.colors.primary }

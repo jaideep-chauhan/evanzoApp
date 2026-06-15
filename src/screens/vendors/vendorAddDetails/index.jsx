@@ -219,7 +219,7 @@ export default function VendorChat({ navigation }) {
                     style={styles.scrollView}
                     showsVerticalScrollIndicator={false}
                     contentOffset={{ x: 0, y: initialScrollY }}
-                    contentContainerStyle={{ paddingBottom: 200 }}
+                    contentContainerStyle={{ paddingBottom: 32 }}
                 >
                     <VendorProfileCard
                         logo={formattedImages[0] || img}

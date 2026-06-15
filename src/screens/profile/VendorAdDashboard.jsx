@@ -265,6 +265,7 @@ export default function VendorAdDashboard({ navigation }) {
                                 <VendorCard
                                     key={vendorAdId || idx}
                                     initials={vendor.initials}
+                                    ownerProfilePic={vendor.owner_profile_pic}
                                     name={vendor.name}
                                     type={vendor.type}
                                     rating={vendor.rating}

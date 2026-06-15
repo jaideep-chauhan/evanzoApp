@@ -47,6 +47,10 @@ export default function VendorCard({
     offers = [],
     onChatPress,
     isChat = true,
+    // Vendor owner's avatar URL — populated by formatVendorForDisplay from
+    // the joined User row. Falls back to the colored initials circle when
+    // null (vendor has no profile pic uploaded yet).
+    ownerProfilePic,
     isFocused = false,
     vendorId,
     fullVendorData, // Full vendor object with all data
@@ -307,9 +311,20 @@ export default function VendorCard({
             {/* Header OUTSIDE the card */}
             <View style={styles.header}>
                 <View style={[styles.avatarShadow, { shadowColor: theme.colors.primary }]}>
-                    <View style={[styles.avatar, { backgroundColor: theme.colors.primary }]}>
-                        <Text style={styles.avatarText}>{initials}</Text>
-                    </View>
+                    {ownerProfilePic ? (
+                        // Owner has a profile pic — show it instead of the
+                        // colored initials circle. Same circular shape so the
+                        // surrounding shadow / layout stays unchanged.
+                        <Image
+                            source={{ uri: ownerProfilePic }}
+                            style={[styles.avatar, { backgroundColor: '#eee' }]}
+                            resizeMode="cover"
+                        />
+                    ) : (
+                        <View style={[styles.avatar, { backgroundColor: theme.colors.primary }]}>
+                            <Text style={styles.avatarText}>{initials}</Text>
+                        </View>
+                    )}
                 </View>
                 <View style={styles.nameBlock}>
                     {/* Name row — vendor name on the left, rating pill on
