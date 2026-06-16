@@ -222,7 +222,17 @@ export default function VendorChat({ navigation }) {
                     contentContainerStyle={{ paddingBottom: 32 }}
                 >
                     <VendorProfileCard
-                        logo={formattedImages[0] || img}
+                        // Avatar at the top of the detail page should be the
+                        // OWNER'S profile picture, not a thumbnail of the ad's
+                        // photos. Fall through to the first ad photo only if
+                        // the owner hasn't uploaded a profile pic.
+                        logo={
+                            vendor?.owner_profile_pic ||
+                            vendor?._original?.user?.profile_pic ||
+                            vendor?._original?.User?.profile_pic ||
+                            formattedImages[0] ||
+                            img
+                        }
                         name={vendor?.name || "4x90 Studio"}
                         category={vendor?.type || "Photography"}
                         location={vendor?.location || "Ontario, Canada"}

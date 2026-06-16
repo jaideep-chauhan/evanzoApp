@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import MainNavigator from './src/navigation/MainNavigator';
@@ -8,6 +8,12 @@ import { AuthProvider } from './src/context/AuthContext';
 import notificationService from './src/services/notificationService';
 import socketService from './src/services/socketService';
 import { initAds } from './src/services/adsService';
+import {
+  checkForUpdate,
+  snoozeUpdatePrompt,
+  openStore,
+} from './src/services/versionCheckService';
+import UpdatePromptModal from './src/components/UpdatePromptModal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -28,11 +34,24 @@ const queryClient = new QueryClient({
 
 const App = () => {
   const appState = useRef(AppState.currentState);
+  const [updateInfo, setUpdateInfo] = useState(null);
 
   useEffect(() => {
     // Initialize AdMob (banners + interstitial preload) and notifications.
     initAds();
     notificationService.initialize();
+
+    // Check for a newer app version. Runs after the UI is interactive so it
+    // doesn't compete with auth + nav + ads init. Backend tells us whether
+    // the prompt should be soft (snoozable) or force (no dismiss).
+    const updateTimeout = setTimeout(async () => {
+      try {
+        const info = await checkForUpdate();
+        if (info?.shouldShow) setUpdateInfo(info);
+      } catch (_) {
+        // version check failure is non-fatal — never block startup
+      }
+    }, 2500);
 
     // Handle app state changes for socket connection
     const subscription = AppState.addEventListener('change', async nextAppState => {
@@ -69,6 +88,7 @@ const App = () => {
     return () => {
       notificationService.cleanup();
       subscription.remove();
+      clearTimeout(updateTimeout);
     };
   }, []);
 
@@ -79,6 +99,20 @@ const App = () => {
           <AuthProvider>
             <MainNavigator />
             <Toast />
+            <UpdatePromptModal
+              visible={!!updateInfo}
+              forceUpdate={!!updateInfo?.forceUpdate}
+              currentVersion={updateInfo?.currentVersion}
+              latest={updateInfo?.latest}
+              releaseNotes={updateInfo?.releaseNotes}
+              onUpdate={() => {
+                if (updateInfo?.storeUrl) openStore(updateInfo.storeUrl);
+              }}
+              onLater={async () => {
+                await snoozeUpdatePrompt();
+                setUpdateInfo(null);
+              }}
+            />
           </AuthProvider>
         </ThemeProvider>
       </SafeAreaProvider>

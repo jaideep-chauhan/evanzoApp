@@ -29,7 +29,7 @@ import { CustomSuccessModal } from '../../components/CustomSuccessModal';
 import { CustomToast } from '../../components/CustomToast';
 import ImageEditorModal from '../../components/ImageEditorModal';
 import LocationSelector from '../../components/LocationSelector';
-import { icons } from '../../assets/icons';
+import { icons, getCategoryIcon } from '../../assets/icons';
 
 // extractLocationFields() removed — LocationSelector now emits a flat
 // payload that maps 1:1 onto the backend shape, so no translation needed.
@@ -540,10 +540,19 @@ const CreateAddForm = ({ type, onClose }) => {
                     return;
                 }
 
-                // Validate description word count
-                const wordCount = description.trim().split(/\s+/).filter(word => word.length > 0).length;
-                if (description && wordCount < 30) {
-                    setToastState({ visible: true, message: `Description must be at least 30 words. Current: ${wordCount} words`, type: 'error' });
+                // Validate description — required and must be at least 30 words.
+                // Previous check was `if (description && wordCount < 30)` which
+                // skipped the rule when description was empty, letting users
+                // submit blank ads. Now we always enforce the floor.
+                const wordCount = (description || '').trim().split(/\s+/).filter(word => word.length > 0).length;
+                if (wordCount < 30) {
+                    setToastState({
+                        visible: true,
+                        message: wordCount === 0
+                            ? 'Description is required (minimum 30 words).'
+                            : `Description must be at least 30 words. Current: ${wordCount} words`,
+                        type: 'error',
+                    });
                     setIsLoading(false);
                     return;
                 }
@@ -680,10 +689,16 @@ const CreateAddForm = ({ type, onClose }) => {
                     return;
                 }
 
-                // Validate description word count
-                const wordCount = vendorDescription.trim().split(/\s+/).filter(word => word.length > 0).length;
-                if (vendorDescription && wordCount < 30) {
-                    setToastState({ visible: true, message: `Description must be at least 30 words. Current: ${wordCount} words`, type: 'error' });
+                // Validate description — required and must be at least 30 words.
+                const wordCount = (vendorDescription || '').trim().split(/\s+/).filter(word => word.length > 0).length;
+                if (wordCount < 30) {
+                    setToastState({
+                        visible: true,
+                        message: wordCount === 0
+                            ? 'Description is required (minimum 30 words).'
+                            : `Description must be at least 30 words. Current: ${wordCount} words`,
+                        type: 'error',
+                    });
                     setIsLoading(false);
                     return;
                 }
@@ -1450,11 +1465,22 @@ const CreateAddForm = ({ type, onClose }) => {
                                                     styles.categoryIconContainer,
                                                     isSelected && { backgroundColor: theme.colors.primary + '15' }
                                                 ]}>
-                                                    <Icon
-                                                        name="folder-outline"
-                                                        size={22}
-                                                        color={isSelected ? theme.colors.primary : '#666'}
-                                                    />
+                                                    {/* Per-category branded icon when we have one
+                                                        (Photography/Videography, Catering, etc.).
+                                                        Falls back to a generic folder for any
+                                                        category that doesn't match a known label. */}
+                                                    {getCategoryIcon(item.name) ? (
+                                                        <Image
+                                                            source={getCategoryIcon(item.name)}
+                                                            style={{ width: 22, height: 22, resizeMode: 'contain' }}
+                                                        />
+                                                    ) : (
+                                                        <Icon
+                                                            name="folder-outline"
+                                                            size={22}
+                                                            color={isSelected ? theme.colors.primary : '#666'}
+                                                        />
+                                                    )}
                                                 </View>
                                                 <View style={styles.categoryTextContainer}>
                                                     <Text style={[
