@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -114,6 +114,9 @@ export default function VendorCard({
     const currentIndex = useRef(1);
     const intervalRef = useRef(null);
     const carouselWidth = (width - 48) * 0.65; // 65% of available width for carousel
+    // Track if the owner-avatar Image errored. When it does, we silently fall
+    // back to the colored initials circle instead of leaving a gray rectangle.
+    const [avatarFailed, setAvatarFailed] = useState(false);
 
     useEffect(() => {
         // Initial positioning
@@ -287,17 +290,13 @@ export default function VendorCard({
 
     return (
         <TouchableOpacity onPress={handleCardPress} style={styles.cardWrapper}>
-            {/* Approval Status Banner for pending/rejected ads */}
-            {approval_status && approval_status !== 'approved' && (
-                <View style={[
-                    styles.approvalBanner,
-                    { backgroundColor: approval_status === 'pending' ? '#FFA500' : '#FF4444' }
-                ]}>
-                    <Text style={styles.approvalBannerText}>
-                        {approval_status === 'pending' ? '⏳ Waiting for approval' : '❌ Rejected - Please review and resubmit'}
-                    </Text>
-                </View>
-            )}
+            {/* Approval status banner intentionally removed — ads are
+                auto-approved on insert (services/vendorAd.service.js:21,
+                services/vendorEnhanced.service.js:617). The legacy "Waiting
+                for approval" / "Rejected" banner was confusing because there
+                is no moderation workflow that would ever flip the state to
+                a non-approved value at this point. If moderation comes back,
+                restore the conditional banner from git history. */}
 
             {/* COMPLETED badge — terminal state, shown to the owner only.
                 Approval banner takes precedence (an ad can't be both pending
@@ -311,14 +310,17 @@ export default function VendorCard({
             {/* Header OUTSIDE the card */}
             <View style={styles.header}>
                 <View style={[styles.avatarShadow, { shadowColor: theme.colors.primary }]}>
-                    {ownerProfilePic ? (
+                    {ownerProfilePic && !avatarFailed ? (
                         // Owner has a profile pic — show it instead of the
                         // colored initials circle. Same circular shape so the
                         // surrounding shadow / layout stays unchanged.
+                        // onError falls back to initials so a broken URL
+                        // doesn't leave a blank gray rectangle.
                         <Image
                             source={{ uri: ownerProfilePic }}
                             style={[styles.avatar, { backgroundColor: '#eee' }]}
                             resizeMode="cover"
+                            onError={() => setAvatarFailed(true)}
                         />
                     ) : (
                         <View style={[styles.avatar, { backgroundColor: theme.colors.primary }]}>

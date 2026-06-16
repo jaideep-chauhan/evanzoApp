@@ -30,19 +30,22 @@ const CreateAd = ({ onClose, onTabPress }) => {
                 <>
                     <Text style={styles.title}>Create Ad</Text>
                     <View style={styles.tabColumnWrap}>
+                        {/* Both options are pure choices, not active/inactive
+                            state — equal visual weight so Event doesn't read
+                            as "secondary" relative to Vendor. */}
                         <TouchableOpacity
-                            style={[styles.tabColumnBtn, styles.activeTab, { backgroundColor: theme.colors.primary }]}
+                            style={[styles.tabColumnBtn, { backgroundColor: theme.colors.primary }]}
                             onPress={() => onTabPress && onTabPress('vendor')}
                             activeOpacity={0.7}
                         >
-                            <Text style={styles.activeTabText}>Vendor</Text>
+                            <Text style={styles.tabBtnText}>Vendor</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
-                            style={[styles.tabColumnBtn, styles.inactiveTab, { backgroundColor: theme.colors.primary, opacity: 0.7 }]}
+                            style={[styles.tabColumnBtn, { backgroundColor: theme.colors.primary }]}
                             onPress={() => onTabPress && onTabPress('event')}
                             activeOpacity={0.7}
                         >
-                            <Text style={styles.inactiveTabText}>Event</Text>
+                            <Text style={styles.tabBtnText}>Event</Text>
                         </TouchableOpacity>
                     </View>
                 </>
@@ -85,20 +88,12 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         marginBottom: 0,
     },
-    activeTab: {
-        // backgroundColor: '#41547A',
-    },
-    inactiveTab: {
-        // backgroundColor: '#32446A',
-    },
-    activeTabText: {
+    // activeTab / inactiveTab / activeTabText / inactiveTabText removed —
+    // there is no "active" choice on this screen; the user hasn't picked
+    // yet. The single tabBtnText style keeps both options identical.
+    tabBtnText: {
         color: '#fff',
         fontWeight: '700',
-        fontSize: 16,
-    },
-    inactiveTabText: {
-        color: '#fff',
-        fontWeight: '600',
         fontSize: 16,
     },
     centeredOverlay: {

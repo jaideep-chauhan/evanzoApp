@@ -412,15 +412,27 @@ class VendorService {
             categoryName = categoryMap[vendor.category_id] || 'Service';
         }
 
-        // The backend now includes a joined User row (Sequelize default alias
-        // is `User` because we passed no `as:`). Expose the owner's personal
-        // name + avatar so chat handlers can show the human's name in the
-        // chat header instead of the ad title.
-        const ownerRow = vendor.User || vendor.user || vendor.owner || null;
+        // The backend includes a joined user row via Sequelize alias `user`
+        // (lowercase — see vendorAd.model.js `belongsTo(User, { as: 'user' })`).
+        // Older callers / cached payloads may still surface it as `User` so
+        // we accept either.
+        const ownerRow = vendor.user || vendor.User || vendor.owner || null;
         const ownerName = ownerRow?.full_name
             || [ownerRow?.first_name, ownerRow?.last_name].filter(Boolean).join(' ').trim()
             || null;
-        const ownerProfilePic = ownerRow?.profile_pic || null;
+        // Normalize stored URL — historic profile_pic values can be
+        // `http://localhost:3000/...`, `http://api.evnzo.com/...` (iOS ATS
+        // blocks plain http), or relative `/uploads/...`. Any of those
+        // would fail to render and look like "no image" on the card.
+        const normalizeProfilePic = (raw) => {
+            if (!raw || typeof raw !== 'string') return null;
+            const localMatch = raw.match(/^https?:\/\/(localhost|127\.0\.0\.1)(?::\d+)?(\/.*)$/i);
+            if (localMatch) return `https://api.evnzo.com${localMatch[2]}`;
+            if (raw.startsWith('http://api.evnzo.com')) return raw.replace('http://', 'https://');
+            if (raw.startsWith('/')) return `https://api.evnzo.com${raw}`;
+            return raw;
+        };
+        const ownerProfilePic = normalizeProfilePic(ownerRow?.profile_pic);
 
         return {
             id: vendor.vendor_ad_id || vendor.id || vendor._id,

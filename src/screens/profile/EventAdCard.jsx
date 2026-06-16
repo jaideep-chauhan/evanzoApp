@@ -174,23 +174,12 @@ export default function EventAdCard({
 
     return (
         <TouchableOpacity style={[styles.card, { padding: 16, marginBottom: 18 }]} onPress={handleCardPress}>
-            {/* Approval Status Banner for pending/rejected ads */}
-            {approval_status && approval_status !== 'approved' && (
-                <View style={[
-                    styles.approvalBanner,
-                    { backgroundColor: approval_status === 'pending' ? '#FFA500' : '#FF4444' }
-                ]}>
-                    <Icon 
-                        name={approval_status === 'pending' ? 'time-outline' : 'close-circle-outline'} 
-                        size={16} 
-                        color="#fff" 
-                    />
-                    <Text style={styles.approvalBannerText}>
-                        {approval_status === 'pending' ? 'Waiting for approval' : 'Rejected - Please review and resubmit'}
-                    </Text>
-                </View>
-            )}
-            
+            {/* Approval status banner removed — event ads are auto-approved
+                on insert (services/eventAd.service.js:22), so the "Waiting
+                for approval" / "Rejected" UI is dead state that confused
+                users. Restore from git history if moderation is re-introduced. */}
+
+
             {/* Title, Status, and More Icon Row */}
             <View style={styles.rowBetween}>
                 <Text style={[styles.title, { color: theme.colors.primary }]} numberOfLines={1} ellipsizeMode="tail">{title}</Text>

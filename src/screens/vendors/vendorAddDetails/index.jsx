@@ -179,8 +179,8 @@ export default function VendorChat({ navigation }) {
                                     chatId: chatId,
                                     chatName:
                                         vendor?.owner_name ||
-                                        vendor?._original?.User?.full_name ||
                                         vendor?._original?.user?.full_name ||
+                                        vendor?._original?.User?.full_name ||
                                         vendor?.company_name ||
                                         vendor?.name ||
                                         'Vendor',

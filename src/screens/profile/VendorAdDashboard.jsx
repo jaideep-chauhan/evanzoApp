@@ -140,11 +140,22 @@ export default function VendorAdDashboard({ navigation }) {
                         </View>
                         {/* Profile Info inside blue box */}
                         <View style={styles.profileSection}>
+                            {(() => {
+                                // Console log on every profile screen render
+                                // so you can see exactly what URL we're feeding
+                                // into <Image>. If it's null/undefined, we fall
+                                // back to initials. If it's set but the Image
+                                // errors, the onError log below fires too.
+                                console.log('[Profile] user.profile_pic =', user?.profile_pic, 'full_name =', user?.full_name);
+                                return null;
+                            })()}
                             {user?.profile_pic ? (
                                 <Image
                                     source={{ uri: user.profile_pic }}
                                     style={styles.profileImage}
                                     resizeMode="cover"
+                                    onLoad={() => console.log('[Profile] avatar loaded OK:', user.profile_pic)}
+                                    onError={(e) => console.log('[Profile] avatar load FAILED:', user.profile_pic, '→', e?.nativeEvent?.error)}
                                 />
                             ) : (
                                 <View style={styles.profileImage}>
@@ -463,14 +474,14 @@ export default function VendorAdDashboard({ navigation }) {
                             </TouchableOpacity>
                             
                             <TouchableOpacity
-                                style={{borderWidth: 2, borderColor: '#fff', padding: 18, borderRadius: 14, opacity: 0.7}}
+                                style={{borderWidth: 2, borderColor: '#fff', padding: 18, borderRadius: 14}}
                                 onPress={() => {
                                     setCreateAddFormType('event');
                                     setShowCreateAddForm(true);
                                     setShowCreateAd(false);
                                 }}
                             >
-                                <Text style={{color: '#fff', textAlign: 'center', fontSize: 16, fontWeight: '600'}}>Event</Text>
+                                <Text style={{color: '#fff', textAlign: 'center', fontSize: 16, fontWeight: '700'}}>Event</Text>
                             </TouchableOpacity>
                         </TouchableOpacity>
                     </TouchableOpacity>

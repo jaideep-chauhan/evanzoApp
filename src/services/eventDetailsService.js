@@ -18,10 +18,13 @@ class EventDetailsService {
 
             // Try to check backend first (primary source of truth)
             try {
+                // Backend caps limit at 100; saved-events lists this big
+                // are extremely rare, and the page param can fetch more if
+                // needed. Going over 100 hits a 400 Joi rejection.
                 const response = await api.get('/profile/saved-items', {
                     params: {
                         itemType: 'event',
-                        limit: 500
+                        limit: 100
                     }
                 });
 
@@ -233,7 +236,13 @@ View more details on Evanzo app!
                 data: []
             };
         } catch (error) {
-            console.error('Get similar events error:', error);
+            // 404 = the backend hasn't deployed the /:eventId/similar route
+            // yet. Treat it as an empty list rather than dumping a noisy stack
+            // trace into the console — the carousel will render the "no
+            // similar events" empty state, which is the right UX anyway.
+            if (error.response?.status !== 404) {
+                console.error('Get similar events error:', error);
+            }
             return {
                 success: false,
                 message: error.response?.data?.message || 'Failed to fetch similar events',

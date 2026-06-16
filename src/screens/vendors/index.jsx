@@ -709,14 +709,14 @@ export default function Vendor() {
                                                     // to the ad title only if no person name.
                                                     chatName:
                                                         vendor.owner_name ||
-                                                        vendor._original?.User?.full_name ||
                                                         vendor._original?.user?.full_name ||
+                                                        vendor._original?.User?.full_name ||
                                                         vendor.company_name ||
                                                         vendor.name,
                                                     avatar:
                                                         vendor.owner_profile_pic ||
-                                                        vendor._original?.User?.profile_pic ||
                                                         vendor._original?.user?.profile_pic ||
+                                                        vendor._original?.User?.profile_pic ||
                                                         null,
                                                     isOnline: false,
                                                 });
@@ -732,14 +732,14 @@ export default function Vendor() {
                                                     // to the ad title only if no person name.
                                                     chatName:
                                                         vendor.owner_name ||
-                                                        vendor._original?.User?.full_name ||
                                                         vendor._original?.user?.full_name ||
+                                                        vendor._original?.User?.full_name ||
                                                         vendor.company_name ||
                                                         vendor.name,
                                                     avatar:
                                                         vendor.owner_profile_pic ||
-                                                        vendor._original?.User?.profile_pic ||
                                                         vendor._original?.user?.profile_pic ||
+                                                        vendor._original?.User?.profile_pic ||
                                                         null,
                                                     isOnline: false,
                                                 });
@@ -756,14 +756,14 @@ export default function Vendor() {
                                                 recipientId: vendorUserId,
                                                 chatName:
                                                     vendor.owner_name ||
-                                                    vendor._original?.User?.full_name ||
                                                     vendor._original?.user?.full_name ||
+                                                    vendor._original?.User?.full_name ||
                                                     vendor.company_name ||
                                                     vendor.name,
                                                 avatar:
                                                     vendor.owner_profile_pic ||
-                                                    vendor._original?.User?.profile_pic ||
                                                     vendor._original?.user?.profile_pic ||
+                                                    vendor._original?.User?.profile_pic ||
                                                     null,
                                                 isOnline: false,
                                             });

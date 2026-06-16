@@ -81,6 +81,9 @@ export const AuthProvider = ({ children }) => {
                     try {
                         const meRes = await api.get('/profile/me');
                         const fresh = meRes?.data?.data;
+                        // Surface exactly what the backend says about
+                        // profile_pic so we can spot bad URLs at startup.
+                        console.log('[Auth] /profile/me returned profile_pic =', fresh?.profile_pic, 'full_name =', fresh?.full_name);
                         if (fresh && typeof fresh === 'object') {
                             const merged = {
                                 ...user,
