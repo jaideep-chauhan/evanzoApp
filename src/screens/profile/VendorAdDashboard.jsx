@@ -81,7 +81,10 @@ export default function VendorAdDashboard({ navigation }) {
         };
     }, []);
 
-    const vendorList = useCachedList('my-ads:vendor', fetchMyVendorAds);
+    // v2 = formatted rows include owner_profile_pic. Bumping the cache key
+    // invalidates pre-existing AsyncStorage rows that don't have the field,
+    // so the avatar shows on first paint after this deploy.
+    const vendorList = useCachedList('my-ads:vendor:v2', fetchMyVendorAds);
     const eventList = useCachedList('my-ads:event', fetchMyEventAds);
 
     const vendorAds = vendorList.data || [];

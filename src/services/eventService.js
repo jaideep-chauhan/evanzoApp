@@ -324,12 +324,22 @@ class EventService {
             }
         }
         
-        // Create organizer data with user_id included
+        // Create organizer data with user_id included. Backend ships event
+        // ads with the joined user row, so prefer its full_name + profile_pic
+        // over the legacy "User <id>" placeholder + lego avatar.
+        const userRow = event?.user || event?.User || null;
         const organizer = {
             id: event.user_id, // Include user_id for chat navigation
             user_id: event.user_id, // Also include as user_id for compatibility
-            name: `User ${event.user_id || 'Unknown'}`,
-            avatar: 'https://randomuser.me/api/portraits/lego/1.jpg' // Default avatar
+            name:
+                userRow?.full_name ||
+                [userRow?.first_name, userRow?.last_name].filter(Boolean).join(' ').trim() ||
+                event.organizer_name ||
+                `User ${event.user_id || 'Unknown'}`,
+            avatar:
+                userRow?.profile_pic ||
+                event.organizer_avatar ||
+                'https://randomuser.me/api/portraits/lego/1.jpg',
         };
 
         // Determine event category

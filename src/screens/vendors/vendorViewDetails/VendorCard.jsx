@@ -61,7 +61,14 @@ const VendorCard = ({
 
     // Pull out the bits the header actually shows. Every field has a clear
     // fallback so the screen never blows up if backend is sparse.
-    const logoUri = firstPhotoUrl(vendor);
+    // Prefer the OWNER's profile picture for the avatar circle (this header
+    // is supposed to identify the human, not the ad). Fall through to the
+    // first ad photo only if the owner hasn't uploaded a profile pic.
+    const logoUri =
+        vendor?.owner_profile_pic ||
+        vendor?._original?.user?.profile_pic ||
+        vendor?._original?.User?.profile_pic ||
+        firstPhotoUrl(vendor);
     const name = vendor?.name || vendor?.company_name || vendor?.title || 'Vendor';
     const category = vendor?.type || vendor?.category?.name || vendor?.vendor_type || '';
     const location =

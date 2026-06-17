@@ -26,6 +26,7 @@ import CategorySelectionModalEnhanced from '../vendors/CategorySelectionModalEnh
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
 import SearchHeader from '../vendors/SearchHeader';
+import { setSearchHandler } from '../../services/searchBridge';
 import eventService from '../../services/eventService';
 import filterService from '../../services/filterService';
 
@@ -876,33 +877,44 @@ export default function Events() {
                     ]}
                 >
                     <View style={styles.stickyContent}>
-                        <View style={[styles.stickySearchBar, { backgroundColor: theme.colors.primary + '10' }]}>
+                        {/* Tap target, not an inline TextInput — see the
+                            equivalent in screens/vendors/index.jsx for the
+                            full rationale. Hand off to the Search overlay
+                            so users get autocomplete + categories. */}
+                        <TouchableOpacity
+                            style={[styles.stickySearchBar, { backgroundColor: theme.colors.primary + '10' }]}
+                            activeOpacity={0.7}
+                            onPress={() => {
+                                setSearchHandler({
+                                    onQuery: (q) => {
+                                        setSearchQuery(q);
+                                        const filters = { ...currentFilters, keyword: q };
+                                        if (!q?.trim()) delete filters.keyword;
+                                        fetchEvents(filters, true);
+                                    },
+                                    onCategory: (cat) => {
+                                        if (cat?.category_id || cat?.id) {
+                                            handleCategorySelect([cat.category_id || cat.id], [cat]);
+                                        }
+                                    },
+                                });
+                                navigation.navigate('Search', {
+                                    searchType: 'events',
+                                    initialQuery: searchQuery,
+                                });
+                            }}
+                        >
                             <Icon name="search-outline" size={20} color={theme.colors.primary} style={styles.stickySearchIcon} />
-                            <TextInput
-                                style={styles.stickyInput}
-                                placeholder="Search by title, location, category..."
-                                placeholderTextColor={theme.colors.primary + '80'}
-                                value={searchQuery}
-                                onChangeText={(text) => {
-                                    setSearchQuery(text);
-                                    // Debounced search
-                                    filterService.debouncedSearch(
-                                        (filters) => fetchEvents(filters, true),
-                                        { ...currentFilters, keyword: text },
-                                        500,
-                                        'event-search'
-                                    );
-                                }}
-                                returnKeyType="search"
-                                onSubmitEditing={() => {
-                                    const filters = { ...currentFilters, keyword: searchQuery };
-                                    if (!searchQuery.trim()) {
-                                        delete filters.keyword;
-                                    }
-                                    fetchEvents(filters, true);
-                                }}
-                            />
-                        </View>
+                            <Text
+                                style={[
+                                    styles.stickyInput,
+                                    { color: searchQuery ? theme.colors.primary : theme.colors.primary + '80' },
+                                ]}
+                                numberOfLines={1}
+                            >
+                                {searchQuery || 'Search by title, location, category...'}
+                            </Text>
+                        </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.stickyChatIcon, { backgroundColor: theme.colors.primary }]}
                             onPress={() => navigation.navigate('NotificationInbox')}

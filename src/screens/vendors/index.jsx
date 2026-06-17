@@ -34,6 +34,7 @@ import { useTheme } from '../../ThemeContext';
 import CatererCard from './CatererCard';
 import Icon from 'react-native-vector-icons/Ionicons';
 import vendorService from '../../services/vendorService';
+import { setSearchHandler } from '../../services/searchBridge';
 import filterService from '../../services/filterService';
 import chatService from '../../services/chatService';
 
@@ -794,33 +795,47 @@ export default function Vendor() {
                 pointerEvents="box-none"
             >
                 <View style={styles.stickyContent}>
-                    <View style={[styles.stickySearchBar, { backgroundColor: theme.colors.primary + '10' }]}>
+                    {/* Tap target, NOT a real TextInput. Mirrors the top
+                        SearchHeader: typing inline here gave the user no
+                        suggestion overlay, so we hand off to the dedicated
+                        Search screen (which has autocomplete + categories +
+                        recent searches). The handler registered via
+                        searchBridge applies whatever the user picks back
+                        into this list's filter state. */}
+                    <TouchableOpacity
+                        style={[styles.stickySearchBar, { backgroundColor: theme.colors.primary + '10' }]}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                            setSearchHandler({
+                                onQuery: (q) => {
+                                    setSearchQuery(q);
+                                    const filters = { ...currentFilters, keyword: q };
+                                    if (!q?.trim()) delete filters.keyword;
+                                    fetchVendors(filters, true);
+                                },
+                                onCategory: (cat) => {
+                                    if (cat?.category_id || cat?.id) {
+                                        handleCategorySelect([cat.category_id || cat.id], [cat]);
+                                    }
+                                },
+                            });
+                            navigation.navigate('Search', {
+                                searchType: 'vendors',
+                                initialQuery: searchQuery,
+                            });
+                        }}
+                    >
                         <Icon name="search-outline" size={20} color={theme.colors.primary} style={styles.stickySearchIcon} />
-                        <TextInput
-                            style={styles.stickyInput}
-                            placeholder="Search by name, location, category..."
-                            placeholderTextColor={theme.colors.primary + '80'}
-                            value={searchQuery}
-                            onChangeText={(text) => {
-                                setSearchQuery(text);
-                                // Debounced search
-                                filterService.debouncedSearch(
-                                    (filters) => fetchVendors(filters, true),
-                                    { ...currentFilters, keyword: text },
-                                    500,
-                                    'vendor-search'
-                                );
-                            }}
-                            returnKeyType="search"
-                            onSubmitEditing={() => {
-                                const filters = { ...currentFilters, keyword: searchQuery };
-                                if (!searchQuery.trim()) {
-                                    delete filters.keyword;
-                                }
-                                fetchVendors(filters, true);
-                            }}
-                        />
-                    </View>
+                        <Text
+                            style={[
+                                styles.stickyInput,
+                                { color: searchQuery ? theme.colors.primary : theme.colors.primary + '80' },
+                            ]}
+                            numberOfLines={1}
+                        >
+                            {searchQuery || 'Search by name, location, category...'}
+                        </Text>
+                    </TouchableOpacity>
                     <TouchableOpacity
                         style={[styles.stickyChatIcon, { backgroundColor: theme.colors.primary }]}
                         onPress={() => navigation.navigate('NotificationInbox')}

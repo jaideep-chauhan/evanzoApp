@@ -88,17 +88,28 @@ export default function EventDetailViewEnhanced() {
     };
 
     const getOrganizerData = (event) => {
-        const organizerName = event.organizer_name ||
+        // Prefer the real owner's profile pic from the joined user row.
+        // Backend ships event ads with `user: {profile_pic, full_name, …}`
+        // — see eventEnhanced.service.js. Fall through to whatever legacy
+        // fields existed before, then the local placeholder image.
+        const user = event?.user || event?.User || event?.organizer || null;
+        const organizerName =
+            user?.full_name ||
+            event.organizer_name ||
             event.user_name ||
             event.created_by_name ||
-            'Tushar Dhania';
+            'Organizer';
+        const organizerAvatar =
+            user?.profile_pic ||
+            event.organizer_avatar ||
+            null;
 
         return {
             name: organizerName,
-            avatar: event.organizer_avatar || img,
+            avatar: organizerAvatar || img,
             rating: event.organizer_rating || 5.0,
             reviewCount: event.organizer_review_count || 10,
-            user_id: event.user_id
+            user_id: user?.user_id || event.user_id,
         };
     };
 
@@ -442,7 +453,19 @@ export default function EventDetailViewEnhanced() {
                     <Text style={styles.sectionTitle}>User Information</Text>
                     <View style={styles.userCard}>
                         <View style={styles.userInfo}>
-                            <Icon name="person-circle" size={40} color="#334462" />
+                            {/* Render the actual organiser avatar when we
+                                have one (from the joined user row). Falls
+                                back to the generic person-circle icon when
+                                the organiser hasn't uploaded a profile pic. */}
+                            {eventData?.organizer?.avatar &&
+                            typeof eventData.organizer.avatar === 'string' ? (
+                                <Image
+                                    source={{ uri: eventData.organizer.avatar }}
+                                    style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#eee' }}
+                                />
+                            ) : (
+                                <Icon name="person-circle" size={40} color="#334462" />
+                            )}
                             <Text style={styles.userName}>{eventData.organizer.name}</Text>
                         </View>
                         <View style={styles.ratingContainer}>
