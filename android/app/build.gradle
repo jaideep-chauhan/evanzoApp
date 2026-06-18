@@ -19,7 +19,7 @@ android {
         applicationId "com.x4x90studio.evnzo"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 29
+        versionCode 30
         versionName "1.9"
 
         // RN apps with lots of native modules routinely cross Android's
@@ -86,6 +86,20 @@ android {
             externalNativeBuild {
                 cmake {
                     abiFilters "armeabi-v7a", "arm64-v8a"
+                }
+            }
+            // ndk.abiFilters only filters libs we COMPILE here. Prebuilt
+            // .so files shipped inside third-party AARs (libreactnative,
+            // libhermes, libandroidlame, etc.) still slip into the AAB
+            // unless we explicitly strip them at packaging time. This
+            // is required to clear Play Console's 16 KB page-size check:
+            // the AndroidLame prebuilt pulled in by react-native-compressor
+            // ships a 4 KB-aligned libandroidlame.so for x86_64 that fails
+            // the check, and we have no real-device reason to ship 32-bit
+            // x86 or 64-bit x86 anyway.
+            packaging {
+                jniLibs {
+                    excludes += ["lib/x86/**", "lib/x86_64/**"]
                 }
             }
         }
