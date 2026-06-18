@@ -180,8 +180,11 @@ export default function EventDetailViewEnhanced() {
 
             const chatId = chatResult.data.chat_id;
 
-            // Step 2: Format quote message
-            const quoteMessage = `📋 Quote for Event:\n\n${quoteText.trim()}\n\n🎉 Event: ${eventData.title}\n📍 Location: ${eventData.location}\n📅 Date: ${eventData.date}`;
+            // Step 2: Format quote message — leading header line that names
+            // the event + date so the organizer can immediately tell which
+            // ad the quote is for, followed by a blank line and the
+            // sender's typed message.
+            const quoteMessage = `Message from event- "${eventData.title}" on "${eventData.date}"\n\n${quoteText.trim()}`;
 
             // Step 3: Send quote message
             const messageResult = await chatService.sendMessage(chatId, quoteMessage, 'text');

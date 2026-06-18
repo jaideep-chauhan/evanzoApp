@@ -82,9 +82,14 @@ export default function SearchScreen() {
         }
         setIsSearching(true);
         try {
+            // Wrap as an arrow that calls the method ON the filterService
+            // singleton — extracting `filterService.searchVendors` into a
+            // local strips the `this` binding, which the class methods rely
+            // on to reach `this.buildVendorSearchParams`. The arrow keeps
+            // `this` pointed at the singleton.
             const fn = searchType === 'events'
-                ? filterService.searchEvents
-                : filterService.searchVendors;
+                ? (args) => filterService.searchEvents(args)
+                : (args) => filterService.searchVendors(args);
             const resp = await fn({ keyword: q.trim(), page: 1, limit: 8 });
             if (resp?.success && Array.isArray(resp.data)) {
                 setResults(resp.data);

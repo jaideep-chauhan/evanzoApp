@@ -109,55 +109,63 @@ const SearchScreen = () => {
 
     debounceTimer.current = setTimeout(async () => {
       setIsLoading(true);
+
+      // Run the backend autocomplete first (it's the primary signal —
+      // DB-known categories, vendors, locations). Then Photon in a
+      // separate try so a network/parse error there can't crash the
+      // backend's already-good hits or leave the loading state stuck.
+      let appHits = [];
+      let photonHits = [];
+
       try {
-        // Run our backend autocomplete (vendors / events / categories /
-        // DB-known locations) AND Photon's geocoder (global cities, regions,
-        // countries) in parallel, then merge. Photon hits get type:'location'
-        // so the renderer's existing 📍 location icon picks them up.
-        const [appRes, photonRes] = await Promise.allSettled([
-          searchService.getAutocompleteSuggestions(query, searchType),
-          photonSearch(query, { limit: 5 }),
-        ]);
-
-        const appHits =
-          appRes.status === 'fulfilled' && appRes.value?.success
-            ? appRes.value.data || []
-            : [];
-        const photonHits =
-          photonRes.status === 'fulfilled' && Array.isArray(photonRes.value)
-            ? photonRes.value.map((p) => ({
-                value: p.display_name,
-                display: p.display_name,
-                type: 'location',
-                subtype: p.osm_value || p.type,
-                icon: 'location-outline',
-                id: `photon-${p.osm_id || p.lat + ',' + p.lon}`,
-                lat: p.lat,
-                lon: p.lon,
-                country: p.country,
-                state: p.state,
-                city: p.city || p.name,
-              }))
-            : [];
-
-        // Dedupe by `value` (case-insensitive). App hits win over Photon
-        // when both surface the same string — they carry richer linkage
-        // (vendor IDs, category IDs, etc).
-        const seen = new Set();
-        const merged = [];
-        for (const item of [...appHits, ...photonHits]) {
-          const key = String(item.value || '').toLowerCase();
-          if (!key || seen.has(key)) continue;
-          seen.add(key);
-          merged.push(item);
+        const appRes = await searchService.getAutocompleteSuggestions(query, searchType);
+        if (appRes?.success && Array.isArray(appRes.data)) {
+          appHits = appRes.data;
         }
-
-        setSuggestions(merged);
-      } catch (error) {
-        console.error('[SearchScreen] Error fetching suggestions:', error);
-      } finally {
-        setIsLoading(false);
+      } catch (e) {
+        console.warn('[SearchScreen] backend autocomplete failed:', e?.message || e);
       }
+
+      try {
+        const features = await photonSearch(query, { limit: 5 });
+        if (Array.isArray(features)) {
+          photonHits = features
+            .map((p) => {
+              const display = String(p?.display_name || p?.name || '').trim();
+              if (!display) return null;
+              return {
+                value: display,
+                display,
+                type: 'location',
+                subtype: typeof p?.type === 'string' ? p.type : undefined,
+                icon: 'location-outline',
+                id: `photon-${p?.id || `${p?.lat || 0},${p?.lon || 0}`}`,
+                lat: p?.lat ?? null,
+                lon: p?.lon ?? null,
+                country: typeof p?.country === 'string' ? p.country : undefined,
+                state: typeof p?.state === 'string' ? p.state : undefined,
+                city: typeof p?.city === 'string' ? p.city : undefined,
+              };
+            })
+            .filter(Boolean);
+        }
+      } catch (e) {
+        console.warn('[SearchScreen] photon autocomplete failed:', e?.message || e);
+      }
+
+      // Dedupe by `value` (case-insensitive). App hits win — they carry
+      // richer linkage (vendor IDs, category IDs).
+      const seen = new Set();
+      const merged = [];
+      for (const item of [...appHits, ...photonHits]) {
+        const key = String(item?.value || '').toLowerCase();
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        merged.push(item);
+      }
+
+      setSuggestions(merged);
+      setIsLoading(false);
     }, 300);
   }, [searchType]);
 
@@ -290,17 +298,24 @@ const SearchScreen = () => {
    * Render suggestion item
    */
   const renderSuggestion = ({ item }) => {
-    // Support both old and new API formats
-    const text = typeof item === 'string' ? item : (item.display || item.value || item.text || item.name);
-    const type = item.type || 'keyword';
-    const category = item.category;
-    const subtype = item.subtype; // For location types (country, state, city)
+    // Defensive normalize — every field gets forced to a string|undefined so
+    // a malformed suggestion (Photon empty hit, unknown backend shape, etc.)
+    // can't crash the row via <Text>{undefined}</Text>.
+    const safe = item && typeof item === 'object' ? item : {};
+    const text = String(
+      typeof item === 'string' ? item
+        : safe.display || safe.value || safe.text || safe.name || ''
+    );
+    if (!text) return null;
+    const type = typeof safe.type === 'string' ? safe.type : 'keyword';
+    const category = typeof safe.category === 'string' ? safe.category : undefined;
+    const subtype = typeof safe.subtype === 'string' ? safe.subtype : undefined;
 
     // Icon based on suggestion type - prefer API-provided icon
     const getIcon = () => {
       // Use icon from API if provided (remove "outline" suffix for consistency)
-      if (item.icon) {
-        return item.icon.replace('-outline', '');
+      if (typeof safe.icon === 'string' && safe.icon) {
+        return safe.icon.replace('-outline', '');
       }
 
       // Fallback to type-based icons

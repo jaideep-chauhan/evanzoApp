@@ -697,18 +697,15 @@ export default function Events() {
                 onScroll={Animated.event(
                     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
                     {
-                        // Native driver = no JS bridge for scroll deltas =
-                        // RefreshControl + sticky overlay both feel snappy
-                        // even on weak phones. Matches vendors/index.jsx.
+                        // Native driver + no JS listener. The sticky overlay
+                        // is always rendered and uses native interpolation
+                        // for opacity/translate, so we don't need to flip
+                        // `isScrolled` state on every scroll frame. Calling
+                        // setState here on every frame in addition to the
+                        // animated interpolation triggered a Hermes
+                        // "Error.stack invalid receiver" crash inside React's
+                        // lane scheduler.
                         useNativeDriver: true,
-                        listener: (event) => {
-                            const offsetY = event.nativeEvent.contentOffset.y;
-                            if (offsetY > 180 && !isScrolled) {
-                                setIsScrolled(true);
-                            } else if (offsetY <= 180 && isScrolled) {
-                                setIsScrolled(false);
-                            }
-                        }
                     }
                 )}
             >
