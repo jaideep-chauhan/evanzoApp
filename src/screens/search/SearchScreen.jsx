@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import searchService from '../../services/searchService';
+import { searchLocations as photonSearch } from '../../services/photonService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
@@ -104,25 +105,60 @@ const SearchScreen = () => {
    * Fetch autocomplete suggestions with debounce
    */
   const fetchSuggestions = useCallback((query) => {
-    // Clear previous timer
-    if (debounceTimer.current) {
-      clearTimeout(debounceTimer.current);
-    }
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
 
-    // Set new timer for debounced API call
     debounceTimer.current = setTimeout(async () => {
       setIsLoading(true);
       try {
-        const response = await searchService.getAutocompleteSuggestions(query, searchType);
-        if (response.success) {
-          setSuggestions(response.data || []);
+        // Run our backend autocomplete (vendors / events / categories /
+        // DB-known locations) AND Photon's geocoder (global cities, regions,
+        // countries) in parallel, then merge. Photon hits get type:'location'
+        // so the renderer's existing 📍 location icon picks them up.
+        const [appRes, photonRes] = await Promise.allSettled([
+          searchService.getAutocompleteSuggestions(query, searchType),
+          photonSearch(query, { limit: 5 }),
+        ]);
+
+        const appHits =
+          appRes.status === 'fulfilled' && appRes.value?.success
+            ? appRes.value.data || []
+            : [];
+        const photonHits =
+          photonRes.status === 'fulfilled' && Array.isArray(photonRes.value)
+            ? photonRes.value.map((p) => ({
+                value: p.display_name,
+                display: p.display_name,
+                type: 'location',
+                subtype: p.osm_value || p.type,
+                icon: 'location-outline',
+                id: `photon-${p.osm_id || p.lat + ',' + p.lon}`,
+                lat: p.lat,
+                lon: p.lon,
+                country: p.country,
+                state: p.state,
+                city: p.city || p.name,
+              }))
+            : [];
+
+        // Dedupe by `value` (case-insensitive). App hits win over Photon
+        // when both surface the same string — they carry richer linkage
+        // (vendor IDs, category IDs, etc).
+        const seen = new Set();
+        const merged = [];
+        for (const item of [...appHits, ...photonHits]) {
+          const key = String(item.value || '').toLowerCase();
+          if (!key || seen.has(key)) continue;
+          seen.add(key);
+          merged.push(item);
         }
+
+        setSuggestions(merged);
       } catch (error) {
         console.error('[SearchScreen] Error fetching suggestions:', error);
       } finally {
         setIsLoading(false);
       }
-    }, 300); // 300ms debounce
+    }, 300);
   }, [searchType]);
 
   /**

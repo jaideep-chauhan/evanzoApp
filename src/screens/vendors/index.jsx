@@ -290,8 +290,28 @@ export default function Vendor() {
     useEffect(() => {
         currentFiltersRef.current = currentFilters;
     }, [currentFilters]);
+    // Tap-same-tab-to-scroll-top. Listens for the tabBar's tabPress event;
+    // if this screen is currently focused, scroll to top with a soft
+    // animation. The new-focus path (cross-tab switch) is handled by the
+    // useFocusEffect below with animated:false for instant landing.
+    useEffect(() => {
+        const unsubscribe = navigation.addListener?.('tabPress', () => {
+            if (navigation.isFocused?.()) {
+                scrollViewRef.current?.scrollTo?.({ y: 0, animated: true });
+            }
+        });
+        return unsubscribe;
+    }, [navigation]);
+
     useFocusEffect(
         useCallback(() => {
+            // Always reset the scroll position to the top when this tab
+            // gains focus, so switching to Vendors lands the user at the
+            // newest items instead of mid-scroll. animated:false avoids
+            // a visible scroll-to-top animation that competes with the
+            // refresh in flight.
+            scrollViewRef.current?.scrollTo?.({ y: 0, animated: false });
+
             if (isFirstFocusRef.current) {
                 isFirstFocusRef.current = false;
                 return undefined;

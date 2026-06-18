@@ -17,67 +17,115 @@ import eventDetailsService from '../../services/eventDetailsService';
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.75;
 
+// Pure-number durations like "6" become "6 hours"; strings that already
+// contain letters ("6 hour", "2 days") pass through untouched. Identical
+// to eventService.formatDuration — duplicated here because the similar-
+// events endpoint returns raw DB rows that don't go through that formatter.
+const formatDuration = (raw) => {
+    if (raw == null) return 'TBD';
+    const s = String(raw).trim();
+    if (!s) return 'TBD';
+    if (/[a-zA-Z]/.test(s)) return s;
+    const n = Number(s);
+    if (!Number.isFinite(n)) return s;
+    return `${n} ${n === 1 ? 'hour' : 'hours'}`;
+};
+
+// Compact card design — matches Figma. No hero image, no price, no guest
+// count. Just: duration pill, close icon, title, owner avatar+name, two
+// info pills (location + date), full-width View button.
 const SimilarEventCard = ({ item, onPress }) => {
     const navigation = useNavigation();
-    
-    // Handle image source
-    const getImageSource = () => {
-        if (item.attachments && item.attachments.length > 0) {
-            const firstAttachment = item.attachments[0];
-            if (typeof firstAttachment === 'string') {
-                return { uri: firstAttachment };
-            }
-            return firstAttachment;
-        }
-        // Default placeholder image
-        return { uri: 'https://picsum.photos/300/200?random=' + item.id };
-    };
-    
+
     const handleViewPress = () => {
         if (onPress) {
             onPress(item);
         } else {
-            // Navigate to event details
-            navigation.push('EventDetailView', { 
+            navigation.push('EventDetailView', {
                 eventId: item.event_ad_id || item.id,
-                event: item
+                event: item,
             });
         }
     };
-    
+
+    const ownerName =
+        item.organizer?.full_name ||
+        item.user?.full_name ||
+        item.owner_name ||
+        'Organizer';
+    const ownerAvatar =
+        item.organizer?.profile_pic ||
+        item.user?.profile_pic ||
+        item.owner_profile_pic ||
+        null;
+
+    // Format date — backend may return ISO ("2026-04-13T00:00:00.000Z") or
+    // already-formatted ("October 30, 2023"). Detect and convert.
+    const dateLabel = (() => {
+        const raw = item.date || item.event_date;
+        if (!raw) return 'Date TBD';
+        const d = new Date(raw);
+        if (!isNaN(d.getTime())) {
+            return d.toLocaleDateString('en-US', {
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
+            });
+        }
+        return String(raw);
+    })();
+
     return (
         <TouchableOpacity style={styles.card} onPress={handleViewPress} activeOpacity={0.9}>
-            <Image source={getImageSource()} style={styles.eventImage} />
-            
-            <View style={styles.cardContent}>
-                <Text style={styles.eventTitle} numberOfLines={1}>{item.title}</Text>
-                <Text style={styles.eventCategory}>{item.category || item.event_type || 'Event'}</Text>
-                
-                <View style={styles.infoRow}>
-                    <View style={styles.infoItem}>
-                        <Ionicons name="location-outline" size={14} color="#666" />
-                        <Text style={styles.infoText} numberOfLines={1}>{item.location || 'Location TBD'}</Text>
-                    </View>
+            {/* Top row: duration pill + close icon */}
+            <View style={styles.topRow}>
+                <View style={styles.durationPill}>
+                    <Text style={styles.durationText} numberOfLines={1}>
+                        {formatDuration(item.duration)}
+                    </Text>
                 </View>
-                
-                <View style={styles.infoRow}>
-                    <View style={styles.infoItem}>
-                        <MaterialCommunityIcons name="calendar-outline" size={14} color="#666" />
-                        <Text style={styles.infoText}>{item.date || 'Date TBD'}</Text>
+                <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Ionicons name="close" size={16} color="#9aa1ad" />
+                </TouchableOpacity>
+            </View>
+
+            <Text style={styles.eventTitle} numberOfLines={1}>
+                {item.title || 'Event'}
+            </Text>
+
+            {/* Owner row */}
+            <View style={styles.ownerRow}>
+                {ownerAvatar ? (
+                    <Image source={{ uri: ownerAvatar }} style={styles.ownerAvatar} />
+                ) : (
+                    <View style={[styles.ownerAvatar, styles.ownerAvatarPlaceholder]}>
+                        <Ionicons name="person" size={14} color="#fff" />
                     </View>
-                    <View style={styles.infoItem}>
-                        <MaterialCommunityIcons name="account-group-outline" size={14} color="#666" />
-                        <Text style={styles.infoText}>{item.guests || '0'} guests</Text>
-                    </View>
+                )}
+                <Text style={styles.ownerName} numberOfLines={1}>
+                    {ownerName}
+                </Text>
+            </View>
+
+            {/* Info pills row */}
+            <View style={styles.pillRow}>
+                <View style={styles.pill}>
+                    <Ionicons name="location-outline" size={12} color="#666" />
+                    <Text style={styles.pillText} numberOfLines={1}>
+                        {item.location || 'Location TBD'}
+                    </Text>
                 </View>
-                
-                <View style={styles.footer}>
-                    <Text style={styles.budget}>${item.budget || '0'}</Text>
-                    <TouchableOpacity style={styles.viewButton} onPress={handleViewPress}>
-                        <Text style={styles.viewButtonText}>View Details</Text>
-                    </TouchableOpacity>
+                <View style={styles.pill}>
+                    <MaterialCommunityIcons name="calendar-outline" size={12} color="#666" />
+                    <Text style={styles.pillText} numberOfLines={1}>
+                        {dateLabel}
+                    </Text>
                 </View>
             </View>
+
+            <TouchableOpacity style={styles.viewButton} onPress={handleViewPress}>
+                <Text style={styles.viewButtonText}>View</Text>
+            </TouchableOpacity>
         </TouchableOpacity>
     );
 };
@@ -268,73 +316,87 @@ const styles = StyleSheet.create({
         width: CARD_WIDTH,
         backgroundColor: '#fff',
         borderRadius: 16,
-        overflow: 'hidden',
+        padding: 16,
         shadowColor: '#000',
-        shadowOpacity: 0.08,
+        shadowOpacity: 0.06,
         shadowOffset: { width: 0, height: 4 },
         shadowRadius: 8,
-        elevation: 4,
+        elevation: 3,
     },
-    eventImage: {
-        width: '100%',
-        height: 140,
-        resizeMode: 'cover',
+    topRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
     },
-    cardContent: {
-        padding: 16,
+    durationPill: {
+        backgroundColor: '#f1f3f6',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    durationText: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: '#3a4760',
     },
     eventTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#2A282F',
-        marginBottom: 4,
-    },
-    eventCategory: {
-        fontSize: 12,
-        color: '#666',
-        marginBottom: 12,
-        textTransform: 'capitalize',
-    },
-    infoRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 8,
-        justifyContent: 'space-between',
-    },
-    infoItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-    },
-    infoText: {
-        fontSize: 12,
-        color: '#666',
-        marginLeft: 4,
-        flex: 1,
-    },
-    footer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginTop: 12,
-        paddingTop: 12,
-        borderTopWidth: 1,
-        borderTopColor: '#f0f0f0',
-    },
-    budget: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#2c3a58',
+        color: '#1D1B20',
+        marginBottom: 10,
+    },
+    ownerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    ownerAvatar: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        marginRight: 8,
+        backgroundColor: '#eee',
+    },
+    ownerAvatarPlaceholder: {
+        backgroundColor: '#9aa1ad',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    ownerName: {
+        fontSize: 13,
+        color: '#3a4760',
+        flex: 1,
+    },
+    pillRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginBottom: 14,
+    },
+    pill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f7f8fa',
+        borderRadius: 14,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        gap: 4,
+    },
+    pillText: {
+        fontSize: 11,
+        color: '#4a4f5c',
+        maxWidth: 130,
     },
     viewButton: {
         backgroundColor: '#2c3a58',
-        borderRadius: 8,
-        paddingHorizontal: 16,
-        paddingVertical: 8,
+        borderRadius: 10,
+        paddingVertical: 11,
+        alignItems: 'center',
     },
     viewButtonText: {
         color: '#fff',
-        fontSize: 12,
+        fontSize: 14,
         fontWeight: '600',
     },
     loadingContainer: {

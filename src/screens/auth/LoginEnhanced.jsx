@@ -18,7 +18,6 @@ import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
 import appple from '../../assets/images/apple.png';
 import google from '../../assets/images/google.png';
-import facebook from '../../assets/images/fb.png';
 import Toast from 'react-native-toast-message';
 import AuthService from '../../services/authService';
 import { loginSchema } from '../../utils/validationSchemas';
@@ -249,9 +248,6 @@ export default function LoginEnhancedScreen() {
                                     <View style={styles.socialRow}>
                                         <TouchableOpacity style={styles.socialIconButton}>
                                             <Image source={google} style={styles.socialIconImage} resizeMode="contain" />
-                                        </TouchableOpacity>
-                                        <TouchableOpacity style={styles.socialIconButton}>
-                                            <Image source={facebook} style={styles.socialIconImage} resizeMode="contain" />
                                         </TouchableOpacity>
                                         <TouchableOpacity style={styles.socialIconButton}>
                                             <Image source={appple} style={styles.socialIconImage} resizeMode="contain" />

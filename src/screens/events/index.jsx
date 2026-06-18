@@ -42,6 +42,7 @@ export default function Events() {
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [activeTab, setActiveTab] = useState(null); // No tab active by default
     const scrollY = useRef(new Animated.Value(0)).current;
+    const scrollViewRef = useRef(null);
     const [isScrolled, setIsScrolled] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
@@ -315,8 +316,24 @@ export default function Events() {
     useEffect(() => {
         currentFiltersRef.current = currentFilters;
     }, [currentFilters]);
+    // Tap-same-tab-to-scroll-top. See screens/vendors/index.jsx for the
+    // full rationale — soft scroll when the currently-focused tab is
+    // re-tapped; the focus path (different tab) uses animated:false below.
+    useEffect(() => {
+        const unsubscribe = navigation.addListener?.('tabPress', () => {
+            if (navigation.isFocused?.()) {
+                scrollViewRef.current?.scrollTo?.({ y: 0, animated: true });
+            }
+        });
+        return unsubscribe;
+    }, [navigation]);
+
     useFocusEffect(
         useCallback(() => {
+            // Reset to top whenever the tab gains focus, so switching to
+            // Events lands on the newest items rather than mid-scroll.
+            scrollViewRef.current?.scrollTo?.({ y: 0, animated: false });
+
             if (isFirstFocusRef.current) {
                 isFirstFocusRef.current = false;
                 return undefined;
@@ -642,9 +659,14 @@ export default function Events() {
         }
     }, [isFetchingEvents, currentFilters]);
 
-    // Pin the header in place ONLY when scrollY is negative (pull-to-refresh).
-    // Positive scrollY (normal scroll up) gets translateY = 0 so the header
-    // scrolls away with the cards as before.
+    // refreshPinTranslate — keeps the header VISUALLY FIXED while the user
+    // pulls down to refresh. The ScrollView moves the content down during
+    // the pull (scrollY goes negative). Without this counter-translation,
+    // the header drifts down with it. Mirrors vendors/index.jsx exactly.
+    //
+    //   scrollY = -100 → translateY = -100 → cancels the pull
+    //   scrollY =    0 → translateY =    0
+    //   scrollY >    0 → translateY =    0 (scrolls away normally)
     const refreshPinTranslate = scrollY.interpolate({
         inputRange: [-500, 0, 500],
         outputRange: [-500, 0, 0],
@@ -652,9 +674,11 @@ export default function Events() {
         extrapolateLeft: 'identity',
     });
 
+
     return (
         <View style={[styles.safe, { backgroundColor: '#fff' }]}>
             <Animated.ScrollView
+                ref={scrollViewRef}
                 style={{ flex: 1, backgroundColor: '#fff' }}
                 contentContainerStyle={{ paddingBottom: 24 }}
                 showsVerticalScrollIndicator={false}
@@ -673,7 +697,10 @@ export default function Events() {
                 onScroll={Animated.event(
                     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
                     {
-                        useNativeDriver: false,
+                        // Native driver = no JS bridge for scroll deltas =
+                        // RefreshControl + sticky overlay both feel snappy
+                        // even on weak phones. Matches vendors/index.jsx.
+                        useNativeDriver: true,
                         listener: (event) => {
                             const offsetY = event.nativeEvent.contentOffset.y;
                             if (offsetY > 180 && !isScrolled) {
@@ -685,7 +712,14 @@ export default function Events() {
                     }
                 )}
             >
-                <Animated.View style={{ transform: [{ translateY: refreshPinTranslate }] }}>
+                {/* Header is wrapped in an Animated.View that counter-
+                    translates the ScrollView's downward movement during
+                    pull-to-refresh. Result: header appears visually
+                    pinned while the cards below get the spinner. Exact
+                    pattern from vendors/index.jsx. */}
+                <Animated.View
+                    style={{ transform: [{ translateY: refreshPinTranslate }] }}
+                >
                     <SearchHeader
                         searchValue={searchQuery}
                         searchType="events"
@@ -855,27 +889,32 @@ export default function Events() {
                 )}
             </Animated.ScrollView>
             
-            {/* Sticky Search Bar */}
-            {isScrolled && (
-                <Animated.View 
-                    style={[
-                        styles.stickyHeader,
-                        {
-                            opacity: scrollY.interpolate({
-                                inputRange: [150, 200],
-                                outputRange: [0, 1],
+            {/* Sticky Search Bar — always mounted, opacity animates from
+                0 → 1 as the user scrolls past the main header. Previously
+                gated behind {isScrolled && …} which caused a visible mount
+                pop the user reported as "header not fixed like vendor".
+                pointerEvents=box-none means taps pass through to the
+                underlying scroll when the overlay is invisible. */}
+            <Animated.View
+                style={[
+                    styles.stickyHeader,
+                    {
+                        opacity: scrollY.interpolate({
+                            inputRange: [100, 150, 160],
+                            outputRange: [0, 0.5, 1],
+                            extrapolate: 'clamp',
+                        }),
+                        transform: [{
+                            translateY: scrollY.interpolate({
+                                inputRange: [100, 160],
+                                outputRange: [-50, 0],
                                 extrapolate: 'clamp',
-                            }),
-                            transform: [{
-                                translateY: scrollY.interpolate({
-                                    inputRange: [150, 200],
-                                    outputRange: [-50, 0],
-                                    extrapolate: 'clamp',
-                                })
-                            }]
-                        }
-                    ]}
-                >
+                            })
+                        }]
+                    }
+                ]}
+                pointerEvents="box-none"
+            >
                     <View style={styles.stickyContent}>
                         {/* Tap target, not an inline TextInput — see the
                             equivalent in screens/vendors/index.jsx for the
@@ -923,7 +962,6 @@ export default function Events() {
                         </TouchableOpacity>
                     </View>
                 </Animated.View>
-            )}
 
             {/* Location picker — same component used by the Create Ad form,
                 driven externally by the Location filter chip. */}

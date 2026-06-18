@@ -35,6 +35,9 @@ export const icons = {
     liveMusic: require('./live-music.png'),
     photography: require('./photography.png'),
     regionalFolk: require('./regional-folk.png'),
+    venues: require('./venues.png'),
+    attire: require('./attire.png'),
+    valetParking: require('./valet-parking.png'),
 };
 
 // Order matters — longer / more specific aliases first so "Live Music" wins
@@ -57,7 +60,17 @@ const CATEGORY_ALIASES = [
     [/invitation|invite|card/i, icons.invitation],
     [/gift|favor|hamper/i, icons.giftbox],
     [/security|guard|bouncer/i, icons.guard],
+    // Valet first — "Valet Service" should hit this, not the generic
+    // car-rental fallback below.
+    [/valet|parking/i, icons.valetParking],
     [/car\s*rent|transport|limo|chauffeur|vehicle/i, icons.carRental],
+    // Wedding attire / bridal wear — matches "Bridal & Groom Wear",
+    // "Wedding Wear" without catching "Wedding Photography" etc.
+    [/wear\b|attire|bridal/i, icons.attire],
+    // Venues — Hotel Venue, Beachfront Venues, Club Venue, Rooftop Venues.
+    // Placed AFTER decoration so "Entry Area / Venue Decoration" stays
+    // decoration-themed instead of jumping to the castle icon.
+    [/venue/i, icons.venues],
     [/entertain|magician|clown|games/i, icons.entertainers],
 ];
 

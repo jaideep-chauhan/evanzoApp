@@ -22,7 +22,6 @@ import { useAuth } from '../../context/AuthContext';
 import Icon from 'react-native-vector-icons/Ionicons';
 import appple from '../../assets/images/apple.png';
 import google from '../../assets/images/google.png';
-import facebook from '../../assets/images/fb.png';
 import CustomModal from '../../components/CustomModal';
 import CustomToast from '../../components/CustomToast';
 
@@ -347,9 +346,6 @@ export default function Register() {
                             <View style={styles.socialRow}>
                                 <TouchableOpacity style={styles.socialIconButton}>
                                     <Image source={google} style={styles.socialIconImage} resizeMode="contain" />
-                                </TouchableOpacity>
-                                <TouchableOpacity style={styles.socialIconButton}>
-                                    <Image source={facebook} style={styles.socialIconImage} resizeMode="contain" />
                                 </TouchableOpacity>
                                 <TouchableOpacity style={styles.socialIconButton}>
                                     <Image source={appple} style={styles.socialIconImage} resizeMode="contain" />

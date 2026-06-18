@@ -115,7 +115,6 @@ const MainNavigator = () => {
                     theme.images.background,
                     require('../assets/images/apple.png'),
                     require('../assets/images/google.png'),
-                    require('../assets/images/fb.png'),
                     require('../assets/images/evanzoLogo.png')
                 ];
                 

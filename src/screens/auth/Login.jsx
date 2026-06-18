@@ -21,7 +21,6 @@ import { useTheme } from '../../ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import appple from '../../assets/images/apple.png';
 import google from '../../assets/images/google.png';
-import facebook from '../../assets/images/fb.png';
 import Icon from 'react-native-vector-icons/Ionicons';
 import Toast from 'react-native-toast-message';
 
@@ -340,12 +339,6 @@ export default function LoginScreen() {
                                                 ) : (
                                                     <Image source={google} style={styles.socialIconImage} resizeMode="contain" />
                                                 )}
-                                            </TouchableOpacity>
-                                            <TouchableOpacity
-                                                style={[styles.socialIconButton, { opacity: 0.5 }]}
-                                                disabled={true}
-                                            >
-                                                <Image source={facebook} style={styles.socialIconImage} resizeMode="contain" />
                                             </TouchableOpacity>
                                             <TouchableOpacity
                                                 style={styles.socialIconButton}

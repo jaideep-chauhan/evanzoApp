@@ -23,6 +23,12 @@ const LocationSelector = ({
     initialCountry = '',
     initialState = '',
     initialCity = '',
+    // Pre-joined display string (e.g. "Panchkula, Haryana, India"). Wins
+    // over the city/state/country join when provided — useful when the
+    // parent has the formatted location but not the structured fields
+    // (Edit Profile: user.location is fresh, user.country/state/city may
+    // be stale from an old save).
+    initialDisplay = '',
     style,
     inputStyle,
     // Externally-controlled mode for list-screen filters:
@@ -32,11 +38,17 @@ const LocationSelector = ({
     externallyControlled = false,
     visible: visibleProp,
     onClose,
+    // When true, swap the trigger button from navy-on-white to white-on-
+    // dark-text. Used by surfaces with a white container (e.g. the Edit
+    // Profile modal) where the default dark pill clashes with the form.
+    lightBackground = false,
 }) => {
     const [selected, setSelected] = useState(() => {
-        // Show initial value if any of the initial fields were provided
-        const display = [initialCity, initialState, initialCountry].filter(Boolean).join(', ');
-        return display ? { display_name: display, name: initialCity || initialState || initialCountry } : null;
+        // Prefer the pre-joined display string when given; otherwise build
+        // it from the structured fields.
+        const display = initialDisplay
+            || [initialCity, initialState, initialCountry].filter(Boolean).join(', ');
+        return display ? { display_name: display, name: initialCity || initialState || initialCountry || display } : null;
     });
     const [internalShow, setInternalShow] = useState(false);
     // Parent controls visibility when externallyControlled, else this component owns it.
@@ -54,9 +66,25 @@ const LocationSelector = ({
     const searchTimeoutRef = useRef(null);
     const lastQueryRef = useRef('');
     const lastEmittedRef = useRef(null);
+    // Separate from lastEmittedRef so the sync useEffect below can tell the
+    // difference between "we emitted the parent's initial value back to it"
+    // (still safe to re-sync display from props) and "user actually picked
+    // something in the modal" (must NOT clobber that with a stale prop).
+    const userSelectedRef = useRef(false);
 
-    // Emit initial location data if provided
+    // Emit initial location data if provided.
+    //
+    // SKIP this echo when the parent supplies `initialDisplay`. The reason:
+    // the parent in that case already HAS a formatted location string and
+    // is just passing it for display. Emitting back a join of the
+    // structured fields would OVERWRITE the parent's good string with a
+    // stale or partial value (e.g. parent has "Panchkula, Haryana, India"
+    // but the structured city/state from an older save says "Chandigarh,
+    // Chandigarh, India" → without this guard, the parent's string flips
+    // to the stale joined form). When initialDisplay isn't passed, behave
+    // exactly as before so other consumers (Create Ad) are unaffected.
     useEffect(() => {
+        if (initialDisplay) return;
         if ((initialCountry || initialState || initialCity) && onLocationChange) {
             const formatted = [initialCity, initialState, initialCountry].filter(Boolean).join(', ');
             const payload = {
@@ -75,7 +103,24 @@ const LocationSelector = ({
                 onLocationChange(payload);
             }
         }
-    }, [initialCountry, initialState, initialCity]);
+    }, [initialCountry, initialState, initialCity, initialDisplay]);
+
+    // Sync displayed value when initial* props change after first mount.
+    // Without this, the modal would keep showing the value it had when it
+    // first mounted, even if the parent later supplies a fresher prop
+    // (Edit Profile re-opening with updated user data, etc.).
+    //
+    // We use `userSelectedRef` here, NOT `lastEmittedRef` — the latter
+    // gets set even when we just echo the parent's initial value back to
+    // it, which would (incorrectly) block this prop-driven sync forever.
+    useEffect(() => {
+        if (userSelectedRef.current) return;
+        const display = initialDisplay
+            || [initialCity, initialState, initialCountry].filter(Boolean).join(', ');
+        setSelected(display
+            ? { display_name: display, name: initialCity || initialState || initialCountry || display }
+            : null);
+    }, [initialDisplay, initialCountry, initialState, initialCity]);
 
     const runSearch = useCallback((q) => {
         if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
@@ -100,6 +145,11 @@ const LocationSelector = ({
 
     const handleSelect = (place) => {
         setSelected(place);
+        // Mark that the USER deliberately picked — prevents the prop-sync
+        // effect from clobbering this choice if the parent's initialDisplay
+        // re-arrives (which it will if the parent stores `formData.location`
+        // from this same payload and re-passes it).
+        userSelectedRef.current = true;
         setShowModal(false);
         setQuery('');
         setResults([]);
@@ -142,20 +192,35 @@ const LocationSelector = ({
                 button entirely. */}
             {!externallyControlled && (
                 <TouchableOpacity
-                    style={[styles.dropdownButton, inputStyle]}
+                    style={[
+                        styles.dropdownButton,
+                        lightBackground && styles.dropdownButtonLight,
+                        inputStyle,
+                    ]}
                     onPress={() => setShowModal(true)}
                     activeOpacity={0.8}
                 >
                     <View style={styles.dropdownContent}>
-                        <Text style={styles.dropdownLabel}>Location</Text>
                         <Text
-                            style={[styles.dropdownText, !selected && styles.placeholderText]}
+                            style={[
+                                styles.dropdownLabel,
+                                lightBackground && styles.dropdownLabelLight,
+                            ]}
+                        >
+                            Location
+                        </Text>
+                        <Text
+                            style={[
+                                styles.dropdownText,
+                                !selected && styles.placeholderText,
+                                lightBackground && (selected ? styles.dropdownTextLight : styles.placeholderTextLight),
+                            ]}
                             numberOfLines={1}
                         >
                             {selected?.display_name || 'Search city, region or country'}
                         </Text>
                     </View>
-                    <Icon name="search" size={20} color="#ffffff80" />
+                    <Icon name="search" size={20} color={lightBackground ? '#2C3D5B80' : '#ffffff80'} />
                 </TouchableOpacity>
             )}
 
@@ -277,6 +342,15 @@ const styles = StyleSheet.create({
     },
     dropdownText: { color: '#ffffff', fontSize: 15 },
     placeholderText: { color: '#ffffff60' },
+    // lightBackground variants — used by white-form surfaces (Edit Profile).
+    dropdownButtonLight: {
+        backgroundColor: '#fff',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+    },
+    dropdownLabelLight: { color: '#6B7280' },
+    dropdownTextLight: { color: '#2C3D5B' },
+    placeholderTextLight: { color: '#9CA3AF' },
     modalContainer: { flex: 1, justifyContent: 'flex-end' },
     modalBackdrop: {
         position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,

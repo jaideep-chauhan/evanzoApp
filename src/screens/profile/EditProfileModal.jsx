@@ -17,23 +17,13 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../../ThemeContext';
 import userProfileService from '../../services/userProfileService';
 import { useAuth } from '../../context/AuthContext';
-import LocationSearchModal from '../vendors/LocationSearchModal';
+import LocationSelector from '../../components/LocationSelector';
 import { icons } from '../../assets/icons';
 import { openImagePickerWithCropper, openCameraWithCropper } from '../../utils/imageCropperUtils';
 
-// Translate a Nominatim/Photon payload into the flat shape the backend expects.
-// Returns null fields when only a popular-location string was picked.
-const extractLocationFields = (structured) => {
-    if (!structured) return null;
-    const addr = structured.address || {};
-    return {
-        country: addr.country || null,
-        state: addr.state || addr.state_district || addr.region || null,
-        city: addr.city || addr.town || addr.village || addr.municipality || addr.hamlet || null,
-        latitude: structured.lat ?? null,
-        longitude: structured.lon ?? null,
-    };
-};
+// extractLocationFields helper removed — LocationSelector now emits a flat
+// payload directly (country/state/city/lat/lon/formattedLocation), so the
+// Nominatim/Photon address-shape translation is no longer needed here.
 
 export default function EditProfileModal({ visible, onClose, onUpdate }) {
     const theme = useTheme();
@@ -104,7 +94,8 @@ export default function EditProfileModal({ visible, onClose, onUpdate }) {
             ],
         );
     };
-    const [showLocationModal, setShowLocationModal] = useState(false);
+    // showLocationModal state removed — LocationSelector owns its own
+    // visibility when used inline (no externallyControlled flag).
 
     useEffect(() => {
         const loadUserData = async () => {
@@ -338,27 +329,38 @@ export default function EditProfileModal({ visible, onClose, onUpdate }) {
                             />
                         </View>
 
-                        {/* Location — uses the same picker as the create-ad form
-                            so structured country/state/city/lat/lon are captured. */}
+                        {/* Location — same LocationSelector as Create Ad form.
+                            Emits a flat payload with country/state/city/lat/lon
+                            + a pre-joined formattedLocation we can drop into
+                            formData.location directly. */}
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Location</Text>
-                            <TouchableOpacity
-                                style={[styles.input, styles.locationPicker, { borderColor: theme.colors.borderLight }]}
-                                onPress={() => setShowLocationModal(true)}
-                                activeOpacity={0.8}
-                            >
-                                <Image source={icons.location} style={styles.locationPin} />
-                                <Text
-                                    style={[
-                                        styles.locationText,
-                                        { color: formData.location ? theme.colors.text : theme.colors.textSecondary },
-                                    ]}
-                                    numberOfLines={1}
-                                >
-                                    {formData.location || 'Choose location'}
-                                </Text>
-                                <Icon name="search" size={18} color={theme.colors.textSecondary} style={{ marginLeft: 'auto' }} />
-                            </TouchableOpacity>
+                            <LocationSelector
+                                lightBackground
+                                // formData.location is the fresh formatted
+                                // string ("Panchkula, Haryana, India").
+                                // Pass it as initialDisplay so the picker
+                                // shows the current value even when the
+                                // structured city/state/country fields are
+                                // stale from an older save.
+                                initialDisplay={formData.location}
+                                initialCountry={locationData?.country || ''}
+                                initialState={locationData?.state || ''}
+                                initialCity={locationData?.city || ''}
+                                onLocationChange={(payload) => {
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        location: payload?.formattedLocation || '',
+                                    }));
+                                    setLocationData({
+                                        country: payload?.country || null,
+                                        state: payload?.state || null,
+                                        city: payload?.city || null,
+                                        latitude: payload?.latitude ?? null,
+                                        longitude: payload?.longitude ?? null,
+                                    });
+                                }}
+                            />
                         </View>
 
                         {/* Bio */}
@@ -403,17 +405,8 @@ export default function EditProfileModal({ visible, onClose, onUpdate }) {
                 </View>
             </KeyboardAvoidingView>
 
-            {/* Location picker — same component used by the create-ad form */}
-            <LocationSearchModal
-                visible={showLocationModal}
-                onClose={() => setShowLocationModal(false)}
-                currentLocation={formData.location}
-                screenType="vendors"
-                onLocationSelect={(formatted, structured) => {
-                    setFormData((prev) => ({ ...prev, location: formatted || '' }));
-                    setLocationData(extractLocationFields(structured));
-                }}
-            />
+            {/* LocationSearchModal block removed — LocationSelector is
+                inlined into the form above and renders its own modal. */}
         </Modal>
     );
 }

@@ -123,14 +123,24 @@ export default function EventDetailViewEnhanced() {
         budget: parseBudget(eventFromParams.budget),
         guests: eventFromParams.guests || eventFromParams.guests_count || '200',
         description: eventFromParams.description || 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Lorem ipsum dolor sit amet, consectetur adipiscing elit...',
-        images: (eventFromParams.attachments || eventFromParams.images || []).length > 0
-            ? (eventFromParams.attachments || eventFromParams.images).map(att => {
+        // attachments / images can come in as a real array, a JSON-stringified
+        // array from a TEXT column, or null. Normalize before .map() — the
+        // crash was "string.map is not a function" when DB returned the
+        // stringified shape and we trusted `.length > 0` as an array signal.
+        images: (() => {
+            const raw = eventFromParams.attachments || eventFromParams.images;
+            let arr = raw;
+            if (typeof raw === 'string') {
+                try { arr = JSON.parse(raw); } catch (_) { arr = []; }
+            }
+            if (!Array.isArray(arr) || arr.length === 0) return [img];
+            return arr.map((att) => {
                 if (typeof att === 'string') return att.startsWith('http') ? { uri: att } : { uri: att };
-                else if (att.url) return { uri: att.url };
-                else if (att.path) return { uri: `https://api.evnzo.com${att.path}` };
+                if (att?.url) return { uri: att.url };
+                if (att?.path) return { uri: `https://api.evnzo.com${att.path}` };
                 return img;
-            })
-            : [img],
+            });
+        })(),
         organizer: getOrganizerData(eventFromParams),
         status: eventFromParams.status || 'active',
     };
@@ -499,9 +509,11 @@ export default function EventDetailViewEnhanced() {
                     </TouchableOpacity>
                 </View>
 
-                {/* Similar Events */}
+                {/* Similar Events — title intentionally not rendered here.
+                    EventCardCarousel renders its own "You might also like"
+                    header internally; duplicating it caused the empty
+                    title block above the actual carousel. */}
                 <View style={styles.similarSection}>
-                    <Text style={styles.sectionTitle}>You might also like</Text>
                     <EventCardCarousel
                         eventId={eventData.id}
                         eventCategory={eventData.event_type}
