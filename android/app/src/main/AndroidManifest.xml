@@ -16,11 +16,6 @@
     <!-- AdMob: required on Android 13+ so the SDK can read the advertising ID -->
     <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
 
-    <!-- Optional: For Android 11+ if targeting MANAGE_EXTERNAL_STORAGE -->
-    <uses-permission
-        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
-        tools:ignore="ScopedStorage" />
-
     <application
         android:name=".MainApplication"
         android:label="@string/app_name"
