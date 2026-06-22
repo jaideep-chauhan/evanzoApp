@@ -33,6 +33,7 @@ import DocumentPicker from 'react-native-document-picker';
 // doesn't have to re-download every time you scroll past it.
 const FILE_CACHE_KEY = '@evanzo_file_cache_mapping';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
+import { requestGalleryPermission, requestCameraPermission } from '../../utils/galleryPermission';
 import FileViewer from 'react-native-file-viewer';
 import RNFS from 'react-native-fs';
 import Contacts from 'react-native-contacts';
@@ -1148,54 +1149,19 @@ export default function ChatScreen({ route, navigation }) {
         }
     };
 
-    const requestGalleryPermission = async () => {
-        if (Platform.OS === 'android') {
-            try {
-                const granted = await PermissionsAndroid.request(
-                    PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
-                    {
-                        title: 'Gallery Permission',
-                        message: 'This app needs access to your gallery to send photos',
-                        buttonNeutral: 'Ask Me Later',
-                        buttonNegative: 'Cancel',
-                        buttonPositive: 'OK',
-                    },
-                );
-                return granted === PermissionsAndroid.RESULTS.GRANTED;
-            } catch (err) {
-                console.warn(err);
-                return false;
-            }
-        }
-        return true;
-    };
-
-    const requestCameraPermission = async () => {
-        if (Platform.OS === 'android') {
-            try {
-                const granted = await PermissionsAndroid.request(
-                    PermissionsAndroid.PERMISSIONS.CAMERA,
-                    {
-                        title: 'Camera Permission',
-                        message: 'This app needs access to your camera to take photos',
-                        buttonNeutral: 'Ask Me Later',
-                        buttonNegative: 'Cancel',
-                        buttonPositive: 'OK',
-                    },
-                );
-                return granted === PermissionsAndroid.RESULTS.GRANTED;
-            } catch (err) {
-                console.warn(err);
-                return false;
-            }
-        }
-        return true;
-    };
+    // Gallery + camera permission helpers were inlined here but only
+    // requested the legacy READ_EXTERNAL_STORAGE / CAMERA permissions,
+    // so on Android 13+ the gallery prompt never appeared. Both now
+    // live in src/utils/galleryPermission.js and branch by API level.
+    // Chat also sends videos, so requestGalleryPermission gets
+    // {includeVideo: true} below where it's called.
 
     const handleImagePicker = async () => {
         setShowAttachmentModal(false);
 
-        const hasPermission = await requestGalleryPermission();
+        // Chat attachments include videos as well — ask for both image
+        // and video media access in a single prompt on Android 13+.
+        const hasPermission = await requestGalleryPermission({ includeVideo: true });
         if (!hasPermission) {
             Alert.alert('Permission Required', 'Gallery permission is required to select photos and videos');
             return;

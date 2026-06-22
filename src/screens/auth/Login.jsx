@@ -340,17 +340,22 @@ export default function LoginScreen() {
                                                     <Image source={google} style={styles.socialIconImage} resizeMode="contain" />
                                                 )}
                                             </TouchableOpacity>
-                                            <TouchableOpacity
-                                                style={styles.socialIconButton}
-                                                onPress={handleAppleLogin}
-                                                disabled={googleLoading || appleLoading || isLoading}
-                                            >
-                                                {appleLoading ? (
-                                                    <ActivityIndicator size="small" color={theme.colors.primary} />
-                                                ) : (
-                                                    <Image source={appple} style={styles.socialIconImage} resizeMode="contain" />
-                                                )}
-                                            </TouchableOpacity>
+                                            {/* Apple Sign-In is iOS-only — the native
+                                                Apple Authentication API doesn't exist on
+                                                Android, so the button is hidden there. */}
+                                            {Platform.OS === 'ios' && (
+                                                <TouchableOpacity
+                                                    style={styles.socialIconButton}
+                                                    onPress={handleAppleLogin}
+                                                    disabled={googleLoading || appleLoading || isLoading}
+                                                >
+                                                    {appleLoading ? (
+                                                        <ActivityIndicator size="small" color={theme.colors.primary} />
+                                                    ) : (
+                                                        <Image source={appple} style={styles.socialIconImage} resizeMode="contain" />
+                                                    )}
+                                                </TouchableOpacity>
+                                            )}
                                         </View>
                                     </ScrollView>
                                 )}

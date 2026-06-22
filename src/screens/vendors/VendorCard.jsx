@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import {
     View,
     Text,
@@ -35,7 +35,7 @@ const toFastSource = (src, fallback) => {
 
 const { width } = Dimensions.get('window');
 
-export default function VendorCard({
+function VendorCard({
     initials,
     name,
     type,
@@ -68,48 +68,43 @@ export default function VendorCard({
     const navigation = useNavigation();
     const theme = useTheme();
 
-    // Carousel logic for infinite auto-scroll
-    // Use fallback image if no images available
-    console.log('🎯 VendorCard - received images:', { 
-        images, 
-        imagesLength: images ? images.length : 0, 
-        imagesType: typeof images,
-        vendorId: vendorId || 'unknown',
-        name,
-        firstImage: images && images.length > 0 ? images[0] : null,
-        imageDetails: images ? images.map((img, idx) => ({
-            index: idx,
-            type: typeof img,
-            value: img,
-            isValidUrl: typeof img === 'string' && img.startsWith('http')
-        })) : []
-    });
-    
-    const safeImages = images && images.length > 0 ? images : [img, img, img];
-    
-    // Convert image URLs to proper format for React Native Image component
-    const formattedImages = safeImages.map(image => {
-        // Handle null or undefined
-        if (!image) {
+    // Carousel logic for infinite auto-scroll. (Removed a verbose per-render
+    // console.log that serialized the whole images array on every render — it
+    // added measurable main-thread cost while scrolling the list.)
+
+    // Memoize the formatted/extended image arrays. Rebuilding these (and the
+    // {uri,...} source objects) on every render handed FastImage brand-new
+    // source references each time the card re-rendered during list scroll,
+    // forcing it to re-decode and flash. Keying off `images` keeps the
+    // references stable until the underlying data actually changes.
+    const formattedImages = useMemo(() => {
+        const safeImages = images && images.length > 0 ? images : [img, img, img];
+        return safeImages.map(image => {
+            // Handle null or undefined
+            if (!image) {
+                return img;
+            }
+            // If it's already an object with uri, use it as is
+            if (typeof image === 'object' && image.uri) {
+                return image;
+            }
+            // If it's a string URL, convert to {uri: url} format
+            if (typeof image === 'string' && image.startsWith('http')) {
+                return { uri: image };
+            }
+            // If it's a local image (number from require), use it directly
+            if (typeof image === 'number') {
+                return image;
+            }
+            // Default fallback
             return img;
-        }
-        // If it's already an object with uri, use it as is
-        if (typeof image === 'object' && image.uri) {
-            return image;
-        }
-        // If it's a string URL, convert to {uri: url} format
-        if (typeof image === 'string' && image.startsWith('http')) {
-            return { uri: image };
-        }
-        // If it's a local image (number from require), use it directly
-        if (typeof image === 'number') {
-            return image;
-        }
-        // Default fallback
-        return img;
-    });
-    
-    const extendedImages = [formattedImages[formattedImages.length - 1], ...formattedImages, formattedImages[0]];
+        });
+    }, [images]);
+
+    const extendedImages = useMemo(
+        () => [formattedImages[formattedImages.length - 1], ...formattedImages, formattedImages[0]],
+        [formattedImages],
+    );
     const scrollRef = useRef(null);
     const currentIndex = useRef(1);
     const intervalRef = useRef(null);
@@ -118,31 +113,36 @@ export default function VendorCard({
     // back to the colored initials circle instead of leaving a gray rectangle.
     const [avatarFailed, setAvatarFailed] = useState(false);
 
+    // Position the carousel on its first real slide ONCE, on mount. This used
+    // to live in the same effect as the auto-scroll timer (keyed on isFocused),
+    // so every time the card's focus flipped while the user scrolled the list,
+    // the carousel snapped back to slide 1 — the "blink on cards" users
+    // reported. Keeping it mount-only means focus changes never touch scroll.
     useEffect(() => {
-        // Initial positioning
-        setTimeout(() => {
-            if (scrollRef.current) {
-                scrollRef.current.scrollTo({ x: carouselWidth * 1, animated: false });
-            }
+        const t = setTimeout(() => {
+            scrollRef.current?.scrollTo({ x: carouselWidth, animated: false });
         }, 10);
+        return () => clearTimeout(t);
+    }, [carouselWidth]);
 
-        // Auto-scroll interval only when focused
-        if (isFocused) {
-            intervalRef.current = setInterval(() => {
-                if (scrollRef.current) {
-                    currentIndex.current += 1;
-                    scrollRef.current.scrollTo({ x: carouselWidth * currentIndex.current, animated: true });
-                }
-            }, 2500);
-        }
-
+    // Auto-advance the carousel only while this card is the focused one.
+    // Starting/stopping the timer must NOT reposition the carousel, otherwise
+    // focus changes during scroll would blink the card.
+    useEffect(() => {
+        if (!isFocused) return undefined;
+        intervalRef.current = setInterval(() => {
+            if (scrollRef.current) {
+                currentIndex.current += 1;
+                scrollRef.current.scrollTo({ x: carouselWidth * currentIndex.current, animated: true });
+            }
+        }, 2500);
         return () => {
             if (intervalRef.current) {
                 clearInterval(intervalRef.current);
                 intervalRef.current = null;
             }
         };
-    }, [carouselWidth, isFocused]);
+    }, [isFocused, carouselWidth]);
 
     const handleScrollEnd = (e) => {
         const offsetX = e.nativeEvent.contentOffset.x;
@@ -487,6 +487,37 @@ export default function VendorCard({
         </TouchableOpacity>
     );
 }
+
+// Memoize so a parent re-render (e.g. focusedCardIndex changing on scroll)
+// only re-renders the cards whose data actually changed — not every card in
+// the list. We deliberately ignore the inline callback props (onChatPress /
+// onComplete / onDelete), which the parent recreates on every render: they
+// close over a stable vendor object per card, so skipping the re-render keeps
+// the correct behavior while eliminating the scroll-time render storm that
+// (together with the carousel reset) caused the cards to blink.
+function areEqual(prev, next) {
+    return (
+        prev.vendorId === next.vendorId &&
+        prev.vendorAdId === next.vendorAdId &&
+        prev.isFocused === next.isFocused &&
+        prev.isCheckingChat === next.isCheckingChat &&
+        prev.name === next.name &&
+        prev.type === next.type &&
+        prev.rating === next.rating &&
+        prev.description === next.description &&
+        prev.location === next.location &&
+        prev.initials === next.initials &&
+        prev.ownerProfilePic === next.ownerProfilePic &&
+        prev.extraCount === next.extraCount &&
+        prev.status === next.status &&
+        prev.showOwnerActions === next.showOwnerActions &&
+        prev.isChat === next.isChat &&
+        prev.images === next.images &&
+        prev.offers === next.offers
+    );
+}
+
+export default React.memo(VendorCard, areEqual);
 
 const styles = StyleSheet.create({
     cardWrapper: {

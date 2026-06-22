@@ -12,7 +12,20 @@ class SocialAuthService {
     initializeGoogleSignIn() {
         try {
             GoogleSignin.configure({
-                webClientId: '1075894285533-6tnc0osfup96pogem7p940ht6vn5u8tv.apps.googleusercontent.com',
+                // IMPORTANT: webClientId MUST be the "Web client" (client_type 3)
+                // from the SAME Firebase project as android/app/google-services.json
+                // (project 453180956529 / evnzo-fd77d), because that's where this
+                // app's package + SHA-1 fingerprints are registered. The previous
+                // value belonged to a different project (1075894285533), so Google
+                // refused to mint a token for it → DEVELOPER_ERROR (code 10).
+                // The backend's GOOGLE_CLIENT_ID must match this exactly (it's the
+                // idToken audience it verifies against).
+                webClientId: '453180956529-01a33o6m8pcv8djesn9n7fsmbedobppd.apps.googleusercontent.com',
+                // NOTE: iOS still needs its OWN OAuth client created in project
+                // 453180956529 (the Firebase iOS app currently has no CLIENT_ID in
+                // GoogleService-Info.plist). Replace the line below with that iOS
+                // client id once created, and update the Info.plist URL scheme to
+                // its REVERSED_CLIENT_ID. Until then iOS Google Sign-In won't work.
                 iosClientId: '1075894285533-cu18n2ip03k8glui687tvkspb7qsi35g.apps.googleusercontent.com',
                 offlineAccess: true,
                 hostedDomain: '',

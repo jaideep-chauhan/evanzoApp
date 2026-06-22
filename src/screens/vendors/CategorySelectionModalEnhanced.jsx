@@ -6,11 +6,11 @@ import {
     StyleSheet,
     TouchableOpacity,
     FlatList,
-    SafeAreaView,
     ActivityIndicator,
     ScrollView,
     Image,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { getCategoryIcon } from '../../assets/icons';
 import { useTheme } from '../../ThemeContext';

@@ -1,4 +1,8 @@
 {
   "name": "EVNZO",
-  "displayName": "EVNZO"
+  "displayName": "EVNZO",
+  "react-native-google-mobile-ads": {
+    "android_app_id": "ca-app-pub-2655968575466386~3663620867",
+    "ios_app_id": "ca-app-pub-2655968575466386~4925662579"
+  }
 }

@@ -7,10 +7,12 @@ import {
     TouchableOpacity,
     StyleSheet,
     FlatList,
-    SafeAreaView,
     ActivityIndicator,
     Alert,
+    KeyboardAvoidingView,
+    Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../../ThemeContext';
 import { searchLocations, getCurrentLocation, reverseGeocode } from '../../utils/locationService';
@@ -238,8 +240,21 @@ export default function LocationSearchModal({ visible, onClose, onLocationSelect
             animationType="slide"
             transparent={true}
             onRequestClose={onClose}
+            // statusBarTranslucent prevents Android from offsetting the
+            // sheet twice (once for status bar, once for the modal layer)
+            // which was clipping the top of the modal on tall screens.
+            statusBarTranslucent
         >
-            <View style={styles.modalOverlay}>
+            {/* KeyboardAvoidingView is the actual fix for "search input
+                jumps above the screen on Android". adjustResize shrinks
+                the window when the keyboard opens; the modal pinned to
+                flex-end with a fixed 70% height got its top pushed off
+                the visible area. Wrapping in KAV + switching to maxHeight
+                lets the sheet shrink instead. */}
+            <KeyboardAvoidingView
+                style={styles.modalOverlay}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            >
                 <View style={styles.container}>
                     {/* Header */}
                     <View style={styles.header}>
@@ -325,7 +340,7 @@ export default function LocationSearchModal({ visible, onClose, onLocationSelect
                         </View>
                     )}
                 </View>
-            </View>
+            </KeyboardAvoidingView>
         </Modal>
     );
 }
@@ -343,9 +358,11 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
-        // Fixed height so the sheet doesn't jump as content switches between
-        // popular locations / search results / empty state.
-        height: '70%',
+        // maxHeight (not fixed height) so the sheet can shrink when the
+        // keyboard opens, keeping the search input on screen. minHeight
+        // stops it from collapsing too far when the list is empty.
+        maxHeight: '85%',
+        minHeight: 380,
     },
     header: {
         flexDirection: 'row',

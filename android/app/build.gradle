@@ -9,6 +9,15 @@ plugins {
     id 'com.google.gms.google-services'
 }
 
+// Release-signing credentials are read from android/local.properties, which is
+// git-ignored, so the real keystore password never lives in a tracked file.
+// Falls back to project properties (gradle.properties / -P flags) for CI.
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file("local.properties")
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+
 android {
     namespace "com.x4x90studio.evnzo"
     compileSdkVersion rootProject.ext.compileSdkVersion
@@ -19,8 +28,8 @@ android {
         applicationId "com.x4x90studio.evnzo"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 31
-        versionName "1.9"
+        versionCode 32
+        versionName "2.0"
 
         // RN apps with lots of native modules routinely cross Android's
         // 65K methods limit. Multidex splits the dex output into multiple
@@ -45,11 +54,16 @@ android {
             keyPassword 'android'
         }
         release {
-            if (project.hasProperty('MYAPP_UPLOAD_STORE_FILE')) {
-                storeFile file(MYAPP_UPLOAD_STORE_FILE)
-                storePassword MYAPP_UPLOAD_STORE_PASSWORD
-                keyAlias MYAPP_UPLOAD_KEY_ALIAS
-                keyPassword MYAPP_UPLOAD_KEY_PASSWORD
+            def storeFileName = keystoreProperties['MYAPP_UPLOAD_STORE_FILE'] ?:
+                    (project.hasProperty('MYAPP_UPLOAD_STORE_FILE') ? MYAPP_UPLOAD_STORE_FILE : null)
+            if (storeFileName != null) {
+                storeFile file(storeFileName)
+                storePassword keystoreProperties['MYAPP_UPLOAD_STORE_PASSWORD'] ?:
+                        project.findProperty('MYAPP_UPLOAD_STORE_PASSWORD')
+                keyAlias keystoreProperties['MYAPP_UPLOAD_KEY_ALIAS'] ?:
+                        project.findProperty('MYAPP_UPLOAD_KEY_ALIAS')
+                keyPassword keystoreProperties['MYAPP_UPLOAD_KEY_PASSWORD'] ?:
+                        project.findProperty('MYAPP_UPLOAD_KEY_PASSWORD')
             }
         }
     }

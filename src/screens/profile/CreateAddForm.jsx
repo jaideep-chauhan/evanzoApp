@@ -18,6 +18,7 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { openImagePickerWithCropper, IMAGE_DIMENSIONS } from '../../utils/imageCropperUtils';
+import { requestGalleryPermission } from '../../utils/galleryPermission';
 import { compressImagesChunked, COMPRESSION_PRESETS } from '../../utils/imageCompressionUtil';
 import { UploadProgressOverlay } from '../../components/UploadProgressBar';
 import { useTheme } from '../../ThemeContext';
@@ -430,29 +431,11 @@ const CreateAddForm = ({ type, onClose }) => {
         setOffers(newOffers);
     };
 
-    const requestGalleryPermission = async () => {
-        if (Platform.OS === 'android') {
-            try {
-                const granted = await PermissionsAndroid.request(
-                    PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
-                    {
-                        title: 'Gallery Permission',
-                        message: 'This app needs access to your gallery to select photos',
-                        buttonNeutral: 'Ask Me Later',
-                        buttonNegative: 'Cancel',
-                        buttonPositive: 'OK',
-                    },
-                );
-                return granted === PermissionsAndroid.RESULTS.GRANTED;
-            } catch (err) {
-                console.warn(err);
-                return false;
-            }
-        }
-        return true;
-    };
-
     const selectImage = async () => {
+        // Gallery permission handled by the shared helper — it branches
+        // on API level (READ_MEDIA_IMAGES on Android 13+, legacy
+        // READ_EXTERNAL_STORAGE below). The local copy was hard-coded to
+        // the legacy permission, which silently auto-denied on API 33+.
         const hasPermission = await requestGalleryPermission();
 
         if (!hasPermission) {

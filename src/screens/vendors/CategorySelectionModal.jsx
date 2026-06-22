@@ -6,9 +6,9 @@ import {
     StyleSheet,
     TouchableOpacity,
     FlatList,
-    SafeAreaView,
     ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../../ThemeContext';
 import categoryService from '../../services/categoryService';

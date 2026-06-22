@@ -60,7 +60,13 @@ export default function VendorDetailsSection({
     const [descExpanded, setDescExpanded] = useState(false);
     const [imageDimensions, setImageDimensions] = useState({});
     return (
-        <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        // This section is already rendered inside the screen's vertical
+        // ScrollView (vendorAddDetails/index.jsx). Nesting a second vertical
+        // ScrollView here made the two compete for the same vertical gesture,
+        // producing the janky/stuttering scroll users reported. A plain View
+        // lets the parent own vertical scrolling; the horizontal photo carousel
+        // and the "You might also like" FlatList scroll on their own axis.
+        <View style={styles.container}>
             <View>
                 {/* Photos Section */}
                 <View style={styles.card}>
@@ -165,7 +171,7 @@ export default function VendorDetailsSection({
                 )}
 
             </View>
-        </ScrollView>
+        </View>
     );
     // ...existing code ends above. Removed duplicate/erroneous JSX block.
 }

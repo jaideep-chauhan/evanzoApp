@@ -9,6 +9,8 @@ import {
     StyleSheet,
     Dimensions,
     ActivityIndicator,
+    KeyboardAvoidingView,
+    Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { searchLocations as photonSearch } from '../services/photonService';
@@ -229,8 +231,28 @@ const LocationSelector = ({
                 transparent
                 animationType="slide"
                 onRequestClose={handleClose}
+                // statusBarTranslucent lets the modal render under the
+                // status bar instead of getting offset twice on Android,
+                // which was clipping the modal sheet on tall devices.
+                statusBarTranslucent
             >
-                <View style={styles.modalContainer}>
+                {/* KeyboardAvoidingView is the actual fix for "search input
+                    goes above the screen". With android:windowSoftInputMode=
+                    "adjustResize", opening the keyboard shrinks the visible
+                    window; the modal was pinned to the bottom with a fixed
+                    85%-of-screen height, so its top — where the search input
+                    lives — got pushed off the visible area.
+
+                    iOS needs `behavior="padding"` because adjustResize is
+                    Android-only. On Android we use `height` so the inner
+                    flex layout reflows naturally; we then bound the content
+                    with maxHeight instead of a fixed height (see styles
+                    below) so it shrinks to fit when the keyboard claims
+                    half the screen. */}
+                <KeyboardAvoidingView
+                    style={styles.modalContainer}
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                >
                     <TouchableOpacity
                         style={styles.modalBackdrop}
                         activeOpacity={1}
@@ -307,7 +329,7 @@ const LocationSelector = ({
                             </View>
                         )}
                     </View>
-                </View>
+                </KeyboardAvoidingView>
             </Modal>
         </View>
     );
@@ -360,7 +382,11 @@ const styles = StyleSheet.create({
         backgroundColor: '#ffffff',
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
-        height: MODAL_HEIGHT,
+        // maxHeight (instead of fixed height) lets the sheet shrink when
+        // the keyboard claims half the window — without it the top of the
+        // sheet (search input + header) gets pushed above the screen on
+        // Android once the keyboard opens.
+        maxHeight: MODAL_HEIGHT,
         elevation: 20,
         shadowColor: '#000',
         shadowOpacity: 0.25,

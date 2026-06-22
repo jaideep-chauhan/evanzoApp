@@ -347,9 +347,12 @@ export default function Register() {
                                 <TouchableOpacity style={styles.socialIconButton}>
                                     <Image source={google} style={styles.socialIconImage} resizeMode="contain" />
                                 </TouchableOpacity>
-                                <TouchableOpacity style={styles.socialIconButton}>
-                                    <Image source={appple} style={styles.socialIconImage} resizeMode="contain" />
-                                </TouchableOpacity>
+                                {/* Apple Sign-In is iOS-only — hidden on Android. */}
+                                {Platform.OS === 'ios' && (
+                                    <TouchableOpacity style={styles.socialIconButton}>
+                                        <Image source={appple} style={styles.socialIconImage} resizeMode="contain" />
+                                    </TouchableOpacity>
+                                )}
                             </View>
                         </ScrollView>
                     )}
