@@ -45,13 +45,30 @@ class SocialAuthService {
                 showPlayServicesUpdateDialog: true,
             });
 
-            // Get user info from Google
+            // Get user info from Google. In google-signin v13+ signIn() RESOLVES
+            // with a discriminated result ({ type: 'cancelled' | 'success', data })
+            // instead of throwing on cancel — so we MUST check the type before
+            // using it. Previously the code called getTokens() unconditionally,
+            // which then threw "getTokens requires a user to be signed in" after
+            // the user cancelled (the console errors reported).
             const userInfo = await GoogleSignin.signIn();
-            console.log('Google user info:', userInfo);
 
-            // Get ID token
-            const tokens = await GoogleSignin.getTokens();
-            const idToken = tokens.idToken;
+            if (userInfo?.type === 'cancelled' || userInfo?.type === 'noSavedCredentialFound') {
+                return {
+                    success: false,
+                    cancelled: true,
+                    error: 'Sign in cancelled by user',
+                };
+            }
+
+            // idToken comes back directly from signIn() when webClientId +
+            // offlineAccess are configured (they are above). Fall back to
+            // getTokens() only if it's somehow missing.
+            let idToken = userInfo?.data?.idToken;
+            if (!idToken) {
+                const tokens = await GoogleSignin.getTokens();
+                idToken = tokens?.idToken;
+            }
 
             if (!idToken) {
                 throw new Error('No ID token received from Google');

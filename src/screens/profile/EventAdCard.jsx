@@ -16,6 +16,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../../ThemeContext';
 import eventService from '../../services/eventService';
 import img from '../../assets/images/dummy.png';
+import { thumbnailUrl } from '../../utils/imageUtils';
 import { useNavigation } from '@react-navigation/native';
 import { icons } from '../../assets/icons';
 import FastImage from 'react-native-fast-image';
@@ -253,9 +254,9 @@ export default function EventAdCard({
                                 const imageUrl = imageItem.startsWith('http')
                                     ? imageItem
                                     : `https://api.evnzo.com${imageItem}`;
-                                imageSource = { uri: imageUrl, priority: FastImage.priority.low };
+                                imageSource = { uri: thumbnailUrl(imageUrl, 600), priority: FastImage.priority.low };
                             } else if (typeof imageItem === 'object' && imageItem.uri) {
-                                imageSource = { uri: imageItem.uri, priority: FastImage.priority.low };
+                                imageSource = { uri: thumbnailUrl(imageItem.uri, 600), priority: FastImage.priority.low };
                             } else {
                                 imageSource = img;
                             }

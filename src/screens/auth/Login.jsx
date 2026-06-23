@@ -403,8 +403,8 @@ const styles = StyleSheet.create({
         height: 90,
     },
     logo: {
-        height: 60,
-        width: 200,
+        height: 45,
+        width: 150,
     },
     bottomSectionWrapper: {
         flex: 1,

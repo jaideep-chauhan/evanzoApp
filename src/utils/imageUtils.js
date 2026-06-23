@@ -40,6 +40,32 @@ export const fixImageArray = (imageArray) => {
 };
 
 /**
+ * Append an on-the-fly resize query to a backend `/uploads` image URL so the
+ * server (sharp middleware) returns a smaller thumbnail instead of the full-
+ * resolution original — large originals drop ~60-94% in bytes and ~10x in
+ * decode pixels, which is the main scroll-jank cost in image lists.
+ *
+ * No-op for non-/uploads URLs (avatars from other hosts, data URIs, local
+ * require()s) and URLs that already request a width, so it's always safe to
+ * wrap a source uri. Backward compatible: a backend without the resize
+ * middleware just ignores the query and serves the original.
+ *
+ * @param {string} url - image URL
+ * @param {number} width - target max width px (default 600 for cards; ~150 for avatars)
+ * @param {number} quality - JPEG quality 30-95 (default 70)
+ * @returns {string}
+ */
+export const thumbnailUrl = (url, width = 600, quality = 70) => {
+    if (typeof url !== 'string' || !url.includes('/uploads/')) {
+        return url;
+    }
+    if (/[?&]w=/.test(url)) {
+        return url; // already sized
+    }
+    return `${url}${url.includes('?') ? '&' : '?'}w=${width}&q=${quality}`;
+};
+
+/**
  * Get image source object for React Native Image component
  * @param {string|number|object} image - Image source (URL, require(), or object)
  * @param {any} fallback - Fallback image if source is invalid
@@ -104,6 +130,7 @@ export default {
     fixImageUrl,
     fixImageArray,
     getImageSource,
+    thumbnailUrl,
     getApiBaseUrl,
     isValidImageUrl
 };

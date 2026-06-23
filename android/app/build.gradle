@@ -24,12 +24,25 @@ android {
     ndkVersion rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
 
+    // Declare the New Architecture native build explicitly (local copy of
+    // RN's default-app-setup CMakeLists + OnLoad.cpp) instead of relying on
+    // the RN gradle plugin to inject the path in finalizeDsl. The injected
+    // path builds libappmodules.so but doesn't fully wire it into the
+    // variant's task graph, so (a) clean builds race the per-library codegen
+    // and (b) libappmodules.so never gets packaged → SoLoader fails at launch
+    // with "couldn't find DSO to load: libappmodules.so".
+    externalNativeBuild {
+        cmake {
+            path "src/main/jni/CMakeLists.txt"
+        }
+    }
+
     defaultConfig {
         applicationId "com.x4x90studio.evnzo"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 32
-        versionName "2.0"
+        versionCode 33
+        versionName "2.0.1"
 
         // RN apps with lots of native modules routinely cross Android's
         // 65K methods limit. Multidex splits the dex output into multiple
@@ -71,21 +84,13 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
-            // Speed up local-emulator dev: only build native libs for the
-            // emulator's ABI (x86_64 on Intel Macs / modern emulators).
-            // ndk.abiFilters limits which compiled libs get bundled into
-            // the APK, but CMake still compiles all ABIs by default —
-            // externalNativeBuild.cmake.abiFilters is what actually
-            // prevents the compile and is the real time saver.
-            // Change to "arm64-v8a" for a physical device over USB.
-            ndk {
-                abiFilters "x86_64"
-            }
-            externalNativeBuild {
-                cmake {
-                    abiFilters "x86_64"
-                }
-            }
+            // Speed up local-emulator dev: restrict native ABIs via the
+            // RN-standard `reactNativeArchitectures` gradle property
+            // (e.g. -PreactNativeArchitectures=x86_64) instead of custom
+            // buildType abiFilters. Custom ndk/externalNativeBuild
+            // abiFilters here detach the externalNativeBuild output
+            // (libappmodules.so) from packaging, so SoLoader fails with
+            // "couldn't find DSO to load: libappmodules.so" at launch.
         }
         release {
             signingConfig signingConfigs.release
@@ -102,26 +107,30 @@ android {
                     abiFilters "armeabi-v7a", "arm64-v8a"
                 }
             }
-            // ndk.abiFilters only filters libs we COMPILE here. Prebuilt
-            // .so files shipped inside third-party AARs (libreactnative,
-            // libhermes, libandroidlame, etc.) still slip into the AAB
-            // unless we explicitly strip them at packaging time. This
-            // is required to clear Play Console's 16 KB page-size check:
-            // the AndroidLame prebuilt pulled in by react-native-compressor
-            // ships a 4 KB-aligned libandroidlame.so for x86_64 that fails
-            // the check, and we have no real-device reason to ship 32-bit
-            // x86 or 64-bit x86 anyway.
-            packaging {
-                jniLibs {
-                    excludes += ["lib/x86/**", "lib/x86_64/**"]
-                }
-            }
+            // x86 / x86_64 prebuilt .so are stripped from the release AAB via
+            // an androidComponents.onVariants block below — NOT a buildType
+            // `packaging { jniLibs { excludes += ... } }` block, because that
+            // mutates a shared list and leaks the x86_64 exclude into the debug
+            // variant too, which strips libappmodules.so + libimagepipeline.so
+            // etc. from the emulator build and crashes the app at launch.
         }
     }
 }
 
 react {
     autolinkLibrariesWithApp()
+}
+
+// Strip x86 / x86_64 prebuilt .so from the RELEASE AAB only (Play Store takes
+// ARM only; also clears the 16 KB page-size check for the AndroidLame x86_64
+// prebuilt from react-native-compressor). Scoped to the release variant via the
+// variant API so it can't leak into debug like a buildType `packaging` block
+// with `excludes += [...]` does.
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        variant.packaging.jniLibs.excludes.add("lib/x86/**")
+        variant.packaging.jniLibs.excludes.add("lib/x86_64/**")
+    }
 }
 
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'

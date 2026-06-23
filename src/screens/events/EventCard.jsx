@@ -16,6 +16,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
 import { icons } from '../../assets/icons';
 import FastImage from 'react-native-fast-image';
+import { thumbnailUrl } from '../../utils/imageUtils';
 
 export default function EventCard({ event, onGiveQuote }) {
     const navigation = useNavigation();
@@ -119,7 +120,7 @@ export default function EventCard({ event, onGiveQuote }) {
             <View style={[styles.profileRow, { marginTop: 6, marginBottom: 12 }]}>
                 <View style={{ alignItems: 'center', marginRight: 12 }}>
                     <FastImage
-                        source={{ uri: event.organizer.avatar, priority: FastImage.priority.normal }}
+                        source={{ uri: thumbnailUrl(event.organizer.avatar, 150), priority: FastImage.priority.normal }}
                         style={styles.avatar}
                         resizeMode={FastImage.resizeMode.cover}
                     />
@@ -152,7 +153,7 @@ export default function EventCard({ event, onGiveQuote }) {
                         {safeAttachments.map((src, index) => (
                             <FastImage
                                 key={index}
-                                source={{ uri: src, priority: FastImage.priority.low }}
+                                source={{ uri: thumbnailUrl(src, 600), priority: FastImage.priority.low }}
                                 style={styles.attachmentImage}
                                 resizeMode={FastImage.resizeMode.cover}
                             />

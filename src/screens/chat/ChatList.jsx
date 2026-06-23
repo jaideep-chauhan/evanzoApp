@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../../ThemeContext';
 import chatService from '../../services/chatService';
+import { thumbnailUrl } from '../../utils/imageUtils';
 import socketService from '../../services/socketService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ChatRowSkeleton, renderSkeletons } from '../../components/SkeletonLoader';
@@ -480,7 +481,7 @@ export default function ChatList({ navigation }) {
             activeOpacity={0.7}
         >
             <View style={styles.avatarContainer}>
-                <Image source={{ uri: item.avatar }} style={styles.avatar} />
+                <Image source={{ uri: thumbnailUrl(item.avatar, 150) }} style={styles.avatar} />
                 {item.isOnline && <View style={styles.onlineIndicator} />}
             </View>
 

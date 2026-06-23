@@ -14,6 +14,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import vendorDetailsService from '../../services/vendorDetailsService';
 import savedVendorsStorage from '../../services/savedVendorsStorage';
+import { thumbnailUrl } from '../../utils/imageUtils';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 
 const SavedVendors = () => {
@@ -216,7 +217,7 @@ const SavedVendors = () => {
                 activeOpacity={0.9}
             >
                 <Image
-                    source={image ? { uri: image } : require('../../assets/images/dummy.png')}
+                    source={image ? { uri: thumbnailUrl(image, 600) } : require('../../assets/images/dummy.png')}
                     style={styles.vendorImage}
                 />
                 <View style={styles.vendorInfo}>

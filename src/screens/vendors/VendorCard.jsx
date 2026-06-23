@@ -21,6 +21,7 @@ import theme from '../../theme';
 import img from '../../assets/images/dummy.png'; // Fallback image
 import { icons, getCategoryIcon } from '../../assets/icons';
 import FastImage from 'react-native-fast-image';
+import { thumbnailUrl } from '../../utils/imageUtils';
 
 // FastImage source helper: it expects {uri,priority,cache} for remote URLs
 // and a require() number for local assets. Pass remotes through, fall back
@@ -32,6 +33,12 @@ const toFastSource = (src, fallback) => {
     if (src.uri) return { ...src, priority: src.priority || FastImage.priority.normal };
     return fallback;
 };
+
+// Card images render at ~240dp wide, so a 600px thumbnail is plenty and decodes
+// far faster than the full-res original. `thumbnailUrl` (shared in imageUtils)
+// appends `?w=600`, served by the backend's sharp resize middleware; the vendor
+// detail screen still loads originals.
+const withThumb = (url) => thumbnailUrl(url, 600);
 
 const { width } = Dimensions.get('window');
 
@@ -84,13 +91,13 @@ function VendorCard({
             if (!image) {
                 return img;
             }
-            // If it's already an object with uri, use it as is
+            // If it's already an object with uri, use it as is (request a thumb)
             if (typeof image === 'object' && image.uri) {
-                return image;
+                return { ...image, uri: withThumb(image.uri) };
             }
-            // If it's a string URL, convert to {uri: url} format
+            // If it's a string URL, convert to {uri: url} format (request a thumb)
             if (typeof image === 'string' && image.startsWith('http')) {
-                return { uri: image };
+                return { uri: withThumb(image) };
             }
             // If it's a local image (number from require), use it directly
             if (typeof image === 'number') {
