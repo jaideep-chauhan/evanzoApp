@@ -29,6 +29,7 @@ import SearchHeader from '../vendors/SearchHeader';
 import { setSearchHandler } from '../../services/searchBridge';
 import eventService from '../../services/eventService';
 import filterService from '../../services/filterService';
+import categoryService from '../../services/categoryService';
 
 export default function Events() {
     const navigation = useNavigation();
@@ -47,6 +48,7 @@ export default function Events() {
     const [refreshing, setRefreshing] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [events, setEvents] = useState([]);
+    const [masterEventTypes, setMasterEventTypes] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [currentFilters, setCurrentFilters] = useState({});
     const [pagination, setPagination] = useState({ page: 1, limit: 10, totalPages: 1, totalResults: 0 });
@@ -122,36 +124,13 @@ export default function Events() {
                     };
                 }
             } else {
-                // Try to use search endpoint if available, otherwise filter client-side
-                try {
-                    // Try using the search endpoint first
-                    response = await eventService.searchEventAds({
-                        keyword: searchFilters.keyword,
-                        location: searchFilters.location,
-                        eventType: searchFilters.category,
-                        dateFrom: searchFilters.dateFrom,
-                        dateTo: searchFilters.dateTo,
-                        page: searchFilters.page,
-                        limit: searchFilters.limit
-                    });
-
-                    if (response.success && response.data) {
-                        // Filter to only show approved event ads
-                        const approvedEvents = response.data.filter(event =>
-                            event.approval_status === 'approved'
-                        );
-                        console.log(`✅ Filtered ${response.data.length} search results to ${approvedEvents.length} approved ads`);
-
-                        response = {
-                            success: true,
-                            data: approvedEvents.map(event => eventService.formatEventForDisplay(event)),
-                            pagination: response.pagination || { page: 1, limit: 10, totalPages: 1, totalResults: approvedEvents.length }
-                        };
-                    }
-                } catch (searchError) {
-                    // If search endpoint fails, fall back to client-side filtering
-                    console.log('📱 Search endpoint not available, using client-side filtering');
-                    
+                // All event filtering (keyword, location, category, date) runs
+                // client-side. Events store event_type as a NAME string —
+                // event_type_id is null in the data — and the backend
+                // /event_ad/search only filters by event_type_id (and rejects an
+                // `eventType` param), so a server-side category filter never
+                // matches. We fetch the public list and filter it here.
+                {
                     const allEventsResponse = await eventService.getPublicEventAds();
                     if (allEventsResponse.success && allEventsResponse.data) {
                         // Filter to only show approved event ads first
@@ -316,6 +295,25 @@ export default function Events() {
     useEffect(() => {
         currentFiltersRef.current = currentFilters;
     }, [currentFilters]);
+
+    // Load the full master list of event types once, so the category filter
+    // shows every category regardless of which events are on the current
+    // (paginated) page.
+    useEffect(() => {
+        let isMounted = true;
+        (async () => {
+            const result = await categoryService.getEventTypes();
+            if (isMounted && result.success) {
+                const names = (result.data || [])
+                    .map((t) => (typeof t === 'string' ? t : t?.name))
+                    .filter(Boolean);
+                setMasterEventTypes(names);
+            }
+        })();
+        return () => {
+            isMounted = false;
+        };
+    }, []);
     // Tap-same-tab-to-scroll-top. See screens/vendors/index.jsx for the
     // full rationale — soft scroll when the currently-focused tab is
     // re-tapped; the focus path (different tab) uses animated:false below.
@@ -557,12 +555,19 @@ export default function Events() {
             setActiveTab(null);
         }
 
-        // Apply category filter
+        // Apply category filter. Events store their type as a NAME string
+        // (event.event_type, e.g. "Wedding"); event_type_id is null in the
+        // data and the backend search can only filter by event_type_id, so a
+        // server-side category filter never matches. We therefore filter by
+        // NAME client-side and store the selected name(s) under `category`
+        // (the key fetchEvents reads — previously this set `categories`, which
+        // nothing read, so the filter silently did nothing).
         const newFilters = { ...currentFilters };
-        if (categoryIds && categoryIds.length > 0) {
-            newFilters.categories = Array.isArray(categoryIds) ? categoryIds : [categoryIds];
+        const categoryNames = (categoryData || []).map((c) => c.name).filter(Boolean);
+        if (categoryNames.length > 0) {
+            newFilters.category = categoryNames.join(',');
         } else {
-            delete newFilters.categories;
+            delete newFilters.category;
         }
 
         console.log('🎯 Event filters to apply:', newFilters);
@@ -674,6 +679,29 @@ export default function Events() {
         extrapolateLeft: 'identity',
     });
 
+    // The Events "Category" filter is actually by EVENT TYPE (Wedding,
+    // Birthday, ...). Events store event_type as a string, so we offer the
+    // distinct types present in the loaded data (with a sensible fallback for
+    // the first paint) and filter event.event_type by the chosen name(s).
+    const eventTypeCategories = useMemo(() => {
+        // Prefer the full master list from the backend (/events/types) so every
+        // category is selectable. Fall back to types derived from the currently
+        // loaded events (only complete when all events fit one page), then to a
+        // hardcoded list if both are empty.
+        const fromData = [...new Set(
+            (events || [])
+                .map((e) => e.event_type || e.category || e._original?.event_type)
+                .filter(Boolean),
+        )];
+        const types = masterEventTypes.length > 0
+            ? masterEventTypes
+            : fromData.length > 0
+                ? fromData
+                : ['Wedding', 'Birthday', 'Corporate Event', 'Product Launch', 'Engagement'];
+        // category_id = name so the existing selection/filter (which works on
+        // names) stays consistent.
+        return types.map((name) => ({ category_id: name, name }));
+    }, [events, masterEventTypes]);
 
     return (
         <View style={[styles.safe, { backgroundColor: '#fff' }]}>
@@ -807,8 +835,8 @@ export default function Events() {
                                     </View>
                                 )}
                                 {selectedCategoryNames.length > 0 && (
-                                    <View style={[styles.filterChip, { backgroundColor: '#e91e6315', borderColor: '#e91e6330' }]}>
-                                        <Text style={[styles.filterChipText, { color: '#e91e63' }]}>
+                                    <View style={[styles.filterChip, { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary + '30' }]}>
+                                        <Text style={[styles.filterChipText, { color: theme.colors.primary }]}>
                                             {selectedCategoryNames.length > 2
                                                 ? `${selectedCategoryNames.length} categories`
                                                 : selectedCategoryNames.join(', ')
@@ -819,7 +847,7 @@ export default function Events() {
                                             hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                                             style={styles.filterChipClear}
                                         >
-                                            <Icon name="close" size={14} color="#e91e63" />
+                                            <Icon name="close" size={14} color={theme.colors.primary} />
                                         </TouchableOpacity>
                                     </View>
                                 )}
@@ -986,6 +1014,11 @@ export default function Events() {
                 onCategorySelect={handleCategorySelect}
                 currentCategory={selectedCategory}
                 screenType="events"
+                // Show actual event types (Wedding, Birthday, ...) as a flat
+                // selectable list instead of the vendor-style service
+                // categories, which don't match what events store.
+                filteredCategories={eventTypeCategories}
+                showOnlySubcategories={true}
             />
         </View>
     );

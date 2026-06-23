@@ -20,6 +20,7 @@ import Icon3 from 'react-native-vector-icons/Entypo'
 import { API_BASE_URL } from '../../services/api';
 import eventDetailsService from '../../services/eventDetailsService';
 import EventCardCarousel from './EventCardCarousel';
+import { getCurrencySymbol } from '../../utils/currency';
 const AVATAR_SIZE = 60;
 
 export default function EventDetailView() {
@@ -66,11 +67,11 @@ export default function EventDetailView() {
     };
 
     // Parse budget to display format
-    const parseBudget = (budget) => {
+    const parseBudget = (budget, currency) => {
         if (!budget) return 'Budget TBD';
         if (typeof budget === 'string') return budget;
         if (typeof budget === 'number') {
-            return `$${budget.toLocaleString()}`;
+            return `${getCurrencySymbol(currency)}${budget.toLocaleString()}`;
         }
         return 'Budget TBD';
     };
@@ -104,7 +105,7 @@ export default function EventDetailView() {
         date: parseDate(eventFromParams.date),
         duration: parseDuration(eventFromParams.duration),
         time: eventFromParams.time || '07:00 pm',
-        budget: parseBudget(eventFromParams.budget),
+        budget: parseBudget(eventFromParams.budget, eventFromParams.currency),
         guests: eventFromParams.guests || eventFromParams.guests_count || '50',
         description: eventFromParams.description || 'Event description not available.',
 

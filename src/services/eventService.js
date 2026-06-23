@@ -356,6 +356,7 @@ class EventService {
             date: formattedDate,
             duration: formatDuration(event.duration),
             budget: event.budget || null,
+            currency: event.currency || 'USD',
             guests: event.guests_count || null,
             guests_count: event.guests_count || null, // Add guests_count for consistency
             description: event.description || '',

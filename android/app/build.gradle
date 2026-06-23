@@ -41,8 +41,8 @@ android {
         applicationId "com.x4x90studio.evnzo"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 33
-        versionName "2.0.1"
+        versionCode 34
+        versionName "2.0.2"
 
         // RN apps with lots of native modules routinely cross Android's
         // 65K methods limit. Multidex splits the dex output into multiple
@@ -121,17 +121,11 @@ react {
     autolinkLibrariesWithApp()
 }
 
-// Strip x86 / x86_64 prebuilt .so from the RELEASE AAB only (Play Store takes
-// ARM only; also clears the 16 KB page-size check for the AndroidLame x86_64
-// prebuilt from react-native-compressor). Scoped to the release variant via the
-// variant API so it can't leak into debug like a buildType `packaging` block
-// with `excludes += [...]` does.
-androidComponents {
-    onVariants(selector().withBuildType("release")) { variant ->
-        variant.packaging.jniLibs.excludes.add("lib/x86/**")
-        variant.packaging.jniLibs.excludes.add("lib/x86_64/**")
-    }
-}
+// x86/x86_64 are kept out of the release AAB via ABI filters: the default
+// `reactNativeArchitectures` (gradle.properties) is ARM-only and the release
+// buildType's ndk/externalNativeBuild abiFilters are ARM-only too, so no x86
+// prebuilt .so are packaged. The x86_64 emulator debug build opts back in with
+// `-PreactNativeArchitectures=x86_64`.
 
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 

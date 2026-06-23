@@ -14,7 +14,8 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import vendorService from '../../services/vendorService';
-import { StarIcon, CurrencyDollarIcon, TagIcon } from 'react-native-heroicons/solid';
+import { StarIcon, TagIcon } from 'react-native-heroicons/solid';
+import { getCurrencySymbol } from '../../utils/currency';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../ThemeContext';
 import theme from '../../theme';
@@ -52,6 +53,7 @@ function VendorCard({
     extraCount,
     location,
     offers = [],
+    currency = 'USD',
     onChatPress,
     isChat = true,
     // Vendor owner's avatar URL — populated by formatVendorForDisplay from
@@ -295,8 +297,13 @@ function VendorCard({
         }
     };
 
+    // activeOpacity=1: don't dim on press. Dimming this wrapper applies alpha
+    // to the nested elevated `card` child, which makes Android render its
+    // elevation shadow as a solid BLACK box on touch (the offscreen
+    // alpha-compositing artifact users reported). The event card avoids this
+    // because its elevation sits on the touchable itself, not a nested child.
     return (
-        <TouchableOpacity onPress={handleCardPress} style={styles.cardWrapper}>
+        <TouchableOpacity onPress={handleCardPress} style={styles.cardWrapper} activeOpacity={1}>
             {/* Approval status banner intentionally removed — ads are
                 auto-approved on insert (services/vendorAd.service.js:21,
                 services/vendorEnhanced.service.js:617). The legacy "Waiting
@@ -408,7 +415,9 @@ function VendorCard({
                             <View style={styles.offerValueRow}>
                                 <Text style={styles.offerLabel}>Offer:</Text>
                                 <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
-                                    <CurrencyDollarIcon size={12} color={theme.colors.primary} />
+                                    <Text style={[styles.offerValue, { color: theme.colors.primary, fontWeight: '700', marginRight: 2 }]}>
+                                        {getCurrencySymbol(currency)}
+                                    </Text>
                                     <Text style={styles.offerValue}>
                                         {offers[0].amount || '0'}
                                     </Text>
@@ -683,9 +692,13 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         borderRadius: 16,
         padding: 14,
+        // iOS shadow
         shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.08,
         shadowRadius: 8,
+        // Android shadow — without elevation the box shadow renders on iOS only.
+        elevation: 4,
     },
     imageGrid: {
         flexDirection: 'row',

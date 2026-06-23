@@ -18,6 +18,7 @@ import Vendor from '../screens/vendors';
 import Events from '../screens/events';
 import Profile from '../screens/profile/index';
 import ChatList from '../screens/chat/ChatList';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../ThemeContext';
 import { withProtectedScreen } from '../components/ProtectedScreen';
 
@@ -49,6 +50,15 @@ const getFocusedDeepRouteName = (route) => {
 
 function CustomTabBar({ state, descriptors, navigation }) {
     const theme = useTheme();
+    const insets = useSafeAreaInsets();
+    // Android only: sit the floating pill just above the device's bottom inset
+    // (gesture bar / nav bar) instead of a fixed 20px, which on phones with a
+    // tall inset made the bar take up too much height. Clamp to a small range so
+    // it stays tight on gesture phones and still clears 3-button nav bars.
+    // iOS keeps the original fixed 20px spacing.
+    const bottomGap = Platform.OS === 'android'
+        ? Math.max(Math.min(insets.bottom, 16), 8)
+        : 20;
 
     // Walk into the focused tab's nested stack and bail out if the visible
     // screen is a detail page.
@@ -71,7 +81,7 @@ function CustomTabBar({ state, descriptors, navigation }) {
                 style={styles.gradientOverlay}
                 pointerEvents="none"
             />
-            <View style={styles.tabBarContainer}>
+            <View style={[styles.tabBarContainer, { marginBottom: bottomGap }]}>
                 {state.routes.map((route, index) => {
                     const { options } = descriptors[route.key];
                     const label =
@@ -182,7 +192,8 @@ const styles = StyleSheet.create({
         backgroundColor: '#F4F4F4',
         borderRadius: 40,
         marginHorizontal: 20,
-        marginBottom: 20,
+        // marginBottom is applied dynamically from the safe-area inset in
+        // CustomTabBar so the bar height adapts to each phone.
         position: 'relative',
         elevation: 0,
         overflow: 'hidden',
@@ -196,7 +207,8 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         flexDirection: 'column',
         borderRadius: 40,
-        paddingVertical: 8,
+        // Android-only tighter padding; iOS keeps original 8.
+        paddingVertical: Platform.select({ android: 6, ios: 8 }),
         paddingHorizontal: 2,
         backgroundColor: '#F4F4F4',
         transition: 'background-color 0.2s',
@@ -215,16 +227,18 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: 'transparent',
-        marginVertical: 4,
+        // Android-only tighter spacing; iOS keeps original 4.
+        marginVertical: Platform.select({ android: 2, ios: 4 }),
     },
     iconWrapperFocused: {
         backgroundColor: 'transparent',
     },
     tabLabel: {
-        fontSize: 14,
+        // Android-only tighter label sizing/spacing; iOS keeps original 14 / 6.
+        fontSize: Platform.select({ android: 13, ios: 14 }),
         fontWeight: '600',
         marginTop: 0,
-        marginBottom: 6, // Adjusted for better spacing
+        marginBottom: Platform.select({ android: 3, ios: 6 }),
         textAlign: 'center',
     },
     tabLabelFocused: {

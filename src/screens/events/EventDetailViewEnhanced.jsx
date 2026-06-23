@@ -23,6 +23,7 @@ import img from '../../assets/images/dummy.png';
 import bg1 from '../../assets/images/smallHeader.jpg';
 import eventDetailsService from '../../services/eventDetailsService';
 import EventCardCarousel from './EventCardCarousel';
+import { getCurrencySymbol } from '../../utils/currency';
 import chatService from '../../services/chatService';
 import { useAuth } from '../../context/AuthContext';
 
@@ -121,6 +122,7 @@ export default function EventDetailViewEnhanced() {
         duration: parseDuration(eventFromParams.duration),
         time: eventFromParams.time || '07:00 pm',
         budget: parseBudget(eventFromParams.budget),
+        currency: eventFromParams.currency || 'USD',
         guests: eventFromParams.guests || eventFromParams.guests_count || '200',
         description: eventFromParams.description || 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Lorem ipsum dolor sit amet, consectetur adipiscing elit...',
         // attachments / images can come in as a real array, a JSON-stringified
@@ -364,7 +366,7 @@ export default function EventDetailViewEnhanced() {
                         </View>
                         <View style={styles.budgetContainer}>
                             <Text style={styles.budgetLabel}>Budget </Text>
-                            <Icon name="logo-usd" size={14} color="#64748B" />
+                            <Text style={[styles.budgetText, { fontWeight: '700' }]}>{getCurrencySymbol(eventData.currency)}</Text>
                             <Text style={styles.budgetText}>{eventData.budget}</Text>
                         </View>
                     </View>

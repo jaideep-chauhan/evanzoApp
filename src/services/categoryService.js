@@ -121,6 +121,27 @@ class CategoryService {
         }
     }
 
+    // Get the full master list of event types (Wedding, Birthday, ...).
+    // This is the canonical source for the events category filter — deriving
+    // it from the loaded (paginated) events list only ever surfaces the types
+    // present on the current page, so categories went missing.
+    async getEventTypes() {
+        try {
+            const response = await api.get('/events/types');
+
+            if (response.data?.status && Array.isArray(response.data.data)) {
+                return {
+                    success: true,
+                    data: response.data.data
+                };
+            }
+            return { success: false, data: [] };
+        } catch (error) {
+            console.error('Error fetching event types:', error);
+            return { success: false, data: [] };
+        }
+    }
+
     // Get locations for vendors
     async getVendorLocations() {
         try {

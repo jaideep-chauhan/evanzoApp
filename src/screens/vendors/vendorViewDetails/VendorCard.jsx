@@ -17,7 +17,7 @@ import { useTheme } from '../../../ThemeContext';
 
 import bg1 from '../../../assets/images/smallHeader.jpg';
 import percent from '../../../assets/icons/percent.png';
-import dollar from '../../../assets/icons/dollar.png';
+import { getCurrencySymbol } from '../../../utils/currency';
 
 const { width } = Dimensions.get('window');
 const AVATAR_SIZE = 100;
@@ -89,6 +89,7 @@ const VendorCard = ({
     const firstOffer = Array.isArray(offersArr) ? offersArr[0] : null;
     const offerAmount = firstOffer?.amount_spent ?? firstOffer?.amount ?? null;
     const offerPercent = firstOffer?.percentage ?? firstOffer?.percent ?? null;
+    const currency = vendor?.currency || 'USD';
 
     return (
         <View style={{ backgroundColor: '#fff', marginBottom: 3 }}>
@@ -170,9 +171,9 @@ const VendorCard = ({
                                                 Amount spent
                                             </Text>
                                             <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
-                                                <View style={styles.iconBox}>
-                                                    <Image source={dollar} style={{ width: 10, height: 10, resizeMode: 'contain' }} />
-                                                </View>
+                                                <Text style={[styles.offerValue, { color: theme.colors.primary, fontWeight: '700', marginRight: 2 }]}>
+                                                    {getCurrencySymbol(currency)}
+                                                </Text>
                                                 <Text style={styles.offerValue}>{String(offerAmount)}</Text>
                                             </View>
                                         </View>

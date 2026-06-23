@@ -26,6 +26,8 @@ import { useTheme } from '../../ThemeContext';
 import vendorService from '../../services/vendorService';
 import eventService from '../../services/eventService';
 import categoryService from '../../services/categoryService';
+import CurrencySelector from '../../components/CurrencySelector';
+import { detectDefaultCurrency } from '../../utils/currency';
 import { CustomSuccessModal } from '../../components/CustomSuccessModal';
 import { CustomToast } from '../../components/CustomToast';
 import ImageEditorModal from '../../components/ImageEditorModal';
@@ -98,6 +100,9 @@ const CreateAddForm = ({ type, onClose }) => {
     const [dateSelected, setDateSelected] = useState(false);
     const [duration, setDuration] = useState('');
     const [budget, setBudget] = useState('');
+    // Currency unit for budget (event) / offer (vendor). Defaults to the unit
+    // matching the device locale (₹ in India, € in EU, ...), fallback USD.
+    const [currency, setCurrency] = useState(() => detectDefaultCurrency());
     const [description, setDescription] = useState('');
     const [showServiceDropdown, setShowServiceDropdown] = useState(false);
     const [showEventCategoryModal, setShowEventCategoryModal] = useState(false);
@@ -174,6 +179,7 @@ const CreateAddForm = ({ type, onClose }) => {
                     if (draft.eventLocationData) setEventLocationData(draft.eventLocationData);
                     if (draft.duration) setDuration(draft.duration);
                     if (draft.budget) setBudget(draft.budget);
+                    if (draft.currency) setCurrency(draft.currency);
                     if (draft.description) setDescription(draft.description);
                 } else {
                     if (draft.companyName) setCompanyName(draft.companyName);
@@ -182,6 +188,7 @@ const CreateAddForm = ({ type, onClose }) => {
                     if (draft.vendorLocationData) setVendorLocationData(draft.vendorLocationData);
                     if (draft.selectedTags) setSelectedTags(draft.selectedTags);
                     if (draft.offers) setOffers(draft.offers);
+                    if (draft.currency) setCurrency(draft.currency);
                 }
                 setDraftRestored(true);
             } catch (e) {
@@ -203,12 +210,12 @@ const CreateAddForm = ({ type, onClose }) => {
                 type === 'event'
                     ? {
                           service, selectedEventType, customEventType, eventTags,
-                          location, eventLocationData, duration, budget, description,
+                          location, eventLocationData, duration, budget, currency, description,
                           savedAt: Date.now(),
                       }
                     : {
                           companyName, vendorDescription, vendorLocation,
-                          vendorLocationData, selectedTags, offers,
+                          vendorLocationData, selectedTags, offers, currency,
                           savedAt: Date.now(),
                       };
             AsyncStorage.setItem(DRAFT_KEY, JSON.stringify(draft)).catch(() => {});
@@ -222,6 +229,8 @@ const CreateAddForm = ({ type, onClose }) => {
         // vendor fields
         companyName, vendorDescription, vendorLocation, vendorLocationData,
         selectedTags, offers,
+        // shared
+        currency,
     ]);
 
     // Fetch vendor categories on mount
@@ -523,6 +532,13 @@ const CreateAddForm = ({ type, onClose }) => {
                     return;
                 }
 
+                // Duration is required for event ads.
+                if (!duration || !duration.trim()) {
+                    setToastState({ visible: true, message: 'Please enter the event duration', type: 'error' });
+                    setIsLoading(false);
+                    return;
+                }
+
                 // Validate description — required and must be at least 30 words.
                 // Previous check was `if (description && wordCount < 30)` which
                 // skipped the rule when description was empty, letting users
@@ -595,6 +611,7 @@ const CreateAddForm = ({ type, onClose }) => {
                 formData.append('date', date.toISOString().split('T')[0]); // Format as YYYY-MM-DD
                 if (duration) formData.append('duration', duration);
                 if (budget) formData.append('budget', budget);
+                formData.append('currency', currency);
                 formData.append('description', description || '');
 
                 // Compress photos in small chunks before uploading. Cuts
@@ -718,6 +735,7 @@ const CreateAddForm = ({ type, onClose }) => {
                 }
                 formData.append('services_offered', JSON.stringify(selectedTags));
                 formData.append('offers', JSON.stringify(validOffers));
+                formData.append('currency', currency);
 
                 // Compress photos in small chunks before uploading.
                 let compressedPhotos = photos;
@@ -1036,7 +1054,7 @@ const CreateAddForm = ({ type, onClose }) => {
                         </View>
 
                         <View style={styles.fieldGroupPro}>
-                            <Text style={styles.labelPro}>Duration (optional)</Text>
+                            <Text style={styles.labelPro}>Duration</Text>
                             <TextInput
                                 style={styles.inputPro}
                                 value={duration}
@@ -1053,19 +1071,22 @@ const CreateAddForm = ({ type, onClose }) => {
 
                         <View style={styles.fieldGroupPro}>
                             <Text style={styles.labelPro}>Budget (optional)</Text>
-                            <TextInput
-                                style={styles.inputPro}
-                                value={budget}
-                                onChangeText={setBudget}
-                                placeholder="$0"
-                                placeholderTextColor="#ffffff80"
-                                keyboardType="numeric"
-                                onFocus={() => {
-                                    setTimeout(() => {
-                                        scrollViewRef.current?.scrollTo({ y: 500, animated: true });
-                                    }, 300);
-                                }}
-                            />
+                            <View style={styles.amountRow}>
+                                <CurrencySelector value={currency} onChange={setCurrency} />
+                                <TextInput
+                                    style={[styles.inputPro, styles.amountInput]}
+                                    value={budget}
+                                    onChangeText={setBudget}
+                                    placeholder="0"
+                                    placeholderTextColor="#ffffff80"
+                                    keyboardType="numeric"
+                                    onFocus={() => {
+                                        setTimeout(() => {
+                                            scrollViewRef.current?.scrollTo({ y: 500, animated: true });
+                                        }, 300);
+                                    }}
+                                />
+                            </View>
                         </View>
 
                         <View style={styles.fieldGroupPro}>
@@ -1239,7 +1260,10 @@ const CreateAddForm = ({ type, onClose }) => {
                         </View>
 
                         <View style={styles.fieldGroupPro}>
-                            <Text style={styles.labelPro}>Offer (Optional)</Text>
+                            <View style={styles.offerHeaderRow}>
+                                <Text style={styles.labelPro}>Offer (Optional)</Text>
+                                <CurrencySelector value={currency} onChange={setCurrency} />
+                            </View>
                             {offers.map((offer, index) => (
                                 <View key={index} style={styles.offerRow}>
                                     <View style={styles.offerInputContainer}>
@@ -1248,7 +1272,7 @@ const CreateAddForm = ({ type, onClose }) => {
                                             style={[styles.inputPro, styles.offerInput]}
                                             value={offer.amount}
                                             onChangeText={(value) => updateOffer(index, 'amount', value)}
-                                            placeholder="$1000"
+                                            placeholder="1000"
                                             placeholderTextColor="#ffffff80"
                                             keyboardType="numeric"
                                             onFocus={() => {
@@ -1728,6 +1752,22 @@ const styles = StyleSheet.create({
     fieldGroupPro: {
         marginBottom: 14,
         width: '100%',
+    },
+    // Currency dropdown + amount input side by side (budget field).
+    amountRow: {
+        flexDirection: 'row',
+        alignItems: 'stretch',
+        gap: 8,
+    },
+    amountInput: {
+        flex: 1,
+    },
+    // Offer label on the left, currency dropdown on the right.
+    offerHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 8,
     },
     labelPro: {
         color: '#ffffff',

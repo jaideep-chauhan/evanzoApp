@@ -51,6 +51,7 @@ export default function VendorDetailsSection({
     reviews = [],
     hideMessageSection = false,
     offers = [],
+    currency = 'USD',
     vendorId,
 }) {
     console.log('VendorDetailsSection - Received offers:', offers);
@@ -148,7 +149,7 @@ export default function VendorDetailsSection({
                     </View>
                 </View>
 
-                <OfferGrid offers={offers} />
+                <OfferGrid offers={offers} currency={currency} />
 
                 <ProfileCardCarousel vendorId={vendorId} />
 

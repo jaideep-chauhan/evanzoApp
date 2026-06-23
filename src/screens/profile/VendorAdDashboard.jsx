@@ -288,6 +288,7 @@ export default function VendorAdDashboard({ navigation }) {
                                     extraCount={vendor.extraCount}
                                     location={vendor.location}
                                     offers={vendor.offers}
+                                    currency={vendor.currency || vendor._original?.currency}
                                     approval_status={vendor.approval_status}
                                     onChatPress={() => navigation && navigation.navigate ? navigation.navigate('Chat') : null}
                                     isFirst={idx === 0}

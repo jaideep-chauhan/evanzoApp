@@ -454,6 +454,7 @@ class VendorService {
                 || (vendor.location ? String(vendor.location).split(',')[0].trim() : '')
                 || '',
             offers: offers,
+            currency: vendor.currency || 'USD',
             // Same auto-approval rationale as eventService.js — backend
             // sets approval_status: 'approved' at insert
             // (services/vendorAd.service.js:21), so default to 'approved'.

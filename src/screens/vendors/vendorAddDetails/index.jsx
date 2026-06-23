@@ -219,7 +219,7 @@ export default function VendorChat({ navigation }) {
                     style={styles.scrollView}
                     showsVerticalScrollIndicator={false}
                     contentOffset={{ x: 0, y: initialScrollY }}
-                    contentContainerStyle={{ paddingBottom: 32 }}
+                    contentContainerStyle={{ paddingBottom: 100 }}
                 >
                     <VendorProfileCard
                         // Avatar at the top of the detail page should be the
@@ -253,12 +253,13 @@ export default function VendorChat({ navigation }) {
                             reviews={dummyReviews}
                             hideMessageSection={true}
                             offers={vendor?.offers || []}
+                            currency={vendor?.currency || vendor?._original?.currency || 'USD'}
                             vendorId={vendor?._original?.vendor_ad_id || vendor?.id}
                         />
                     </View>
                 </ScrollView>
 
-                {/* Quote Section - Sticky Bottom */}
+                {/* Quote Section — fixed at the bottom (white box removed). */}
                 <View style={styles.quoteSectionContainer}>
                     <View style={styles.quoteSection}>
                         {/* Input + Quick Message button share a rounded
@@ -320,19 +321,15 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     quoteSectionContainer: {
+        // Fixed at the bottom (sticky), but the white box that used to sit
+        // behind the quote — semi-transparent background, blur and shadow —
+        // has been removed; only the dark quote pill renders.
         position: 'absolute',
         bottom: 10,
         left: 0,
         right: 0,
-        backgroundColor: 'rgba(255, 255, 255, 0.42)',
-        backdropFilter: 'blur(10px)',
         paddingHorizontal: 20,
         paddingVertical: 10,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 5,
     },
     quoteSection: {
         flexDirection: 'row',

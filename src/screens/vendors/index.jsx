@@ -670,6 +670,7 @@ export default function Vendor() {
                                     extraCount={vendor.extraCount}
                                     location={vendor.location}
                                     offers={vendor.offers || []} // Add offers prop
+                                    currency={vendor.currency} // Currency unit for offer amounts
                                     isFocused={idx === focusedCardIndex}
                                     isCheckingChat={checkingChat === `vendor_${vendor._original?.user_id}`}
                                     onChatPress={async () => {

@@ -17,6 +17,7 @@ import { useTheme } from '../../ThemeContext';
 import { icons } from '../../assets/icons';
 import FastImage from 'react-native-fast-image';
 import { thumbnailUrl } from '../../utils/imageUtils';
+import { getCurrencySymbol } from '../../utils/currency';
 
 export default function EventCard({ event, onGiveQuote }) {
     const navigation = useNavigation();
@@ -134,7 +135,7 @@ export default function EventCard({ event, onGiveQuote }) {
                             <Text style={styles.budgetLabel}>Budget: </Text>
                             <View style={styles.budgetItem}>
                                 <Text style={[styles.budgetText, { color: theme.colors.primary }]}>
-                                    ${typeof event.budget === 'number' ? event.budget.toString() : event.budget}
+                                    {getCurrencySymbol(event.currency)}{typeof event.budget === 'number' ? event.budget.toString() : event.budget}
                                 </Text>
                             </View>
                         </View>

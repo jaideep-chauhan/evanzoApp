@@ -9,13 +9,13 @@ import {
 
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import Entypo from 'react-native-vector-icons/Entypo';
-import dollar from '../../../assets/icons/dollar.png';
 import percentage from '../../../assets/icons/percent.png'
+import { getCurrencySymbol } from '../../../utils/currency';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2; // 2 cards with spacing
 
-const OfferCard = ({ amount = 0, percent = 0 }) => {
+const OfferCard = ({ amount = 0, percent = 0, currency = 'USD' }) => {
     // Don't render the card if both amount and percent are 0
     if (amount === 0 && percent === 0) {
         return null;
@@ -33,7 +33,7 @@ const OfferCard = ({ amount = 0, percent = 0 }) => {
                     <Text style={{ color: "#344562", fontSize: 8 }}>Offer:</Text>
                 </View>
                 <View style={styles.valueBox}>
-                    <Image source={dollar} style={{ width: 12, height: 12, resizeMode: 'contain' }} />
+                    <Text style={[styles.valueText, { marginLeft: 0, fontWeight: '700' }]}>{getCurrencySymbol(currency)}</Text>
                     <Text style={styles.valueText}>{amount}</Text>
                 </View>
                 <View style={styles.valueBox}>
@@ -45,7 +45,7 @@ const OfferCard = ({ amount = 0, percent = 0 }) => {
     );
 };
 
-const OfferGrid = ({ offers = [] }) => {
+const OfferGrid = ({ offers = [], currency = 'USD' }) => {
     // Filter out offers where both amount and discount are 0
     const validOffers = offers.filter(offer =>
         (offer.amount && offer.amount !== 0) || (offer.discount && offer.discount !== 0)
@@ -76,6 +76,7 @@ const OfferGrid = ({ offers = [] }) => {
                             key={i + index}
                             amount={offer.amount || 0}
                             percent={offer.discount || 0}
+                            currency={currency}
                         />
                     ))}
                 </View>

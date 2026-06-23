@@ -17,6 +17,11 @@ import { searchLocations as photonSearch } from '../services/photonService';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MODAL_HEIGHT = SCREEN_HEIGHT * 0.85;
+// Fixed height for the results/empty body region. Keeping this constant is what
+// stops the sheet's top edge from fluctuating as the body switches between
+// states (start-typing / loading / results / no-results). Capped at 360 so it
+// stays comfortably above the keyboard on smaller devices.
+const BODY_HEIGHT = Math.min(Math.round(SCREEN_HEIGHT * 0.42), 360);
 const DEBOUNCE_MS = 350;
 const MIN_QUERY_LENGTH = 2;
 
@@ -289,45 +294,50 @@ const LocationSelector = ({
                             )}
                         </View>
 
-                        {results.length > 0 ? (
-                            <FlatList
-                                data={results}
-                                keyExtractor={(item) => item.id}
-                                keyboardShouldPersistTaps="handled"
-                                contentContainerStyle={styles.listContent}
-                                renderItem={({ item }) => (
-                                    <TouchableOpacity
-                                        style={styles.listItem}
-                                        onPress={() => handleSelect(item)}
-                                    >
-                                        <Icon name="location-outline" size={20} color="#2C3D5B" />
-                                        <View style={styles.listItemTextWrap}>
-                                            <Text style={styles.listItemMain} numberOfLines={1}>
-                                                {item.main_text}
-                                            </Text>
-                                            {item.secondary_text ? (
-                                                <Text style={styles.listItemSecondary} numberOfLines={1}>
-                                                    {item.secondary_text}
+                        {/* Fixed-height body so the sheet's top edge never moves
+                            as the content switches between states. */}
+                        <View style={styles.body}>
+                            {results.length > 0 ? (
+                                <FlatList
+                                    data={results}
+                                    keyExtractor={(item) => item.id}
+                                    keyboardShouldPersistTaps="handled"
+                                    style={styles.resultsList}
+                                    contentContainerStyle={styles.listContent}
+                                    renderItem={({ item }) => (
+                                        <TouchableOpacity
+                                            style={styles.listItem}
+                                            onPress={() => handleSelect(item)}
+                                        >
+                                            <Icon name="location-outline" size={20} color="#2C3D5B" />
+                                            <View style={styles.listItemTextWrap}>
+                                                <Text style={styles.listItemMain} numberOfLines={1}>
+                                                    {item.main_text}
                                                 </Text>
-                                            ) : null}
-                                        </View>
-                                    </TouchableOpacity>
-                                )}
-                            />
-                        ) : query.trim().length >= MIN_QUERY_LENGTH && !isSearching ? (
-                            <View style={styles.emptyState}>
-                                <Icon name="location-outline" size={48} color="#ccc" />
-                                <Text style={styles.emptyText}>No results found</Text>
-                            </View>
-                        ) : (
-                            <View style={styles.emptyState}>
-                                <Icon name="search" size={48} color="#ccc" />
-                                <Text style={styles.emptyText}>Start typing to search</Text>
-                                <Text style={styles.emptySubtext}>
-                                    Works for any city, region or country worldwide.
-                                </Text>
-                            </View>
-                        )}
+                                                {item.secondary_text ? (
+                                                    <Text style={styles.listItemSecondary} numberOfLines={1}>
+                                                        {item.secondary_text}
+                                                    </Text>
+                                                ) : null}
+                                            </View>
+                                        </TouchableOpacity>
+                                    )}
+                                />
+                            ) : query.trim().length >= MIN_QUERY_LENGTH && !isSearching ? (
+                                <View style={styles.emptyState}>
+                                    <Icon name="location-outline" size={48} color="#ccc" />
+                                    <Text style={styles.emptyText}>No results found</Text>
+                                </View>
+                            ) : (
+                                <View style={styles.emptyState}>
+                                    <Icon name="search" size={48} color="#ccc" />
+                                    <Text style={styles.emptyText}>Start typing to search</Text>
+                                    <Text style={styles.emptySubtext}>
+                                        Works for any city, region or country worldwide.
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
                     </View>
                 </KeyboardAvoidingView>
             </Modal>
@@ -382,10 +392,14 @@ const styles = StyleSheet.create({
         backgroundColor: '#ffffff',
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
-        // maxHeight (instead of fixed height) lets the sheet shrink when
-        // the keyboard claims half the window — without it the top of the
-        // sheet (search input + header) gets pushed above the screen on
-        // Android once the keyboard opens.
+        // Content-sized (NOT flex:1) so the sheet stays anchored to the bottom
+        // and never overflows the top when the keyboard opens. Height stability
+        // is handled by giving the body region (`body`) a fixed height, so the
+        // sheet's top edge no longer jumps as the body switches between
+        // "start typing" / spinner / results / "no results".
+        //
+        // maxHeight is kept as a safety cap so the sheet can still shrink if the
+        // keyboard claims part of the window via KeyboardAvoidingView.
         maxHeight: MODAL_HEIGHT,
         elevation: 20,
         shadowColor: '#000',
@@ -407,6 +421,8 @@ const styles = StyleSheet.create({
     },
     searchIcon: { marginRight: 8 },
     searchInput: { flex: 1, paddingVertical: 12, fontSize: 15, color: '#333' },
+    body: { height: BODY_HEIGHT },
+    resultsList: { flex: 1 },
     listContent: { paddingBottom: 20 },
     listItem: {
         flexDirection: 'row', alignItems: 'center',
@@ -417,6 +433,7 @@ const styles = StyleSheet.create({
     listItemMain: { fontSize: 15, fontWeight: '600', color: '#2C3D5B' },
     listItemSecondary: { fontSize: 13, color: '#666', marginTop: 2 },
     emptyState: {
+        flex: 1,
         paddingVertical: 60, paddingHorizontal: 20,
         alignItems: 'center', justifyContent: 'center',
     },
