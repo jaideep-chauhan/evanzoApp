@@ -81,7 +81,8 @@ export default function LoginScreen() {
                     index: 0,
                     routes: [{ name: 'Main' }],
                 });
-            } else {
+            } else if (!result.cancelled) {
+                // Don't show an error when the user deliberately cancelled.
                 Toast.show({
                     type: 'error',
                     text1: 'Google Login Failed',

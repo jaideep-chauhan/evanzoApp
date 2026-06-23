@@ -589,6 +589,7 @@ export const AuthProvider = ({ children }) => {
             } else {
                 return {
                     success: false,
+                    cancelled: result.cancelled === true,
                     error: result.error || 'Google login failed',
                 };
             }
