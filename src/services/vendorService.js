@@ -1,4 +1,4 @@
-import api, { API_BASE_URL } from './api';
+import api, { API_BASE_URL, MEDIA_BASE_URL } from './api';
 import dummyImage from '../assets/images/dummy.png';
 import authFetch from './authFetch';
 
@@ -273,18 +273,16 @@ class VendorService {
     formatVendorForDisplay(vendor) {
         // Parse photos if it's a JSON string or use attachments
         let photos = [];
-        // Since API_BASE_URL is 'https://api.evnzo.com/api', we need to extract the proper base URL
-        const baseUrl = API_BASE_URL.replace('/api', '').replace('api.', ''); // This will give us https://evnzo.com
-        // But we need the API subdomain, so let's use the correct URL
-        const imageBaseUrl = 'https://api.evnzo.com'; // Use the actual API server URL for images
-        
+        // Uploads are served off the domain root (no "/api"), so use the
+        // shared MEDIA_BASE_URL (e.g. https://api.evnzo.com) for image URLs.
+        const imageBaseUrl = MEDIA_BASE_URL;
+
         console.log('📸 Formatting vendor for display:', {
             vendorId: vendor.vendor_ad_id || vendor.id,
             hasPhotos: !!vendor.photos,
             photosType: typeof vendor.photos,
             photosLength: vendor.photos ? vendor.photos.length : 0,
             hasAttachments: !!vendor.attachments,
-            baseUrl,
             imageBaseUrl,
             API_BASE_URL
         });

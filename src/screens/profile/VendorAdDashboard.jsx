@@ -81,11 +81,12 @@ export default function VendorAdDashboard({ navigation }) {
         };
     }, []);
 
-    // v2 = formatted rows include owner_profile_pic. Bumping the cache key
-    // invalidates pre-existing AsyncStorage rows that don't have the field,
-    // so the avatar shows on first paint after this deploy.
-    const vendorList = useCachedList('my-ads:vendor:v2', fetchMyVendorAds);
-    const eventList = useCachedList('my-ads:event', fetchMyEventAds);
+    // v3 = formatted rows include `currency`. Bumping the cache key invalidates
+    // pre-existing AsyncStorage rows that were stored before currency support,
+    // which otherwise render the offer amount with a stale '$' fallback.
+    // (v2 added owner_profile_pic.)
+    const vendorList = useCachedList('my-ads:vendor:v3', fetchMyVendorAds);
+    const eventList = useCachedList('my-ads:event:v2', fetchMyEventAds);
 
     const vendorAds = vendorList.data || [];
     const eventAds = eventList.data || [];

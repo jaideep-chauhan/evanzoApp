@@ -1,4 +1,4 @@
-import api, { API_BASE_URL } from './api';
+import api, { API_BASE_URL, MEDIA_BASE_URL } from './api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import authFetch from './authFetch';
 
@@ -582,20 +582,18 @@ class ChatService {
     const processAttachment = (attachment) => {
       let processedUrl = attachment.url;
 
-      // If attachment has a URL
+      // If attachment has a URL. Uploads are served off the domain root
+      // (MEDIA_BASE_URL, e.g. https://api.evnzo.com), NOT under the "/api"
+      // path — so we rebuild dev/relative URLs against MEDIA_BASE_URL.
       if (processedUrl) {
-        // Replace localhost with actual API base URL
+        // Replace localhost with the production media host
         if (processedUrl.includes('localhost') || processedUrl.includes('127.0.0.1')) {
-          // Extract the path part from localhost URL (e.g., /uploads/images/file.jpg)
           try {
             // Use string manipulation instead of URL API (React Native compatibility)
             // Find the path after the domain/port
             const pathMatch = processedUrl.match(/https?:\/\/[^\/]+(\/.*)/);
             const path = pathMatch ? pathMatch[1] : processedUrl;
-
-            // Remove '/api' from API_BASE_URL to get the main domain
-            const baseUrl = API_BASE_URL.replace('/api', '');
-            processedUrl = `${baseUrl}${path}`;
+            processedUrl = `${MEDIA_BASE_URL}${path}`;
             console.log('🔄 Replaced localhost URL:', { original: attachment.url, fixed: processedUrl });
           } catch (e) {
             console.error('Error parsing URL:', e);
@@ -603,15 +601,13 @@ class ChatService {
             const lastSlashIndex = processedUrl.lastIndexOf('/uploads');
             if (lastSlashIndex !== -1) {
               const path = processedUrl.substring(lastSlashIndex);
-              const baseUrl = API_BASE_URL.replace('/api', '');
-              processedUrl = `${baseUrl}${path}`;
+              processedUrl = `${MEDIA_BASE_URL}${path}`;
             }
           }
         }
-        // If URL doesn't start with http, prepend base URL
+        // If URL doesn't start with http, prepend the media host
         else if (!processedUrl.startsWith('http')) {
-          const baseUrl = API_BASE_URL.replace('/api', '');
-          processedUrl = `${baseUrl}${processedUrl.startsWith('/') ? '' : '/'}${processedUrl}`;
+          processedUrl = `${MEDIA_BASE_URL}${processedUrl.startsWith('/') ? '' : '/'}${processedUrl}`;
         }
       }
 

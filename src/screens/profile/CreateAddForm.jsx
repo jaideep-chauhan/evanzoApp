@@ -1260,28 +1260,32 @@ const CreateAddForm = ({ type, onClose }) => {
                         </View>
 
                         <View style={styles.fieldGroupPro}>
-                            <View style={styles.offerHeaderRow}>
-                                <Text style={styles.labelPro}>Offer (Optional)</Text>
-                                <CurrencySelector value={currency} onChange={setCurrency} />
-                            </View>
+                            <Text style={styles.labelPro}>Offer (Optional)</Text>
                             {offers.map((offer, index) => (
                                 <View key={index} style={styles.offerRow}>
-                                    <View style={styles.offerInputContainer}>
+                                    <View style={[styles.offerInputContainer, styles.amountColumn]}>
                                         <Text style={styles.offerLabel}>Amount</Text>
-                                        <TextInput
-                                            style={[styles.inputPro, styles.offerInput]}
-                                            value={offer.amount}
-                                            onChangeText={(value) => updateOffer(index, 'amount', value)}
-                                            placeholder="1000"
-                                            placeholderTextColor="#ffffff80"
-                                            keyboardType="numeric"
-                                            onFocus={() => {
-                                                // Scroll to show the input above keyboard
-                                                setTimeout(() => {
-                                                    scrollViewRef.current?.scrollToEnd({ animated: true });
-                                                }, 300);
-                                            }}
-                                        />
+                                        <View style={styles.amountFieldRow}>
+                                            <CurrencySelector
+                                                value={currency}
+                                                onChange={setCurrency}
+                                                compact
+                                            />
+                                            <TextInput
+                                                style={[styles.inputPro, styles.offerInput, styles.amountFieldInput]}
+                                                value={offer.amount}
+                                                onChangeText={(value) => updateOffer(index, 'amount', value)}
+                                                placeholder="1000"
+                                                placeholderTextColor="#ffffff80"
+                                                keyboardType="numeric"
+                                                onFocus={() => {
+                                                    // Scroll to show the input above keyboard
+                                                    setTimeout(() => {
+                                                        scrollViewRef.current?.scrollToEnd({ animated: true });
+                                                    }, 300);
+                                                }}
+                                            />
+                                        </View>
                                     </View>
                                     <View style={styles.offerInputContainer}>
                                         <Text style={styles.offerLabel}>Discount</Text>
@@ -1762,12 +1766,18 @@ const styles = StyleSheet.create({
     amountInput: {
         flex: 1,
     },
-    // Offer label on the left, currency dropdown on the right.
-    offerHeaderRow: {
+    // Offer "Amount" column: currency dropdown inline with the amount input.
+    // Given a bit more width than the discount column to fit both.
+    amountColumn: {
+        flex: 1.4,
+    },
+    amountFieldRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 8,
+        gap: 6,
+    },
+    amountFieldInput: {
+        flex: 1,
     },
     labelPro: {
         color: '#ffffff',

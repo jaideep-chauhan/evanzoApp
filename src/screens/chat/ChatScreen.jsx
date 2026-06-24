@@ -8,6 +8,7 @@ import {
     Image,
     TextInput,
     KeyboardAvoidingView,
+    Keyboard,
     Platform,
     StatusBar,
     Alert,
@@ -19,6 +20,7 @@ import {
     ScrollView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MessageStatus from './MessageStatus';
 import { useTheme } from '../../ThemeContext';
 import socketService from '../../services/socketService';
@@ -53,6 +55,19 @@ import { getCached, setCached } from '../../services/listCacheService';
 const chatCacheKey = (chatId) => `chat:msgs:${chatId}`;
 
 export default function ChatScreen({ route, navigation }) {
+    const insets = useSafeAreaInsets();
+    // Track keyboard visibility so the input bar's bottom padding only adds the
+    // safe-area inset (home indicator clearance) when the keyboard is hidden.
+    // When the keyboard is open, KeyboardAvoidingView already lifts the bar, so
+    // the inset would leave an empty gap above the keyboard.
+    const [keyboardVisible, setKeyboardVisible] = useState(false);
+    useEffect(() => {
+        const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+        const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+        const showSub = Keyboard.addListener(showEvt, () => setKeyboardVisible(true));
+        const hideSub = Keyboard.addListener(hideEvt, () => setKeyboardVisible(false));
+        return () => { showSub.remove(); hideSub.remove(); };
+    }, []);
     const { chatId: initialChatId, chatName, avatar, isOnline: initialOnline, recipientId } = route.params;
     console.log('🔍 ChatScreen route params:', {
         initialChatId,
@@ -69,6 +84,11 @@ export default function ChatScreen({ route, navigation }) {
     const [isSending, setIsSending] = useState(false);
     const [currentUserId, setCurrentUserId] = useState(null);
     const [typingUsers, setTypingUsers] = useState(new Set());
+    // Header "Typing..." is driven purely by who is in the typingUsers set
+    // (which already excludes ourselves), so it can never reflect our own typing.
+    useEffect(() => {
+        setIsTyping(typingUsers.size > 0);
+    }, [typingUsers]);
     const [showAttachmentModal, setShowAttachmentModal] = useState(false);
     const [uploadingFile, setUploadingFile] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
@@ -737,14 +757,17 @@ export default function ChatScreen({ route, navigation }) {
 
         // User typing
         socketService.on('user-typing', (data) => {
-            if (data.userId !== currentUserId) {
-                setTypingUsers(prev => {
-                    const newSet = new Set(prev);
-                    newSet.add(data.userId);
-                    return newSet;
-                });
-                setIsTyping(true);
-            }
+            // Ignore our OWN typing echo — only the recipient's typing should
+            // surface in the header. Compare against the REF (the `currentUserId`
+            // state is null in this closure: the listener is registered on mount
+            // before the user id resolves, so the state capture is stale).
+            // String-normalize so a number/string mismatch can't slip through.
+            if (String(data.userId) === String(currentUserIdRef.current)) return;
+            setTypingUsers(prev => {
+                const newSet = new Set(prev);
+                newSet.add(data.userId);
+                return newSet;
+            });
         });
 
         // User stopped typing
@@ -754,9 +777,6 @@ export default function ChatScreen({ route, navigation }) {
                 newSet.delete(data.userId);
                 return newSet;
             });
-            if (typingUsers.size === 0) {
-                setIsTyping(false);
-            }
         });
 
         // User status changed
@@ -2711,7 +2731,17 @@ export default function ChatScreen({ route, navigation }) {
             )}
 
             {/* Sticky Input Bar */}
-            <View style={styles.inputSectionContainer}>
+            {/* paddingBottom uses the safe-area inset so the rounded input bar
+                clears the iOS home indicator (≈34px) instead of being clipped
+                by the screen's bottom curve. When the keyboard is open the bar
+                is already lifted, so we drop back to the platform base to avoid
+                an empty gap above the keyboard. */}
+            <View
+                style={[
+                    styles.inputSectionContainer,
+                    { paddingBottom: keyboardVisible ? (Platform.OS === 'ios' ? 10 : 15) : Math.max(insets.bottom, Platform.OS === 'ios' ? 10 : 15) },
+                ]}
+            >
                 <View style={styles.inputSection}>
                     {isRecordingVoice ? (
                         <VoiceRecorder
@@ -3519,8 +3549,10 @@ const styles = StyleSheet.create({
     attachmentGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        justifyContent: 'space-between',
-        gap: 16,
+        // Fixed 3-column grid: items fill left-to-right, so a partial last row
+        // (Document, Contact) stays consecutive instead of being pushed to the
+        // edges by space-between.
+        rowGap: 4,
     },
     deletedBubble: {
         backgroundColor: '#f5f5f5',
@@ -3534,10 +3566,9 @@ const styles = StyleSheet.create({
     },
     attachmentOption: {
         alignItems: 'center',
-        justifyContent: 'center',
-        width: '30%',
-        minWidth: 90,
-        marginBottom: 16,
+        justifyContent: 'flex-start',
+        width: '33.33%',
+        marginBottom: 20,
     },
     attachmentIcon: {
         width: 64,

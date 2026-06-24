@@ -9,7 +9,8 @@ import { BANNER_LIST_INTERVAL } from '../../services/adsConfig';
 // Bumping the key invalidates pre-existing cached rows that don't have those
 // fields, so the chat-icon handler doesn't fall back to the ad title until
 // the fresh fetch lands.
-const VENDORS_CACHE_KEY = 'vendors:public:v2';
+// v3: cached formatted rows now include `currency` for offer amounts.
+const VENDORS_CACHE_KEY = 'vendors:public:v3';
 import {
     StyleSheet,
     SafeAreaView,
@@ -517,6 +518,7 @@ export default function Vendor() {
                         onCategorySelect={(cat) => {
                             handleCategorySelect([cat.category_id || cat.id], [cat]);
                         }}
+                        onLocationSelect={(loc) => handleLocationSelect(loc)}
                     />
                     <Tabs
                         tabs={['Location', 'Quick Message', 'Category']}

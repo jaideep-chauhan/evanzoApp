@@ -21,12 +21,12 @@ class SocialAuthService {
                 // The backend's GOOGLE_CLIENT_ID must match this exactly (it's the
                 // idToken audience it verifies against).
                 webClientId: '453180956529-01a33o6m8pcv8djesn9n7fsmbedobppd.apps.googleusercontent.com',
-                // NOTE: iOS still needs its OWN OAuth client created in project
-                // 453180956529 (the Firebase iOS app currently has no CLIENT_ID in
-                // GoogleService-Info.plist). Replace the line below with that iOS
-                // client id once created, and update the Info.plist URL scheme to
-                // its REVERSED_CLIENT_ID. Until then iOS Google Sign-In won't work.
-                iosClientId: '1075894285533-cu18n2ip03k8glui687tvkspb7qsi35g.apps.googleusercontent.com',
+                // iOS OAuth client in the SAME project (453180956529) as the
+                // webClientId above. A client from a different project (the old
+                // 1075894285533) caused "invalid_audience: The audience client
+                // and the client need to be in the same project." The matching
+                // REVERSED_CLIENT_ID is the URL scheme in ios/EVNZO/Info.plist.
+                iosClientId: '453180956529-lci338mf6g2c2itecgn9vuna9sqeo8th.apps.googleusercontent.com',
                 offlineAccess: true,
                 hostedDomain: '',
                 forceCodeForRefreshToken: true,

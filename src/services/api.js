@@ -23,6 +23,12 @@ console.log('🌐 API Configuration:', {
 
 export const API_BASE_URL = BASE_URL; // Export for socket service
 
+// Host WITHOUT the "/api" suffix — for static assets the backend serves off
+// the domain root (e.g. https://api.evnzo.com/uploads/...). Computed once here
+// so callers never strip "/api" themselves; a naive `.replace('/api','')`
+// matches the "/api" inside "https://api..." and corrupts the host.
+export const MEDIA_BASE_URL = BASE_URL.replace(/\/api\/?$/, '');
+
 // Pass-through URL fixer kept for compatibility with screens that grew up
 // against an older dev setup where localhost ↔ machine-IP rewriting lived
 // here. In production it's a no-op — the URL is already absolute.

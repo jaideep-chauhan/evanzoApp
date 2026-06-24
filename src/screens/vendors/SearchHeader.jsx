@@ -17,17 +17,19 @@ import bg from '../../assets/images/smallHeader.jpg';
 import { setSearchHandler } from '../../services/searchBridge';
 import notificationService from '../../services/notificationService';
 
-export default function SearchHeader({ onSearchChange, searchValue = '', searchType = 'vendors', onCategorySelect }) {
+export default function SearchHeader({ onSearchChange, searchValue = '', searchType = 'vendors', onCategorySelect, onLocationSelect }) {
     const navigation = useNavigation();
     const theme = useTheme();
 
     // Open the dedicated Search overlay. Register a one-shot handler that
-    // the Search screen pops + invokes when the user picks a keyword or
-    // category, so the list screen's own state is the source of truth.
+    // the Search screen pops + invokes when the user picks a keyword,
+    // category, or location, so the list screen's own state is the source
+    // of truth.
     const openSearch = () => {
         setSearchHandler({
             onQuery: (q) => onSearchChange?.(q),
             onCategory: (cat) => onCategorySelect?.(cat),
+            onLocation: (loc) => onLocationSelect?.(loc),
         });
         navigation.navigate('Search', {
             searchType,

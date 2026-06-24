@@ -14,10 +14,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import filterService from '../../services/filterService';
 import categoryService from '../../services/categoryService';
-import vendorService from '../../services/vendorService';
-import { icons, getCategoryIcon } from '../../assets/icons';
+import searchService from '../../services/searchService';
+import { getCategoryIcon } from '../../assets/icons';
 import { popSearchHandler } from '../../services/searchBridge';
 
 const RECENT_SEARCHES_KEY = '@evnzo_recent_searches';
@@ -49,9 +48,12 @@ export default function SearchScreen() {
             } catch (_) { /* ignore */ }
 
             try {
+                // Call ON the singleton (arrow keeps `this` bound) — extracting
+                // `categoryService.getVendorCategories` into a local strips the
+                // binding, so `this.isCacheValid()` inside throws.
                 const fn = searchType === 'events'
-                    ? categoryService.getEventCategories
-                    : categoryService.getVendorCategories;
+                    ? (arg) => categoryService.getEventCategories(arg)
+                    : (arg) => categoryService.getVendorCategories(arg);
                 const resp = await fn(false);
                 if (resp?.success && Array.isArray(resp.data)) {
                     // Show only the first 6 — keeps the grid clean. Backend
@@ -82,26 +84,44 @@ export default function SearchScreen() {
         }
         setIsSearching(true);
         try {
-            // Wrap as an arrow that calls the method ON the filterService
-            // singleton — extracting `filterService.searchVendors` into a
-            // local strips the `this` binding, which the class methods rely
-            // on to reach `this.buildVendorSearchParams`. The arrow keeps
-            // `this` pointed at the singleton.
-            const fn = searchType === 'events'
-                ? (args) => filterService.searchEvents(args)
-                : (args) => filterService.searchVendors(args);
-            const resp = await fn({ keyword: q.trim(), page: 1, limit: 8 });
-            if (resp?.success && Array.isArray(resp.data)) {
-                setResults(resp.data);
-            } else {
-                setResults([]);
-            }
+            // Suggest CATEGORIES and LOCATIONS (not individual ads). Typing
+            // "photography" should surface the Photography category; typing a
+            // place should surface that location — so the user filters the
+            // list, instead of jumping at one specific ad. The backend
+            // /search/suggestions returns category/location/vendor hits; we
+            // keep only category + location here.
+            const resp = await searchService.getAutocompleteSuggestions(q.trim(), searchType);
+            const items = resp?.success && Array.isArray(resp.data) ? resp.data : [];
+            const filtered = items.filter((it) => {
+                const t = String(it?.type || '').toLowerCase();
+                return t === 'category' || t === 'location';
+            });
+            setResults(filtered);
         } catch (_) {
             setResults([]);
         } finally {
             setIsSearching(false);
         }
     }, [searchType]);
+
+    // Apply a tapped suggestion: category → category filter, location →
+    // location filter, via the one-shot bridge the list screen registered.
+    const pickSuggestion = (item) => {
+        const type = String(item?.type || '').toLowerCase();
+        const label = item?.value || item?.display || item?.name || '';
+        if (!label) return;
+        Keyboard.dismiss();
+        persistRecent(label);
+        if (type === 'category') {
+            const catId = item.id || item.category_id || item.categoryId;
+            popSearchHandler()?.onCategory?.({ category_id: catId, id: catId, name: label });
+        } else if (type === 'location') {
+            popSearchHandler()?.onLocation?.(label);
+        } else {
+            popSearchHandler()?.onQuery?.(label);
+        }
+        navigation.goBack();
+    };
 
     const handleChange = (text) => {
         setQuery(text);
@@ -185,16 +205,22 @@ export default function SearchScreen() {
                         </View>
                     )}
                     renderItem={({ item }) => {
-                        const name = item.company_name || item.title || item.name || 'Untitled';
-                        const sub = item.city || item.location || item.category?.name || '';
+                        const type = String(item?.type || '').toLowerCase();
+                        const isCategory = type === 'category';
+                        const label = item?.value || item?.display || item?.name || '';
+                        const sub = isCategory ? 'Category' : (item?.display || 'Location');
                         return (
                             <TouchableOpacity
                                 style={styles.resultRow}
-                                onPress={() => submitQuery(name)}
+                                onPress={() => pickSuggestion(item)}
                             >
-                                <Image source={icons.location} style={styles.resultIcon} />
+                                <Icon
+                                    name={isCategory ? 'pricetag-outline' : 'location-outline'}
+                                    size={18}
+                                    color="#2C3D5B"
+                                />
                                 <View style={{ flex: 1 }}>
-                                    <Text style={styles.resultTitle} numberOfLines={1}>{name}</Text>
+                                    <Text style={styles.resultTitle} numberOfLines={1}>{label}</Text>
                                     {!!sub && <Text style={styles.resultSub} numberOfLines={1}>{sub}</Text>}
                                 </View>
                             </TouchableOpacity>

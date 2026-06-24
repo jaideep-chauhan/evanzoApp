@@ -13,7 +13,7 @@ import { CURRENCIES, getCurrencyMeta } from '../utils/currency';
 // Compact currency picker: a pill showing "<symbol> <code> ▾" that opens a
 // bottom-sheet list. Used next to budget/offer amount inputs so a multi-country
 // user can pick the unit (₹, €, $, ...) their price is in.
-const CurrencySelector = ({ value, onChange, style }) => {
+const CurrencySelector = ({ value, onChange, style, compact = false }) => {
     const [open, setOpen] = useState(false);
     const meta = getCurrencyMeta(value);
 
@@ -25,11 +25,11 @@ const CurrencySelector = ({ value, onChange, style }) => {
     return (
         <>
             <TouchableOpacity
-                style={[styles.trigger, style]}
+                style={[styles.trigger, compact && styles.triggerCompact, style]}
                 onPress={() => setOpen(true)}
                 activeOpacity={0.8}
             >
-                <Text style={styles.triggerText}>{meta.symbol} {meta.code}</Text>
+                <Text style={styles.triggerText}>{compact ? meta.symbol : `${meta.symbol} ${meta.code}`}</Text>
                 <Icon name="chevron-down" size={16} color="#ffffff" />
             </TouchableOpacity>
 
@@ -92,6 +92,10 @@ const styles = StyleSheet.create({
         borderColor: '#ffffff30',
         paddingHorizontal: 12,
         paddingVertical: 12,
+    },
+    triggerCompact: {
+        paddingHorizontal: 10,
+        gap: 2,
     },
     triggerText: { color: '#ffffff', fontSize: 15, fontWeight: '600' },
     backdrop: {

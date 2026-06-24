@@ -17,7 +17,8 @@ import { getCached, setCached } from '../../services/listCacheService';
 import BannerAdView from '../../components/ads/BannerAdView';
 import { BANNER_LIST_INTERVAL } from '../../services/adsConfig';
 
-const EVENTS_CACHE_KEY = 'events:public';
+// v2: cached formatted rows now include `currency` for the budget display.
+const EVENTS_CACHE_KEY = 'events:public:v2';
 import Tabs from '../vendors/Tabs';
 import EventCard from './EventCard';
 import LocationSelector from '../../components/LocationSelector';
@@ -760,6 +761,7 @@ export default function Events() {
                         onCategorySelect={(cat) => {
                             handleCategorySelect([cat.category_id || cat.id], [cat]);
                         }}
+                        onLocationSelect={(loc) => handleLocationSelect(loc)}
                     />
                     <View style={{ marginBottom: 10 }}>
                         <Tabs
