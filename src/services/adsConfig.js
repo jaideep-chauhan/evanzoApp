@@ -22,7 +22,21 @@ const IOS = {
     rewarded: TestIds.REWARDED,
 };
 
-const pick = (key) => (Platform.OS === 'ios' ? IOS[key] : ANDROID[key]);
+// Google's official always-fill TEST units. In dev builds we use these so the
+// ad UI is actually visible on simulators/emulators — production units no-fill
+// on non-physical devices, which is why "ads don't show" during testing.
+// Release builds always use the real production units above.
+const TEST = {
+    banner: TestIds.BANNER,
+    interstitial: TestIds.INTERSTITIAL,
+    native: 'ca-app-pub-3940256099942544/2247696110', // Google native-advanced test unit
+    rewarded: TestIds.REWARDED,
+};
+
+const pick = (key) => {
+    if (__DEV__) return TEST[key];
+    return Platform.OS === 'ios' ? IOS[key] : ANDROID[key];
+};
 
 export const AD_UNITS = {
     banner: pick('banner'),

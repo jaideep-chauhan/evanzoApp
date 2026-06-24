@@ -24,6 +24,13 @@ android {
     ndkVersion rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
 
+    // Skip the memory-heavy lintVitalRelease pass on release builds. It isn't
+    // needed for a test APK and was OOM-crashing the Gradle daemon.
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
     // Declare the New Architecture native build explicitly (local copy of
     // RN's default-app-setup CMakeLists + OnLoad.cpp) instead of relying on
     // the RN gradle plugin to inject the path in finalizeDsl. The injected

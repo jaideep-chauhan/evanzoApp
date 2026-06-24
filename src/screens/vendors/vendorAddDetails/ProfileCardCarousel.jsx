@@ -8,13 +8,13 @@ import {
     Dimensions,
     FlatList,
     Animated,
-    ActivityIndicator,
 } from 'react-native';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import Entypo from 'react-native-vector-icons/Entypo';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import vendorDetailsService from '../../../services/vendorDetailsService';
+import vendorService from '../../../services/vendorService';
 import img from '../../../assets/images/dummy.png';
 import { icons } from '../../../assets/icons';
 
@@ -40,10 +40,12 @@ const ProfileCard = ({ item, onPress }) => {
         if (onPress) {
             onPress(item);
         } else {
-            // Navigate to vendor details
-            navigation.navigate('VendorChat', { 
-                vendor: item,
-                scrollToOffer: false 
+            // Pass the fully-formatted vendor (real image URLs, offers, etc.) —
+            // same shape the main list passes — so the detail page renders the
+            // actual ad data instead of dummy placeholders.
+            navigation.navigate('VendorAddDetail', {
+                vendor: item.fv || item,
+                scrollToOffer: false,
             });
         }
     };
@@ -87,6 +89,32 @@ const ProfileCard = ({ item, onPress }) => {
     );
 };
 
+// Pulsing placeholder card shown while similar vendors load — matches the real
+// ProfileCard footprint so the section doesn't jump when data arrives.
+const SkeletonCard = () => {
+    const pulse = useRef(new Animated.Value(0.45)).current;
+    useEffect(() => {
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.timing(pulse, { toValue: 1, duration: 650, useNativeDriver: true }),
+                Animated.timing(pulse, { toValue: 0.45, duration: 650, useNativeDriver: true }),
+            ])
+        );
+        loop.start();
+        return () => loop.stop();
+    }, [pulse]);
+
+    return (
+        <Animated.View style={[styles.card, { opacity: pulse }]}>
+            <View style={styles.skelAvatar} />
+            <View style={[styles.skelLine, { width: '55%', alignSelf: 'center', marginTop: 14 }]} />
+            <View style={[styles.skelLine, { width: '35%', alignSelf: 'center', marginTop: 8 }]} />
+            <View style={styles.skelBadge} />
+            <View style={styles.skelButton} />
+        </Animated.View>
+    );
+};
+
 const ProfileCardCarousel = ({ vendorId }) => {
     const scrollRef = useRef(null);
     const intervalRef = useRef(null);
@@ -108,36 +136,26 @@ const ProfileCardCarousel = ({ vendorId }) => {
                 const response = await vendorDetailsService.getSimilarVendors(vendorId);
                 
                 if (response.success && response.data && response.data.length > 0) {
-                    // Format the vendor data - check for both company_name and name
+                    // Format through the SAME formatter the main vendor list uses,
+                    // so `images` are full URLs (the raw record stores them under
+                    // `photos`, not `images`) and the object shape matches what the
+                    // detail page (VendorChat) expects on navigation. `fv` is kept
+                    // on each item and passed verbatim when the user taps "View",
+                    // so the opened page shows the REAL images, not dummies.
                     const formattedVendors = response.data.map(vendor => {
-                        // Parse images if it's a string
-                        let images = vendor.images;
-                        if (typeof images === 'string') {
-                            try {
-                                images = JSON.parse(images);
-                            } catch (e) {
-                                images = [];
-                            }
-                        }
-                        
+                        const fv = vendorService.formatVendorForDisplay(vendor);
                         return {
-                            id: vendor.vendor_ad_id || vendor.id,
-                            name: vendor.company_name || vendor.name || vendor.title,
-                            role: vendor.type || vendor.category?.name || vendor.category || 'Photography',
-                            location: vendor.location || 'Location not specified',
-                            rating: vendor.rating || 0,
-                            image: Array.isArray(images) ? images[0] : images || vendor.image,
-                            // Owner avatar (small badge overlaid on the card).
-                            // Backend includes the User row on similar vendors
-                            // — same join used by the public list.
-                            ownerProfilePic:
-                                vendor.User?.profile_pic ||
-                                vendor.user?.profile_pic ||
-                                null,
-                            type: vendor.type || vendor.category?.name,
-                            description: vendor.description,
-                            images: images,
-                            _original: vendor
+                            id: fv.id,
+                            name: fv.name,
+                            role: fv.type,
+                            location: fv.location,
+                            rating: fv.rating,
+                            image: fv.images?.[0],
+                            ownerProfilePic: fv.owner_profile_pic || null,
+                            type: fv.type,
+                            description: fv.description,
+                            images: fv.images,
+                            fv, // full formatted object for navigation
                         };
                     });
                     setSimilarVendors(formattedVendors);
@@ -249,12 +267,15 @@ const ProfileCardCarousel = ({ vendorId }) => {
         index,
     });
     
-    // Don't render if no data and still loading
+    // Skeleton placeholders while loading (no jarring spinner / layout jump).
     if (isLoading && similarVendors.length === 0) {
         return (
-            <View style={[styles.carouselContainer, styles.loadingContainer]}>
+            <View style={styles.carouselContainer}>
                 <Text style={styles.sectionTitle}>You might also like</Text>
-                <ActivityIndicator size="small" color="#2c3a58" />
+                <View style={styles.skeletonRow}>
+                    <SkeletonCard />
+                    <SkeletonCard />
+                </View>
             </View>
         );
     }
@@ -379,7 +400,6 @@ const styles = StyleSheet.create({
     role: {
         textAlign: 'center',
         fontSize: 12,
-        color: '#777',
         marginTop: 2,
         marginBottom: 10,
         color: '#49454F'
@@ -420,6 +440,36 @@ const styles = StyleSheet.create({
         height: 200,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    skeletonRow: {
+        flexDirection: 'row',
+        paddingLeft: 16,
+        gap: 10,
+    },
+    skelAvatar: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        alignSelf: 'center',
+        backgroundColor: '#E5E7EB',
+    },
+    skelLine: {
+        height: 12,
+        borderRadius: 6,
+        backgroundColor: '#E5E7EB',
+    },
+    skelBadge: {
+        width: 90,
+        height: 24,
+        borderRadius: 12,
+        alignSelf: 'center',
+        backgroundColor: '#E5E7EB',
+        marginVertical: 12,
+    },
+    skelButton: {
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: '#E5E7EB',
     },
     noDataContainer: {
         paddingVertical: 40,
