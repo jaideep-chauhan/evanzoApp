@@ -26,6 +26,7 @@ import { useTheme } from '../../ThemeContext';
 import vendorService from '../../services/vendorService';
 import eventService from '../../services/eventService';
 import categoryService from '../../services/categoryService';
+import { SERVICE_OPTIONS, EVENT_TYPE_OPTIONS } from '../../data/eventOptions';
 import CurrencySelector from '../../components/CurrencySelector';
 import { detectDefaultCurrency } from '../../utils/currency';
 import { CustomSuccessModal } from '../../components/CustomSuccessModal';
@@ -59,15 +60,6 @@ const CATEGORIES = [
 const TAG_OPTIONS = [
     'Wedding', 'Birthday', 'Corporate', 'Anniversary', 'Engagement', 'Baby Shower',
     'Graduation', 'Festival', 'Private Party', 'Other',
-];
-
-const SERVICE_OPTIONS = [
-    'Photography', 'Catering', 'Music', 'Decoration', 'Venue', 'Transport',
-];
-
-const FALLBACK_EVENT_TYPE_OPTIONS = [
-    'Wedding', 'Birthday', 'Corporate Event', 'Anniversary', 'Engagement',
-    'Baby Shower', 'Graduation', 'Festival', 'Private Party', 'Other',
 ];
 
 const EVENT_TYPE_TAG_OPTIONS = {
@@ -351,47 +343,11 @@ const CreateAddForm = ({ type, onClose }) => {
         'Photobooth',
     ];
 
-    // Service options for events
-    const serviceOptions = [
-        'Photographer',
-        'Videographer',
-        'Caterer',
-        'Decorator',
-        'DJ',
-        'Event Planner',
-        'Florist',
-        'Makeup Artist',
-        'Venue',
-        'Transport',
-        'Security',
-        'Sound System',
-        'Lighting',
-        'Entertainment',
-    ];
-
-    // Event type options - Updated with complete list
-    const eventTypeOptions = [
-        'Wedding',
-        'Engagement',
-        'Birthday',
-        'Baby Shower',
-        'Corporate Event',
-        'Product Launch',
-        'Pre-Wedding Shoot',
-        'Anniversary',
-        'Festival Celebration',
-        'Housewarming',
-        'College Fest',
-        'Farewell Party',
-        'Music Concert',
-        'Religious Ceremony',
-        'Workshop or Seminar',
-        'Brand Promotion',
-        'Cultural Event',
-        'Proposal Setup',
-        'Bachelor/Bachelorette',
-        'Other',
-    ];
+    // Service + event-type options come from the shared source of truth
+    // (data/eventOptions.js), the same lists the events filter uses — so what
+    // you can post and what you can filter by never drift apart.
+    const serviceOptions = SERVICE_OPTIONS;
+    const eventTypeOptions = EVENT_TYPE_OPTIONS;
 
     // Event type tags
     const eventTypeTagOptions = [

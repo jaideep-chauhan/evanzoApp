@@ -112,8 +112,12 @@ export default function VendorAdDashboard({ navigation }) {
                 keyboardShouldPersistTaps="handled"
                 contentInsetAdjustmentBehavior="never"
             >
-                {/* Header and all content before tabs */}
-                <View style={[styles.headerBox, { paddingTop: insets.top + 12 }]}>
+                {/* Header and all content before tabs.
+                    backgroundColor matches the doodle's navy base so no white
+                    from the page background shows through at the very top edge
+                    (the doodle is an absolute, zIndex:-1 layer over an
+                    otherwise-transparent box). */}
+                <View style={[styles.headerBox, { paddingTop: insets.top + 12, backgroundColor: theme.colors.primary }]}>
                         <ImageBackground
                             source={bg}
                             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: -1 }}
@@ -542,7 +546,8 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
     },
     headerBox: {
-        backgroundColor: 'transparent',
+        // backgroundColor (navy) is set inline from theme so the doodle's
+        // base color fills the box and no white shows at the top edge.
         borderBottomLeftRadius: 32,
         borderBottomRightRadius: 32,
         paddingBottom: 24,

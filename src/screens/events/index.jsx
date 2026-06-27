@@ -31,6 +31,7 @@ import { setSearchHandler } from '../../services/searchBridge';
 import eventService from '../../services/eventService';
 import filterService from '../../services/filterService';
 import categoryService from '../../services/categoryService';
+import { SERVICE_OPTIONS } from '../../data/eventOptions';
 
 export default function Events() {
     const navigation = useNavigation();
@@ -53,9 +54,6 @@ export default function Events() {
     const [isLoading, setIsLoading] = useState(true);
     const [events, setEvents] = useState([]);
     const [masterEventTypes, setMasterEventTypes] = useState([]);
-    // Vendor categories (service types) for the "Vendor Type" filter tab —
-    // events can be filtered by the service they need (service_needed).
-    const [vendorTypeNames, setVendorTypeNames] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [currentFilters, setCurrentFilters] = useState({});
     const [pagination, setPagination] = useState({ page: 1, limit: 10, totalPages: 1, totalResults: 0 });
@@ -327,24 +325,6 @@ export default function Events() {
         };
     }, []);
 
-    // Load the vendor categories once for the "Vendor Type" filter tab. Events
-    // store the service they need as a name (service_needed), so we filter by
-    // the top-level vendor category names.
-    useEffect(() => {
-        let isMounted = true;
-        (async () => {
-            const result = await categoryService.getVendorCategories(false);
-            if (isMounted && result.success) {
-                const names = (result.data || [])
-                    .map((c) => (typeof c === 'string' ? c : c?.name))
-                    .filter(Boolean);
-                setVendorTypeNames(names);
-            }
-        })();
-        return () => {
-            isMounted = false;
-        };
-    }, []);
     // Tap-same-tab-to-scroll-top. See screens/vendors/index.jsx for the
     // full rationale — soft scroll when the currently-focused tab is
     // re-tapped; the focus path (different tab) uses animated:false below.
@@ -732,11 +712,14 @@ export default function Events() {
         return types.map((name) => ({ category_id: name, name }));
     }, [events, masterEventTypes]);
 
-    // Vendor types (service_needed) for the second filter tab — same name=id
-    // convention as event types so the name-based filter stays consistent.
+    // Vendor types (service_needed) for the second filter tab. These are the
+    // SERVICE roles an event needs (Photographer, Florist, ...) — the exact
+    // values events store in service_needed — NOT vendor service categories
+    // like "Photography/Videography", which would never match. Shared with the
+    // create-ad form so the post/filter vocabularies can't drift apart.
     const vendorTypeCategories = useMemo(
-        () => vendorTypeNames.map((name) => ({ category_id: name, name })),
-        [vendorTypeNames],
+        () => SERVICE_OPTIONS.map((name) => ({ category_id: name, name })),
+        [],
     );
 
     // The two dimensions the user can filter events by, shown as tabs at the
