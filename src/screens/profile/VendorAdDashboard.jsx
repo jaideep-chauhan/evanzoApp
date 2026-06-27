@@ -112,11 +112,10 @@ export default function VendorAdDashboard({ navigation }) {
                 keyboardShouldPersistTaps="handled"
                 contentInsetAdjustmentBehavior="never"
             >
-                {/* Header and all content before tabs.
-                    backgroundColor matches the doodle's navy base so no white
-                    from the page background shows through at the very top edge
-                    (the doodle is an absolute, zIndex:-1 layer over an
-                    otherwise-transparent box). */}
+                {/* Header and all content before tabs. backgroundColor is the
+                    doodle's navy base as a safety net behind the image. The
+                    white line that used to show at the top was 2 white rows
+                    baked into profileBG.png (now cropped out). */}
                 <View style={[styles.headerBox, { paddingTop: insets.top + 12, backgroundColor: theme.colors.primary }]}>
                         <ImageBackground
                             source={bg}

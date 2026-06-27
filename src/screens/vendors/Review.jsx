@@ -29,19 +29,20 @@ const Review = () => {
     const route = useRoute();
     const { user, isAuthenticated } = useAuth();
     
-    // Get vendor data from route params
-    const { vendorId, vendorName, onReviewSubmitted } = route.params || {};
+    // Review target. Either a vendor ad (vendorId) OR a user directly
+    // (revieweeUserId, e.g. an event organizer with no vendor ad).
+    const { vendorId, vendorName, revieweeUserId, onReviewSubmitted } = route.params || {};
 
     const handleStarPress = (index) => {
         setRating(index + 1);
     };
 
     const handleSubmit = async () => {
-        if (!vendorId) {
-            Alert.alert('Error', 'Vendor information is missing');
+        if (!vendorId && !revieweeUserId) {
+            Alert.alert('Error', 'Review target is missing');
             return;
         }
-        
+
         if (!isAuthenticated) {
             Alert.alert('Authentication Required', 'Please log in to submit a review');
             return;
@@ -78,10 +79,9 @@ const Review = () => {
                 media: selectedImages
             };
             
-            console.log('Submitting review for vendorId:', vendorId);
-            console.log('Review data:', reviewData);
-            
-            const response = await vendorDetailsService.submitVendorReview(vendorId, reviewData);
+            const response = revieweeUserId
+                ? await vendorDetailsService.submitUserReview(revieweeUserId, reviewData)
+                : await vendorDetailsService.submitVendorReview(vendorId, reviewData);
             
             if (response.success) {
                 Alert.alert(

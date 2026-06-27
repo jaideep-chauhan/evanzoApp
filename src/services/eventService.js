@@ -7,7 +7,9 @@ import authFetch from './authFetch';
 //   - empty / null  → "TBD"
 //   - already contains letters (e.g. "2 hours", "90 min") → pass through
 //   - purely numeric → "<N> hour" / "<N> hours"
-const formatDuration = (raw) => {
+// Exported so the similar-events carousel (which renders raw DB rows that
+// don't pass through formatEventForDisplay) shares the exact same formatting.
+export const formatDuration = (raw) => {
     if (raw == null) return 'TBD';
     const s = String(raw).trim();
     if (!s) return 'TBD';

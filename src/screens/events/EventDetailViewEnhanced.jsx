@@ -18,11 +18,13 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { icons } from '../../assets/icons';
-import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import img from '../../assets/images/dummy.png';
 import bg1 from '../../assets/images/smallHeader.jpg';
 import eventDetailsService from '../../services/eventDetailsService';
+import vendorDetailsService from '../../services/vendorDetailsService';
 import EventCardCarousel from './EventCardCarousel';
+import { MEDIA_BASE_URL } from '../../services/api';
 import { getCurrencySymbol } from '../../utils/currency';
 import chatService from '../../services/chatService';
 import { useAuth } from '../../context/AuthContext';
@@ -36,15 +38,17 @@ export default function EventDetailViewEnhanced() {
     const { user } = useAuth();
 
     const [quoteText, setQuoteText] = useState('');
-    const [isSaved, setIsSaved] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
 
     // Every Nth event-detail open triggers an interstitial.
     const tickInterstitial = useInterstitialAd();
     useEffect(() => { tickInterstitial(); }, [tickInterstitial]);
-    const [isCheckingStatus, setIsCheckingStatus] = useState(true);
     const [showFullDesc, setShowFullDesc] = useState(false);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    // Real organizer rating/count from the user-review system (the hardcoded
+    // 5.0/10 in getOrganizerData was a placeholder). Same source as the User
+    // Profile screen, so the two stay consistent.
+    const [organizerRating, setOrganizerRating] = useState(0);
+    const [organizerReviewCount, setOrganizerReviewCount] = useState(0);
     const [isSubmittingQuote, setIsSubmittingQuote] = useState(false);
 
     // Get event data from navigation params
@@ -96,20 +100,25 @@ export default function EventDetailViewEnhanced() {
         const user = event?.user || event?.User || event?.organizer || null;
         const organizerName =
             user?.full_name ||
+            user?.name || // formatEventForDisplay's `organizer` uses `name`, not `full_name`
+            [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim() ||
             event.organizer_name ||
             event.user_name ||
             event.created_by_name ||
             'Organizer';
         const organizerAvatar =
             user?.profile_pic ||
+            user?.avatar || // formatted organizer uses `avatar`
             event.organizer_avatar ||
             null;
 
         return {
             name: organizerName,
             avatar: organizerAvatar || img,
-            rating: event.organizer_rating || 5.0,
-            reviewCount: event.organizer_review_count || 10,
+            // Real values come from the user-review fetch below; these are
+            // just fallbacks until that resolves.
+            rating: event.organizer_rating || 0,
+            reviewCount: event.organizer_review_count || 0,
             user_id: user?.user_id || event.user_id,
         };
     };
@@ -136,16 +145,46 @@ export default function EventDetailViewEnhanced() {
                 try { arr = JSON.parse(raw); } catch (_) { arr = []; }
             }
             if (!Array.isArray(arr) || arr.length === 0) return [img];
-            return arr.map((att) => {
-                if (typeof att === 'string') return att.startsWith('http') ? { uri: att } : { uri: att };
-                if (att?.url) return { uri: att.url };
-                if (att?.path) return { uri: `https://api.evnzo.com${att.path}` };
-                return img;
-            });
+            // Attachment urls/paths from raw rows are RELATIVE
+            // ("/uploads/event-ads/..."). Without the media host the <Image>
+            // gets a hostless uri and silently fails to load — which is why
+            // images were blank when the detail was opened from the similar-
+            // events carousel (the main list pre-formats to absolute urls).
+            const toUri = (u) => {
+                if (!u || typeof u !== 'string') return null;
+                if (u.startsWith('http')) return u;
+                return `${MEDIA_BASE_URL}${u.startsWith('/') ? '' : '/'}${u}`;
+            };
+            const out = arr
+                .map((att) => {
+                    const u = typeof att === 'string'
+                        ? toUri(att)
+                        : toUri(att?.url || att?.path || att?.file_url);
+                    return u ? { uri: u } : null;
+                })
+                .filter(Boolean);
+            return out.length > 0 ? out : [img];
         })(),
         organizer: getOrganizerData(eventFromParams),
         status: eventFromParams.status || 'active',
     };
+
+    // Pull the organizer's real rating + review count (replaces the 5.0/10
+    // placeholder). Keyed on user_id so it only refetches when the organizer
+    // changes.
+    const organizerUserId = eventData.organizer?.user_id;
+    useEffect(() => {
+        if (!organizerUserId) return undefined;
+        let active = true;
+        (async () => {
+            const res = await vendorDetailsService.getUserReviews(organizerUserId);
+            if (active && res.success && res.data) {
+                setOrganizerRating(Number(res.data.averageRating) || 0);
+                setOrganizerReviewCount(res.data.totalReviews || 0);
+            }
+        })();
+        return () => { active = false; };
+    }, [organizerUserId]);
 
     const handleSendQuote = async () => {
         if (!quoteText.trim()) {
@@ -224,39 +263,6 @@ export default function EventDetailViewEnhanced() {
         }
     };
 
-    const handleSave = async () => {
-        if (isLoading) return;
-
-        if (!eventData.id) {
-            Alert.alert('Error', 'Cannot save event: ID not found');
-            return;
-        }
-
-        // Optimistically update UI immediately for better UX
-        const newSavedState = !isSaved;
-        setIsSaved(newSavedState);
-        setIsLoading(true);
-
-        try {
-            const response = await eventDetailsService.toggleSaveEvent(eventData.id);
-
-            if (response.success) {
-                const finalSavedState = response.saved !== undefined ? response.saved : newSavedState;
-                setIsSaved(finalSavedState);
-            } else {
-                // Rollback on error
-                setIsSaved(!newSavedState);
-                Alert.alert('Error', response.message || 'Failed to save event');
-            }
-        } catch (error) {
-            // Rollback on error
-            setIsSaved(!newSavedState);
-            Alert.alert('Error', 'Failed to save event. Please try again.');
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
     const handleShare = async () => {
         try {
             await eventDetailsService.shareEvent(eventData);
@@ -277,38 +283,6 @@ export default function EventDetailViewEnhanced() {
         }
         return stars;
     };
-
-    // Check saved status on mount and whenever screen comes into focus
-    useFocusEffect(
-        React.useCallback(() => {
-            const checkSavedStatus = async () => {
-                if (!eventData.id) {
-                    console.log('❌ No event ID found in eventData:', eventData);
-                    setIsCheckingStatus(false);
-                    return;
-                }
-                setIsCheckingStatus(true);
-                try {
-                    console.log('🔄 Screen focused - checking saved status for event ID:', eventData.id);
-                    console.log('📌 Event data:', {
-                        id: eventData.id,
-                        title: eventData.title,
-                        event_ad_id: eventFromParams.event_ad_id,
-                        rawId: eventFromParams.id
-                    });
-                    const savedStatus = await eventDetailsService.isEventSaved(eventData.id);
-                    console.log('💾 Event saved status result:', savedStatus);
-                    setIsSaved(savedStatus);
-                } catch (error) {
-                    console.error('❌ Error checking saved status:', error);
-                    setIsSaved(false);
-                } finally {
-                    setIsCheckingStatus(false);
-                }
-            };
-            checkSavedStatus();
-        }, [eventData.id, eventFromParams.id, eventFromParams.event_ad_id])
-    );
 
     return (
         <KeyboardAvoidingView
@@ -340,34 +314,22 @@ export default function EventDetailViewEnhanced() {
                             <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
                                 <Icon name="share-social-outline" size={20} color="#1E293B" />
                             </TouchableOpacity>
-                            <TouchableOpacity
-                                style={styles.actionButton}
-                                onPress={handleSave}
-                                disabled={isLoading || isCheckingStatus}
-                            >
-                                {(isLoading || isCheckingStatus) ? (
-                                    <ActivityIndicator size="small" color="#FF6B6B" />
-                                ) : (
-                                    <Icon
-                                        name={isSaved ? "heart" : "heart-outline"}
-                                        size={20}
-                                        color={isSaved ? "#FF6B6B" : "#1E293B"}
-                                    />
-                                )}
-                            </TouchableOpacity>
                         </View>
                     </View>
 
-                    {/* Location and Budget */}
+                    {/* Location and Budget — location takes the remaining
+                        width and ellipsizes; budget keeps its intrinsic width
+                        on the right so a long location can't push it off the
+                        card. */}
                     <View style={styles.metaInfo}>
                         <View style={styles.locationContainer}>
                             <Image source={icons.location} style={styles.locationIconImg} />
-                            <Text style={styles.locationText}>{eventData.location}</Text>
+                            <Text style={styles.locationText} numberOfLines={1}>{eventData.location}</Text>
                         </View>
                         <View style={styles.budgetContainer}>
                             <Text style={styles.budgetLabel}>Budget </Text>
                             <Text style={[styles.budgetText, { fontWeight: '700' }]}>{getCurrencySymbol(eventData.currency)}</Text>
-                            <Text style={styles.budgetText}>{eventData.budget}</Text>
+                            <Text style={styles.budgetText} numberOfLines={1}>{eventData.budget}</Text>
                         </View>
                     </View>
 
@@ -485,10 +447,10 @@ export default function EventDetailViewEnhanced() {
                         </View>
                         <View style={styles.ratingContainer}>
                             <View style={styles.stars}>
-                                {renderStars(eventData.organizer.rating)}
+                                {renderStars(organizerRating)}
                             </View>
                             <Text style={styles.ratingText}>
-                                {eventData.organizer.rating.toFixed(1)} ({eventData.organizer.reviewCount})
+                                {organizerRating.toFixed(1)} ({organizerReviewCount})
                             </Text>
                         </View>
                     </View>
@@ -636,6 +598,8 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
+        flex: 1, // take the leftover width so the budget stays on the card
+        minWidth: 0, // allow the text child to shrink + ellipsize
     },
     locationIconImg: {
         width: 14,
@@ -645,10 +609,12 @@ const styles = StyleSheet.create({
     locationText: {
         fontSize: 13,
         color: '#64748B',
+        flexShrink: 1, // ellipsize long locations instead of overflowing
     },
     budgetContainer: {
         flexDirection: 'row',
         alignItems: 'center',
+        flexShrink: 0, // never shrink — budget always fully visible
     },
     budgetLabel: {
         fontSize: 13,

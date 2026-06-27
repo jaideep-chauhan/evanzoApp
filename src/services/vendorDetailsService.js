@@ -42,18 +42,39 @@ class VendorDetailsService {
         }
     }
 
-    // Submit a review for vendor.
-    // When media files are attached, the request goes out as multipart so the
-    // backend's multer middleware can persist them under /uploads/vendor-reviews.
-    // Axios's XHR multipart is broken on Android, so use native fetch with the
-    // auth token (same pattern as createVendorAd in vendorService).
-    async submitVendorReview(vendorId, reviewData) {
+    // Get reviews for a user directly (event organizers have no vendor ad).
+    async getUserReviews(userId, page = 1, limit = 10) {
+        try {
+            const response = await api.get(`/vendor-enhanced/user/${userId}/reviews`, {
+                params: { page, limit }
+            });
+            return {
+                success: true,
+                data: response.data.data
+            };
+        } catch (error) {
+            console.error('Get user reviews error:', error);
+            return {
+                success: false,
+                message: error.response?.data?.message || 'Failed to fetch reviews',
+                data: null
+            };
+        }
+    }
+
+    // Shared review-submit core. When media files are attached, the request
+    // goes out as multipart so the backend's multer middleware can persist them
+    // under /uploads/vendor-reviews. Axios's XHR multipart is broken on
+    // Android, so the multipart path uses native fetch with the auth token
+    // (same pattern as createVendorAd in vendorService). `path` is the API
+    // path (vendor-ad or user review endpoint) — both share this logic.
+    async _postReview(path, reviewData) {
         try {
             const media = Array.isArray(reviewData.media) ? reviewData.media : [];
 
             if (media.length === 0) {
                 // Plain JSON path — no files, the original behavior is fine.
-                const response = await api.post(`/vendor-enhanced/${vendorId}/reviews`, {
+                const response = await api.post(path, {
                     rating: reviewData.rating,
                     review_text: reviewData.comment,
                 });
@@ -84,7 +105,7 @@ class VendorDetailsService {
 
             // Go through authFetch so a 401 mid-upload transparently
             // refreshes + retries instead of failing the whole submission.
-            const res = await authFetch(`${API_BASE_URL}/vendor-enhanced/${vendorId}/reviews`, {
+            const res = await authFetch(`${API_BASE_URL}${path}`, {
                 method: 'POST',
                 body: formData,
             });
@@ -103,12 +124,22 @@ class VendorDetailsService {
                 message: data.message || 'Review submitted successfully',
             };
         } catch (error) {
-            console.error('Submit vendor review error:', error);
+            console.error('Submit review error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || error.message || 'Failed to submit review',
             };
         }
+    }
+
+    // Submit a review for a vendor ad's owner.
+    async submitVendorReview(vendorId, reviewData) {
+        return this._postReview(`/vendor-enhanced/${vendorId}/reviews`, reviewData);
+    }
+
+    // Submit a review for a user directly (event organizer).
+    async submitUserReview(userId, reviewData) {
+        return this._postReview(`/vendor-enhanced/user/${userId}/reviews`, reviewData);
     }
 
     // Toggle save vendor (save/unsave)

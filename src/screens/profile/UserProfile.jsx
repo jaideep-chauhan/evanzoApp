@@ -17,6 +17,7 @@ import api from '../../services/api';
 import EventCard from '../events/EventCard';
 import VendorCard from '../vendors/VendorCard';
 import eventService from '../../services/eventService';
+import vendorDetailsService from '../../services/vendorDetailsService';
 
 export default function UserProfile() {
     const navigation = useNavigation();
@@ -33,8 +34,8 @@ export default function UserProfile() {
     const [userInfo, setUserInfo] = useState({
         name: userName || 'User',
         avatar: userAvatar || 'https://randomuser.me/api/portraits/lego/1.jpg',
-        rating: 5.0,
-        reviewCount: 10,
+        rating: 0,
+        reviewCount: 0,
         totalAds: 0
     });
 
@@ -76,12 +77,26 @@ export default function UserProfile() {
                         ...prev,
                         name: fullName,
                         avatar: profileAvatar,
-                        rating: profile.rating || 5.0,
-                        reviewCount: profile.review_count || 0,
                     }));
                 }
             } catch (profileError) {
                 console.log('⚠️ Could not fetch profile, using passed data:', profileError.message);
+            }
+
+            // Live rating + count from the user-review system (same source the
+            // Write-a-Review flow posts to), so the profile reflects real data
+            // instead of a hardcoded placeholder.
+            try {
+                const reviewsRes = await vendorDetailsService.getUserReviews(userId);
+                if (reviewsRes.success && reviewsRes.data) {
+                    setUserInfo(prev => ({
+                        ...prev,
+                        rating: Number(reviewsRes.data.averageRating) || 0,
+                        reviewCount: reviewsRes.data.totalReviews || 0,
+                    }));
+                }
+            } catch (reviewsError) {
+                console.log('⚠️ Could not fetch user reviews:', reviewsError.message);
             }
 
             // Fetch user's event ads
@@ -139,6 +154,16 @@ export default function UserProfile() {
             chatName: userInfo.name,
             avatar: userInfo.avatar,
             isOnline: false
+        });
+    };
+
+    const handleWriteReview = () => {
+        // Reuse the shared Review screen, targeting this user directly
+        // (revieweeUserId). Refresh the profile's rating/count on submit.
+        navigation.navigate('Review', {
+            revieweeUserId: userId,
+            vendorName: userInfo.name,
+            onReviewSubmitted: fetchUserData,
         });
     };
 
@@ -225,13 +250,22 @@ export default function UserProfile() {
                         </View>
                     </View>
 
-                    <TouchableOpacity
-                        style={[styles.contactButton, { backgroundColor: theme.colors.primary }]}
-                        onPress={handleContactUser}
-                    >
-                        <Icon name="chatbubble-ellipses-outline" size={20} color="#fff" />
-                        <Text style={styles.contactButtonText}>Contact User</Text>
-                    </TouchableOpacity>
+                    <View style={styles.actionRow}>
+                        <TouchableOpacity
+                            style={[styles.contactButton, { backgroundColor: theme.colors.primary }]}
+                            onPress={handleContactUser}
+                        >
+                            <Icon name="chatbubble-ellipses-outline" size={18} color="#fff" />
+                            <Text style={styles.contactButtonText} numberOfLines={1}>Contact User</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.reviewButton, { borderColor: theme.colors.primary }]}
+                            onPress={handleWriteReview}
+                        >
+                            <Icon name="star-outline" size={18} color={theme.colors.primary} />
+                            <Text style={[styles.reviewButtonText, { color: theme.colors.primary }]} numberOfLines={1}>Write a Review</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 {/* Tabs */}
@@ -398,13 +432,39 @@ const styles = StyleSheet.create({
         color: '#64748B',
         marginTop: 4,
     },
-    contactButton: {
+    actionRow: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        alignSelf: 'stretch',
+        paddingHorizontal: 16,
+    },
+    contactButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
         paddingVertical: 12,
-        paddingHorizontal: 32,
+        paddingHorizontal: 12,
         borderRadius: 25,
-        gap: 8,
+        gap: 6,
+    },
+    reviewButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+        borderRadius: 25,
+        gap: 6,
+        borderWidth: 1.5,
+        backgroundColor: '#fff',
+    },
+    reviewButtonText: {
+        fontWeight: '600',
+        fontSize: 14,
     },
     contactButtonText: {
         color: '#fff',

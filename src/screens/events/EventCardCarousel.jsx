@@ -13,23 +13,19 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation } from '@react-navigation/native';
 import eventDetailsService from '../../services/eventDetailsService';
+import { formatDuration } from '../../services/eventService';
+import { MEDIA_BASE_URL } from '../../services/api';
+
+// Attachment/avatar urls from raw event rows are relative ("/uploads/..."),
+// so prefix the media host or the <Image> can't load them.
+const absUrl = (u) => {
+    if (!u || typeof u !== 'string') return null;
+    if (u.startsWith('http')) return u;
+    return `${MEDIA_BASE_URL}${u.startsWith('/') ? '' : '/'}${u}`;
+};
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.75;
-
-// Pure-number durations like "6" become "6 hours"; strings that already
-// contain letters ("6 hour", "2 days") pass through untouched. Identical
-// to eventService.formatDuration — duplicated here because the similar-
-// events endpoint returns raw DB rows that don't go through that formatter.
-const formatDuration = (raw) => {
-    if (raw == null) return 'TBD';
-    const s = String(raw).trim();
-    if (!s) return 'TBD';
-    if (/[a-zA-Z]/.test(s)) return s;
-    const n = Number(s);
-    if (!Number.isFinite(n)) return s;
-    return `${n} ${n === 1 ? 'hour' : 'hours'}`;
-};
 
 // Compact card design — matches Figma. No hero image, no price, no guest
 // count. Just: duration pill, close icon, title, owner avatar+name, two
@@ -53,11 +49,12 @@ const SimilarEventCard = ({ item, onPress }) => {
         item.user?.full_name ||
         item.owner_name ||
         'Organizer';
-    const ownerAvatar =
+    const ownerAvatar = absUrl(
         item.organizer?.profile_pic ||
         item.user?.profile_pic ||
         item.owner_profile_pic ||
-        null;
+        null,
+    );
 
     // Format date — backend may return ISO ("2026-04-13T00:00:00.000Z") or
     // already-formatted ("October 30, 2023"). Detect and convert.
