@@ -41,6 +41,9 @@ export default function Events() {
     const [showDateRangeModal, setShowDateRangeModal] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [selectedCategoryNames, setSelectedCategoryNames] = useState([]);
+    // Which dimension the current category selection filters: 'event' (event
+    // type, e.g. Wedding) or 'vendor' (service needed, e.g. Photographer).
+    const [selectedCategoryType, setSelectedCategoryType] = useState('event');
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [activeTab, setActiveTab] = useState(null); // No tab active by default
     const scrollY = useRef(new Animated.Value(0)).current;
@@ -50,6 +53,9 @@ export default function Events() {
     const [isLoading, setIsLoading] = useState(true);
     const [events, setEvents] = useState([]);
     const [masterEventTypes, setMasterEventTypes] = useState([]);
+    // Vendor categories (service types) for the "Vendor Type" filter tab —
+    // events can be filtered by the service they need (service_needed).
+    const [vendorTypeNames, setVendorTypeNames] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [currentFilters, setCurrentFilters] = useState({});
     const [pagination, setPagination] = useState({ page: 1, limit: 10, totalPages: 1, totalResults: 0 });
@@ -161,15 +167,20 @@ export default function Events() {
                         
                         if (searchFilters.category) {
                             const categories = searchFilters.category.split(',');
-                            console.log('🔍 Filtering events by categories:', categories);
-                            
                             filteredEvents = filteredEvents.filter(event => {
-                                const eventCategory = event.category?.toLowerCase() || event.event_type?.toLowerCase();
-                                const matches = categories.some(cat => eventCategory === cat.toLowerCase());
-                                return matches;
+                                const eventType = (event.event_type || event.category || '').toLowerCase();
+                                return categories.some(cat => eventType === cat.toLowerCase());
                             });
-                            
-                            console.log('🔍 Events after category filter:', filteredEvents.length);
+                        }
+
+                        // Vendor-type filter — match the service the event needs
+                        // (service_needed) against the chosen vendor categories.
+                        if (searchFilters.serviceType) {
+                            const services = searchFilters.serviceType.split(',');
+                            filteredEvents = filteredEvents.filter(event => {
+                                const need = (event.service_needed || '').toLowerCase();
+                                return services.some(s => need === s.toLowerCase());
+                            });
                         }
                         
                         // Apply date range filtering
@@ -309,6 +320,25 @@ export default function Events() {
                     .map((t) => (typeof t === 'string' ? t : t?.name))
                     .filter(Boolean);
                 setMasterEventTypes(names);
+            }
+        })();
+        return () => {
+            isMounted = false;
+        };
+    }, []);
+
+    // Load the vendor categories once for the "Vendor Type" filter tab. Events
+    // store the service they need as a name (service_needed), so we filter by
+    // the top-level vendor category names.
+    useEffect(() => {
+        let isMounted = true;
+        (async () => {
+            const result = await categoryService.getVendorCategories(false);
+            if (isMounted && result.success) {
+                const names = (result.data || [])
+                    .map((c) => (typeof c === 'string' ? c : c?.name))
+                    .filter(Boolean);
+                setVendorTypeNames(names);
             }
         })();
         return () => {
@@ -532,14 +562,12 @@ export default function Events() {
         fetchEvents(newFilters, true, !hasAnyFilter);
     };
 
-    const handleCategorySelect = (categoryIds, categoryData) => {
-        console.log('📱 Event category selected:', {
-            categoryIds,
-            categoryData,
-            isArray: Array.isArray(categoryIds)
-        });
-
+    // `dimension` says whether the picked categories are EVENT types or VENDOR
+    // types (from the modal's tab). 'event' (default) keeps the old behavior;
+    // 'vendor' filters by the service the event needs (service_needed).
+    const handleCategorySelect = (categoryIds, categoryData, dimension = 'event') => {
         setSelectedCategory(categoryIds);
+        setSelectedCategoryType(dimension);
         setShowCategoryModal(false);
 
         // Store category names for display
@@ -556,19 +584,19 @@ export default function Events() {
             setActiveTab(null);
         }
 
-        // Apply category filter. Events store their type as a NAME string
-        // (event.event_type, e.g. "Wedding"); event_type_id is null in the
-        // data and the backend search can only filter by event_type_id, so a
-        // server-side category filter never matches. We therefore filter by
-        // NAME client-side and store the selected name(s) under `category`
-        // (the key fetchEvents reads — previously this set `categories`, which
-        // nothing read, so the filter silently did nothing).
+        // Apply the filter client-side by NAME (event_type_id is null in the
+        // data and the backend search only filters by id, so a server-side
+        // filter never matches). The two dimensions are mutually exclusive
+        // here, so always clear both keys and set only the active one:
+        //   - event  → `category`    matched against event.event_type
+        //   - vendor → `serviceType` matched against event.service_needed
         const newFilters = { ...currentFilters };
+        delete newFilters.category;
+        delete newFilters.serviceType;
         const categoryNames = (categoryData || []).map((c) => c.name).filter(Boolean);
         if (categoryNames.length > 0) {
-            newFilters.category = categoryNames.join(',');
-        } else {
-            delete newFilters.category;
+            const key = dimension === 'vendor' ? 'serviceType' : 'category';
+            newFilters[key] = categoryNames.join(',');
         }
 
         console.log('🎯 Event filters to apply:', newFilters);
@@ -703,6 +731,23 @@ export default function Events() {
         // names) stays consistent.
         return types.map((name) => ({ category_id: name, name }));
     }, [events, masterEventTypes]);
+
+    // Vendor types (service_needed) for the second filter tab — same name=id
+    // convention as event types so the name-based filter stays consistent.
+    const vendorTypeCategories = useMemo(
+        () => vendorTypeNames.map((name) => ({ category_id: name, name })),
+        [vendorTypeNames],
+    );
+
+    // The two dimensions the user can filter events by, shown as tabs at the
+    // top of the category modal. Events only — vendors keep the single list.
+    const categoryTabs = useMemo(
+        () => [
+            { key: 'event', label: 'Event Type', items: eventTypeCategories },
+            { key: 'vendor', label: 'Vendor Type', items: vendorTypeCategories },
+        ],
+        [eventTypeCategories, vendorTypeCategories],
+    );
 
     return (
         <View style={[styles.safe, { backgroundColor: '#fff' }]}>
@@ -887,6 +932,7 @@ export default function Events() {
                                     setSelectedLocation(null);
                                     setSelectedCategory(null);
                                     setSelectedCategoryNames([]);
+                                    setSelectedCategoryType('event');
                                     setSelectedDateRange(null);
                                     setActiveTab(null); // Clear active tab
                                     setSearchQuery('');
@@ -1016,11 +1062,10 @@ export default function Events() {
                 onCategorySelect={handleCategorySelect}
                 currentCategory={selectedCategory}
                 screenType="events"
-                // Show actual event types (Wedding, Birthday, ...) as a flat
-                // selectable list instead of the vendor-style service
-                // categories, which don't match what events store.
-                filteredCategories={eventTypeCategories}
-                showOnlySubcategories={true}
+                // Two tabs at the top: "Event Type" (Wedding, Birthday, ...)
+                // and "Vendor Type" (the service the event needs). The user
+                // picks from whichever dimension they want to filter by.
+                categoryTabs={categoryTabs}
             />
         </View>
     );

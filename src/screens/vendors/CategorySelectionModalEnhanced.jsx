@@ -23,7 +23,14 @@ export default function CategorySelectionModalEnhanced({
     currentCategory,
     screenType = 'vendors',
     filteredCategories = null, // Optional: if provided, use these instead of fetching
-    showOnlySubcategories = false // Optional: if true, treat filteredCategories as subcategories to show directly
+    showOnlySubcategories = false, // Optional: if true, treat filteredCategories as subcategories to show directly
+    // Optional: when provided, render a tab bar at the top and let the user
+    // pick from more than one category set (e.g. Events filter by Event Type
+    // OR Vendor Type). Shape: [{ key, label, items: [{ category_id, name }] }].
+    // Each tab is a flat multi-select list; Done returns the active tab's key
+    // as the 3rd onCategorySelect arg so the caller knows which dimension was
+    // chosen. Used by the Events screen only; vendors leave it null.
+    categoryTabs = null
 }) {
     const theme = useTheme();
 
@@ -34,10 +41,26 @@ export default function CategorySelectionModalEnhanced({
     const [selectedSubcategories, setSelectedSubcategories] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
+    // Active tab key when `categoryTabs` is in use (dual Event/Vendor type).
+    const [activeTabKey, setActiveTabKey] = useState(null);
 
     // Fetch categories when modal becomes visible or use provided filteredCategories
     useEffect(() => {
         if (visible) {
+            if (categoryTabs && categoryTabs.length > 0) {
+                // Dual-type mode: show the first tab's items as a flat
+                // multi-select list. selectionStep stays 'subcategory' so we
+                // reuse the chip renderer; the tab bar swaps the items.
+                const first = categoryTabs[0];
+                setActiveTabKey(first.key);
+                setCategories(first.items || []);
+                setSelectionStep('subcategory');
+                setSelectedCategory({ name: first.label });
+                setSelectedSubcategories([]);
+                setIsLoading(false);
+                setError(null);
+                return;
+            }
             if (filteredCategories && showOnlySubcategories) {
                 // Use filtered categories as subcategories directly
                 console.log('📋 Using filtered subcategories:', filteredCategories.length);
@@ -61,7 +84,17 @@ export default function CategorySelectionModalEnhanced({
             // Reset selected subcategories when modal opens
             setSelectedSubcategories([]);
         }
-    }, [visible, screenType, filteredCategories, showOnlySubcategories]);
+    }, [visible, screenType, filteredCategories, showOnlySubcategories, categoryTabs]);
+
+    // Switch between Event Type / Vendor Type tabs. Each tab is an independent
+    // flat multi-select, so swapping tabs clears the current selection.
+    const handleTabSwitch = (tab) => {
+        if (tab.key === activeTabKey) return;
+        setActiveTabKey(tab.key);
+        setCategories(tab.items || []);
+        setSelectedCategory({ name: tab.label });
+        setSelectedSubcategories([]);
+    };
 
     const fetchCategories = async () => {
         setIsLoading(true);
@@ -149,13 +182,16 @@ export default function CategorySelectionModalEnhanced({
     };
 
     const handleSaveSubcategories = () => {
-        if (selectedSubcategories.length === 0) {
+        const ids = selectedSubcategories.map((sub) => sub.category_id);
+        if (categoryTabs) {
+            // Dual-type mode: always return the active tab's selection (may be
+            // empty = clear) plus which tab it came from.
+            onCategorySelect(ids, selectedSubcategories, activeTabKey);
+        } else if (selectedSubcategories.length === 0) {
             // No subcategories selected, just select the parent category
             onCategorySelect([selectedCategory.category_id], [selectedCategory]);
         } else {
-            // Pass selected subcategory IDs
-            const subcategoryIds = selectedSubcategories.map(sub => sub.category_id);
-            onCategorySelect(subcategoryIds, selectedSubcategories);
+            onCategorySelect(ids, selectedSubcategories);
         }
         onClose();
     };
@@ -235,18 +271,48 @@ export default function CategorySelectionModalEnhanced({
             <SafeAreaView style={[styles.container, styles.safeAreaPad]}>
                 {/* Header */}
                 <View style={styles.header}>
-                    {selectionStep === 'subcategory' && !showOnlySubcategories && (
+                    {selectionStep === 'subcategory' && !showOnlySubcategories && !categoryTabs && (
                         <TouchableOpacity onPress={handleBackToCategories} style={styles.backButton}>
                             <Icon name="arrow-back" size={22} color={theme.colors.primary} />
                         </TouchableOpacity>
                     )}
                     <Text style={styles.titleHeader}>
-                        {selectionStep === 'category' ? 'Select Category' : selectedCategory?.name}
+                        {categoryTabs
+                            ? 'Select Category'
+                            : selectionStep === 'category' ? 'Select Category' : selectedCategory?.name}
                     </Text>
                     <TouchableOpacity onPress={onClose} style={styles.closeIconBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                         <Icon name="close" size={22} color={theme.colors.primary} />
                     </TouchableOpacity>
                 </View>
+
+                {/* Tab bar — Event Type / Vendor Type (events filter only) */}
+                {categoryTabs && categoryTabs.length > 1 && (
+                    <View style={styles.tabBar}>
+                        {categoryTabs.map((tab) => {
+                            const active = tab.key === activeTabKey;
+                            return (
+                                <TouchableOpacity
+                                    key={tab.key}
+                                    style={[
+                                        styles.tabItem,
+                                        active && { backgroundColor: theme.colors.primary },
+                                    ]}
+                                    onPress={() => handleTabSwitch(tab)}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.tabItemText,
+                                            { color: active ? '#fff' : theme.colors.primary },
+                                        ]}
+                                    >
+                                        {tab.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+                )}
 
                 {selectionStep === 'subcategory' && selectedSubcategories.length > 0 && !isLoading && (
                     <View style={[styles.selectedInfo, { backgroundColor: theme.colors.primary + '10', borderColor: theme.colors.primary + '33' }]}>
@@ -297,7 +363,7 @@ export default function CategorySelectionModalEnhanced({
                 {/* Subcategories List */}
                 {!isLoading && !error && selectionStep === 'subcategory' && selectedCategory && (
                     <>
-                        {showOnlySubcategories && categories.length > 0 ? (
+                        {(showOnlySubcategories || categoryTabs) && categories.length > 0 ? (
                             // When showing filtered subcategories directly
                             <FlatList
                                 key="filtered-subcategories-list-2col"
@@ -414,6 +480,26 @@ const styles = StyleSheet.create({
         padding: 4,
         borderRadius: 16,
         zIndex: 2,
+    },
+    tabBar: {
+        flexDirection: 'row',
+        marginHorizontal: 16,
+        marginTop: 14,
+        backgroundColor: '#EEF3FB',
+        borderRadius: 24,
+        padding: 4,
+        gap: 4,
+    },
+    tabItem: {
+        flex: 1,
+        paddingVertical: 10,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    tabItemText: {
+        fontSize: 14,
+        fontWeight: '700',
     },
     selectedInfo: {
         marginHorizontal: 16,

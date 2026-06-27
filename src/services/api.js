@@ -3,22 +3,32 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { secureStorage } from '../utils/secureStorage';
 
-// Production URL - LIVE SERVER (ACTIVE)
-const BASE_URL = 'https://api.evnzo.com/api';
+// ───────────────────────────────────────────────────────────────────────────
+// API environments. Both are live and verified reachable.
+//   prod  → https://api.evnzo.com       (production)
+//   dev   → https://dev.api.evnzo.com   (staging / development)
+// Switch the whole app between them by changing ACTIVE_ENV below — everything
+// (API calls, sockets, media URLs) is derived from BASE_URL, so it's the only
+// place to flip.
+// ───────────────────────────────────────────────────────────────────────────
+export const API_ENVIRONMENTS = {
+    prod: 'https://api.evnzo.com/api',
+    dev: 'https://dev.api.evnzo.com/api',
+    // Local backend (uncomment + select to use). Android emulator must use
+    // 10.0.2.2 for the host machine; iOS simulator can use localhost.
+    // local: Platform.OS === 'android' ? 'http://10.0.2.2:3000/api' : 'http://localhost:3000/api',
+};
 
-// Local development URL - (commented out)
-// Note: iOS Simulator can use 'localhost' or your Mac's IP address
-// Android emulator must use 10.0.2.2 for host machine
-// const BASE_URL = Platform.select({
-//     ios: 'http://localhost:3000/api', // iOS Simulator/Device - use localhost
-//     android: 'http://10.0.2.2:3000/api', // Android emulator uses 10.0.2.2 for host machine
-// });
+// 👇 Change this ONE line to switch environments (e.g. 'dev' to hit the dev API).
+export const ACTIVE_ENV = 'prod';
+
+const BASE_URL = API_ENVIRONMENTS[ACTIVE_ENV];
 
 // Log the active configuration on startup
 console.log('🌐 API Configuration:', {
     platform: Platform.OS,
+    env: ACTIVE_ENV,
     baseURL: BASE_URL,
-    environment: BASE_URL.includes('localhost') || BASE_URL.includes('10.0.2.2') ? 'LOCALHOST' : 'PRODUCTION'
 });
 
 export const API_BASE_URL = BASE_URL; // Export for socket service

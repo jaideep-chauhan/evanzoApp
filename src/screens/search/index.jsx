@@ -16,6 +16,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import categoryService from '../../services/categoryService';
 import searchService from '../../services/searchService';
+import { searchLocations } from '../../services/photonService';
 import { getCategoryIcon } from '../../assets/icons';
 import { popSearchHandler } from '../../services/searchBridge';
 
@@ -87,16 +88,54 @@ export default function SearchScreen() {
             // Suggest CATEGORIES and LOCATIONS (not individual ads). Typing
             // "photography" should surface the Photography category; typing a
             // place should surface that location — so the user filters the
-            // list, instead of jumping at one specific ad. The backend
-            // /search/suggestions returns category/location/vendor hits; we
-            // keep only category + location here.
-            const resp = await searchService.getAutocompleteSuggestions(q.trim(), searchType);
+            // list instead of jumping at one specific ad.
+            //
+            // Categories come from the backend (/search/suggestions). Locations
+            // come from Photon (OpenStreetMap) geocoding — the backend only
+            // knows cities that already exist in its data, so places like
+            // "Panchkula" / "Pune" return nothing there; Photon covers any
+            // place worldwide. Both run in parallel and are merged.
+            const term = q.trim();
+            const [resp, places] = await Promise.all([
+                searchService
+                    .getAutocompleteSuggestions(term, searchType)
+                    .catch(() => ({ success: false, data: [] })),
+                searchLocations(term, { limit: 6 }).catch(() => []),
+            ]);
+
             const items = resp?.success && Array.isArray(resp.data) ? resp.data : [];
-            const filtered = items.filter((it) => {
-                const t = String(it?.type || '').toLowerCase();
-                return t === 'category' || t === 'location';
-            });
-            setResults(filtered);
+            const categories = items.filter(
+                (it) => String(it?.type || '').toLowerCase() === 'category',
+            );
+
+            // Keep place-like Photon hits (cities/towns/admin areas), drop
+            // streets/roads, and dedupe by name+state so "Panchkula" doesn't
+            // repeat. Photon returns the most relevant first.
+            const ROAD_TYPES = new Set([
+                'street', 'secondary', 'primary', 'tertiary', 'residential',
+                'house', 'road', 'footway', 'path', 'service', 'track',
+                'motorway', 'trunk', 'cycleway', 'construction',
+            ]);
+            const seen = new Set();
+            const locations = [];
+            for (const p of places) {
+                const t = String(p?.type || '').toLowerCase();
+                if (t && ROAD_TYPES.has(t)) continue;
+                const name = p?.name;
+                if (!name) continue;
+                const key = `${name}|${p?.state || ''}`.toLowerCase();
+                if (seen.has(key)) continue;
+                seen.add(key);
+                locations.push({
+                    type: 'location',
+                    value: name,
+                    display: p?.secondary_text || p?.display_name || 'Location',
+                });
+                if (locations.length >= 6) break;
+            }
+
+            // Categories first, then locations.
+            setResults([...categories, ...locations]);
         } catch (_) {
             setResults([]);
         } finally {
@@ -192,6 +231,7 @@ export default function SearchScreen() {
                 /* Live results */
                 <FlatList
                     data={results}
+                    style={{ flex: 1 }}
                     keyExtractor={(item, idx) => `${item.vendor_ad_id || item.event_ad_id || item.id || idx}`}
                     keyboardShouldPersistTaps="handled"
                     contentContainerStyle={styles.resultsList}

@@ -441,7 +441,16 @@ class VendorService {
             owner_name: ownerName,             // vendor owner's person name
             owner_profile_pic: ownerProfilePic, // vendor owner's avatar URL
             type: categoryName,
-            rating: vendor.rating || 4.5,
+            // Rating comes from the backend as a NUMERIC column, which
+            // Postgres serializes as a STRING ("0.00", "4.5"). A string is
+            // truthy, so the old `vendor.rating || 4.5` never fell back and a
+            // genuinely-unrated vendor showed "0.00" on the card while the
+            // detail page (which recomputes from reviews) showed the real
+            // average. Coerce to a real number, default to 0 — no fabricated
+            // rating. The backend list now returns the live aggregate, so this
+            // matches the detail page.
+            rating: Number.isFinite(Number(vendor.rating)) ? Number(vendor.rating) : 0,
+            reviews_count: Number(vendor.reviews_count) || 0,
             description: vendor.description || '',
             images: photos.length > 0 ? photos : [dummyImage, dummyImage, dummyImage], // Use dummy images as fallback
             extraCount: photos.length > 3 ? photos.length - 3 : 0,

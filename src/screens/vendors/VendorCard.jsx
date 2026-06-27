@@ -173,51 +173,30 @@ function VendorCard({
         }
     };
 
-    const handleCardPress = () => {
-        // Pass the full vendor data if available, otherwise construct from props
-        const vendorData = fullVendorData || { 
+    // Prefer the full vendor object when the parent passed it; otherwise
+    // reconstruct the minimum the detail screen needs from the card props.
+    // Shared by the card tap and the "SEE MORE" tap so the shape stays in sync.
+    const buildVendorData = () =>
+        fullVendorData || {
             id: vendorId,
             vendor_ad_id: vendorId,
-            initials, 
-            name, 
-            type, 
-            rating, 
-            description, 
-            images, 
-            extraCount, 
+            initials,
+            name,
+            type,
+            rating,
+            description,
+            images,
+            extraCount,
             location,
-            offers 
+            offers,
         };
-        
-        console.log('VendorCard handleCardPress - vendorId:', vendorId);
-        console.log('VendorCard handleCardPress - fullVendorData:', fullVendorData);
-        console.log('VendorCard handleCardPress - vendorData being passed:', vendorData);
-        
-        navigation.navigate('VendorAddDetail', { 
-            vendor: vendorData
-        });
+
+    const handleCardPress = () => {
+        navigation.navigate('VendorAddDetail', { vendor: buildVendorData() });
     };
 
     const handleSeeMorePress = () => {
-        // Pass the full vendor data if available, otherwise construct from props
-        const vendorData = fullVendorData || { 
-            id: vendorId,
-            vendor_ad_id: vendorId,
-            initials, 
-            name, 
-            type, 
-            rating, 
-            description, 
-            images, 
-            extraCount, 
-            location,
-            offers 
-        };
-        
-        navigation.navigate('VendorAddDetail', {
-            vendor: vendorData,
-            scrollToOffer: true
-        });
+        navigation.navigate('VendorAddDetail', { vendor: buildVendorData(), scrollToOffer: true });
     };
 
     // Owner-only actions: Mark as Complete + Delete. Mirrors the EventAdCard
