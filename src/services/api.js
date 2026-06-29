@@ -14,13 +14,14 @@ import { secureStorage } from '../utils/secureStorage';
 export const API_ENVIRONMENTS = {
     prod: 'https://api.evnzo.com/api',
     dev: 'https://dev.api.evnzo.com/api',
-    // Local backend (uncomment + select to use). Android emulator must use
-    // 10.0.2.2 for the host machine; iOS simulator can use localhost.
-    // local: Platform.OS === 'android' ? 'http://10.0.2.2:3000/api' : 'http://localhost:3000/api',
+    // Local backend. Android emulator must use 10.0.2.2 for the host machine;
+    // iOS simulator can use localhost.
+    local: Platform.OS === 'android' ? 'http://10.0.2.2:3000/api' : 'http://localhost:3000/api',
 };
 
-// 👇 Change this ONE line to switch environments (e.g. 'dev' to hit the dev API).
-export const ACTIVE_ENV = 'prod';
+// 👇 Change this ONE line to switch environments. NOTE: set back to 'prod'
+// before building a release — 'local' points at your dev machine.
+export const ACTIVE_ENV = 'local';
 
 const BASE_URL = API_ENVIRONMENTS[ACTIVE_ENV];
 
