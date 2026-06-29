@@ -106,15 +106,15 @@ const SimilarEventCard = ({ item, onPress }) => {
 
             {/* Info pills row */}
             <View style={styles.pillRow}>
-                <View style={styles.pill}>
+                <View style={[styles.pill, styles.pillLocation]}>
                     <Ionicons name="location-outline" size={12} color="#666" />
                     <Text style={styles.pillText} numberOfLines={1}>
                         {item.location || 'Location TBD'}
                     </Text>
                 </View>
-                <View style={styles.pill}>
+                <View style={[styles.pill, styles.pillDate]}>
                     <MaterialCommunityIcons name="calendar-outline" size={12} color="#666" />
-                    <Text style={styles.pillText} numberOfLines={1}>
+                    <Text style={styles.pillTextFixed} numberOfLines={1}>
                         {dateLabel}
                     </Text>
                 </View>
@@ -311,6 +311,7 @@ const styles = StyleSheet.create({
     },
     card: {
         width: CARD_WIDTH,
+        height: 220, // fixed so all carousel cards are the same height
         backgroundColor: '#fff',
         borderRadius: 16,
         padding: 16,
@@ -367,7 +368,8 @@ const styles = StyleSheet.create({
     },
     pillRow: {
         flexDirection: 'row',
-        flexWrap: 'wrap',
+        flexWrap: 'nowrap', // keep location + date on ONE row across all cards
+        alignItems: 'center',
         gap: 8,
         marginBottom: 14,
     },
@@ -380,16 +382,28 @@ const styles = StyleSheet.create({
         paddingVertical: 5,
         gap: 4,
     },
+    pillLocation: {
+        flexShrink: 1, // location gives way (ellipsizes) so the row never wraps
+        minWidth: 0,
+    },
+    pillDate: {
+        flexShrink: 0, // date keeps its full width on the right
+    },
     pillText: {
         fontSize: 11,
         color: '#4a4f5c',
-        maxWidth: 130,
+        flexShrink: 1,
+    },
+    pillTextFixed: {
+        fontSize: 11,
+        color: '#4a4f5c',
     },
     viewButton: {
         backgroundColor: '#2c3a58',
         borderRadius: 10,
         paddingVertical: 11,
         alignItems: 'center',
+        marginTop: 'auto', // pin to the bottom so the fixed-height cards align
     },
     viewButtonText: {
         color: '#fff',

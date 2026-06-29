@@ -36,6 +36,17 @@ class AppDelegate: RCTAppDelegate, UNUserNotificationCenterDelegate, MessagingDe
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
+  // MARK: - Deep Links (React Navigation / RCTLinkingManager)
+  // Universal Links: https://evnzo.com/event/123, /vendor/45
+  override func application(_ application: UIApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
+    return RCTLinkingManager.application(application, continue: userActivity, restorationHandler: restorationHandler)
+  }
+
+  // Custom URI scheme: evnzo://event/123
+  override func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
+    return RCTLinkingManager.application(app, open: url, options: options)
+  }
+
   // MARK: - Push Notification Registration
   override func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
     Messaging.messaging().apnsToken = deviceToken

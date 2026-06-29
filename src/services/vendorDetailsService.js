@@ -2,6 +2,7 @@ import api, { API_BASE_URL } from './api';
 import { Share, Platform } from 'react-native';
 import authFetch from './authFetch';
 import savedVendorsStorage from './savedVendorsStorage';
+import { createAdLink } from './deepLinkService';
 
 class VendorDetailsService {
     // Get vendor details by ID
@@ -239,6 +240,15 @@ class VendorDetailsService {
     // Share vendor
     async shareVendor(vendor) {
         try {
+            // Shareable deep link to THIS vendor ad.
+            const link = await createAdLink({
+                type: 'vendor',
+                id: vendor.vendor_ad_id || vendor.id,
+                title: vendor.name,
+                description: vendor.description,
+                imageUrl: vendor.images?.[0]?.uri || vendor.images?.[0] || '',
+            });
+
             const shareOptions = {
                 title: `Check out ${vendor.name}`,
                 message: `
@@ -248,9 +258,9 @@ class VendorDetailsService {
 
 ${vendor.description}
 
-View more details on Evanzo app!
+👉 Open it on Evanzo: ${link}
                 `.trim(),
-                url: vendor.images?.[0] || '', // Share first image if available
+                url: link,
             };
 
             const result = await Share.share(shareOptions);

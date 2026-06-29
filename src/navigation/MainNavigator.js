@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { Image, AppState } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { navigationRef, setAuthLogout } from '../services/navigationService';
+import { linking } from '../services/deepLinkService';
 // Screens
 import SplashScreen from '../screens/SplashScreen';
 import LoginScreen from '../screens/auth/Login';
@@ -174,8 +175,8 @@ const MainNavigator = () => {
     }
 
     return (
-        <NavigationContainer ref={navigationRef}>
-            <Stack.Navigator 
+        <NavigationContainer ref={navigationRef} linking={linking}>
+            <Stack.Navigator
                 screenOptions={{ 
                     headerShown: false,
                     animation: 'fade',

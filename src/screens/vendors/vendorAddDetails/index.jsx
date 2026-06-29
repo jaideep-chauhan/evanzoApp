@@ -69,7 +69,12 @@ export default function VendorChat({ navigation }) {
     };
 
     const scrollToOffer = route.params?.scrollToOffer;
-    const vendor = route.params?.vendor;
+    // Accept a full vendor object (in-app) or just an id (deep link
+    // "vendor/:vendorId") — the id form builds a minimal stub.
+    const vendor = route.params?.vendor
+        || (route.params?.vendorId
+            ? { id: route.params.vendorId, vendor_ad_id: route.params.vendorId }
+            : undefined);
 
 
     // Format images to ensure they're in the correct format

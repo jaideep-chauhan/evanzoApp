@@ -54,6 +54,27 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Custom URI scheme: evnzo://event/123, evnzo://vendor/45 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="evnzo" />
+            </intent-filter>
+
+            <!-- Android App Links (https) for ad sharing. autoVerify needs a
+                 valid assetlinks.json at
+                 https://api.evnzo.com/.well-known/assetlinks.json
+                 (served by the backend). -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="api.evnzo.com" />
+                <data android:pathPrefix="/event/" />
+                <data android:pathPrefix="/vendor/" />
+            </intent-filter>
         </activity>
 
         <!-- Required for document/file sharing -->

@@ -43,7 +43,11 @@ const ProfileCard = ({ item, onPress }) => {
             // Pass the fully-formatted vendor (real image URLs, offers, etc.) —
             // same shape the main list passes — so the detail page renders the
             // actual ad data instead of dummy placeholders.
-            navigation.navigate('VendorAddDetail', {
+            // Use push (not navigate): the current screen is already
+            // VendorAddDetail, so navigate() would just swap params on the same
+            // instance and keep the old scroll position (stuck near the
+            // carousel at the bottom). push() opens a fresh detail at the top.
+            navigation.push('VendorAddDetail', {
                 vendor: item.fv || item,
                 scrollToOffer: false,
             });

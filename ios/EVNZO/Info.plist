@@ -149,6 +149,16 @@
 				<string>com.googleusercontent.apps.453180956529-lci338mf6g2c2itecgn9vuna9sqeo8th</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.x4x90studio.evnzo.uri</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>evnzo</string>
+			</array>
+		</dict>
 	</array>
 </dict>
 </plist>

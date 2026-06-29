@@ -1,6 +1,7 @@
 import api from './api';
 import { Share } from 'react-native';
 import savedEventsStorage from './savedEventsStorage';
+import { createAdLink } from './deepLinkService';
 
 class EventDetailsService {
     // Check if event is saved by current user
@@ -128,6 +129,16 @@ class EventDetailsService {
     // Share event
     async shareEvent(event) {
         try {
+            // Shareable deep link to THIS event. Opens the ad in-app if
+            // installed; otherwise routes via store + deferred deep link.
+            const link = await createAdLink({
+                type: 'event',
+                id: event.id || event.event_ad_id,
+                title: event.title,
+                description: event.description,
+                imageUrl: event.images?.[0]?.uri || event.images?.[0] || '',
+            });
+
             const shareOptions = {
                 title: `Check out this event: ${event.title}`,
                 message: `
@@ -142,9 +153,9 @@ ${event.description}
 
 Event organized by ${event.organizer?.name || 'Event Organizer'}
 
-View more details on Evanzo app!
+👉 Open it on Evanzo: ${link}
                 `.trim(),
-                url: event.images?.[0]?.uri || '', // Share first image if available
+                url: link, // deep link (iOS shows it as the rich share target)
             };
 
             const result = await Share.share(shareOptions);

@@ -52,7 +52,13 @@ export default function EventDetailViewEnhanced() {
     const [isSubmittingQuote, setIsSubmittingQuote] = useState(false);
 
     // Get event data from navigation params
-    const eventFromParams = route.params?.event || {};
+    // Accept either a full event object (in-app navigation) or just an id
+    // (deep link "event/:eventId" / notification tap) — the latter builds a
+    // minimal stub so the screen still resolves the ad by id.
+    const eventFromParams = route.params?.event
+        || (route.params?.eventId
+            ? { id: route.params.eventId, event_ad_id: route.params.eventId }
+            : {});
 
     // Helper functions
     const parseDuration = (duration) => {
@@ -763,15 +769,9 @@ const styles = StyleSheet.create({
         bottom: 10,
         left: 0,
         right: 0,
-        backgroundColor: 'rgba(255, 255, 255, 0.42)',
-        backdropFilter: 'blur(10px)',
+        backgroundColor: 'transparent',
         paddingHorizontal: 20,
         paddingVertical: 10,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 5,
     },
     quoteSection: {
         flexDirection: 'row',

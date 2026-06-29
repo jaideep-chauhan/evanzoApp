@@ -8,5 +8,11 @@
 	<array>
 		<string>Default</string>
 	</array>
+	<!-- Universal Links for ad sharing. The backend serves the AASA at
+	     https://api.evnzo.com/.well-known/apple-app-site-association -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:api.evnzo.com</string>
+	</array>
 </dict>
 </plist>
