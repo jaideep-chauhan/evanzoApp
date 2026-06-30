@@ -30,14 +30,16 @@ export default function BannerAdView({ style, size = BannerAdSize.ANCHORED_ADAPT
                     if (__DEV__) console.log('[Ads] Banner loaded');
                 }}
                 onAdFailedToLoad={(err) => {
-                    // Full error so we can tell no-fill vs misconfig vs network.
-                    if (__DEV__) {
-                        console.log('[Ads] Banner failed:', {
-                            code: err?.code,
-                            message: err?.message,
-                            domain: err?.domain,
-                        });
-                    }
+                    // Always log (not just __DEV__) so production no-show can be
+                    // diagnosed from device logs (logcat / Console.app). AdMob
+                    // codes: 0=internal, 1=invalid-request (unit/app-id mismatch),
+                    // 2=network, 3=no-fill (no ad available — common for new apps).
+                    console.warn('[Ads] Banner failed to load:', {
+                        code: err?.code,
+                        message: err?.message,
+                        domain: err?.domain,
+                        unitId: AD_UNITS.banner,
+                    });
                     setFailed(true);
                 }}
             />

@@ -16,6 +16,7 @@ export const icons = {
     calendarAlt: require('./calendar-alt.png'),
     clock: require('./clock.png'),
     giftbox: require('./giftbox.png'),
+    send: require('./send.png'),
 
     // Vendor / service categories
     bakery: require('./bakery.png'),

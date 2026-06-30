@@ -168,8 +168,8 @@ export default function EventCard({ event, onGiveQuote }) {
                 <TouchableOpacity style={[styles.giveQuoteButton, { backgroundColor: theme.colors.tabBackground }]} onPress={onGiveQuote}>
                     <Text style={[styles.giveQuoteText, { color: theme.colors.primary }]}>GIVE A QUOTE</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.sendButton, { backgroundColor: theme.colors.primary }]} onPress={onGiveQuote}>
-                    <Icon name="paper-plane" size={16} color="#fff" style={{ transform: [{ rotate: '40deg' }] }} />
+                <TouchableOpacity style={styles.sendButton} onPress={onGiveQuote}>
+                    <Image source={icons.send} style={styles.sendIcon} resizeMode="contain" />
                 </TouchableOpacity>
             </View>
         </TouchableOpacity>
@@ -329,6 +329,9 @@ const styles = StyleSheet.create({
         borderRadius: 16,
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 1
+    },
+    sendIcon: {
+        width: 32,
+        height: 32,
     },
 });

@@ -87,6 +87,21 @@ target 'EVNZO' do
       end
     end
     
+    # Xcode 26.x clang rejects fmt 11.0.2's consteval format-string checks
+    # ("call to consteval function ... is not a constant expression"). fmt's
+    # base.h sets FMT_USE_CONSTEVAL unconditionally (not #ifndef-guarded), so a
+    # -D flag can't override it — patch the header to force consteval off.
+    fmt_base_h = File.join(__dir__, 'Pods/fmt/include/fmt/base.h')
+    if File.exist?(fmt_base_h)
+      fmt_src = File.read(fmt_base_h)
+      if fmt_src.include?('#  define FMT_USE_CONSTEVAL 1')
+        fmt_src = fmt_src.gsub('#  define FMT_USE_CONSTEVAL 1', '#  define FMT_USE_CONSTEVAL 0')
+        File.chmod(0644, fmt_base_h)
+        File.write(fmt_base_h, fmt_src)
+        Pod::UI.puts "Patched fmt base.h: FMT_USE_CONSTEVAL forced to 0".green
+      end
+    end
+
     # Fix RCTThirdPartyComponentsProvider nil value crash
     # This runs after pod install to fix the generated file
     installer.pods_project.targets.each do |target|

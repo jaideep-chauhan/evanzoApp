@@ -316,7 +316,7 @@ class EventService {
             const dateObj = new Date(raw);
             if (!isNaN(dateObj.getTime())) {
                 formattedDate = dateObj.toLocaleDateString('en-US', {
-                    month: 'long',
+                    month: 'short',
                     day: 'numeric',
                     year: 'numeric',
                 });

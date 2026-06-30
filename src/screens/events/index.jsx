@@ -54,6 +54,9 @@ export default function Events() {
     const [isLoading, setIsLoading] = useState(true);
     const [events, setEvents] = useState([]);
     const [masterEventTypes, setMasterEventTypes] = useState([]);
+    // Vendor categories from the backend — power the "vendor type" filter tab so
+    // it matches what the create-ad form posts as service_needed.
+    const [masterVendorTypes, setMasterVendorTypes] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [currentFilters, setCurrentFilters] = useState({});
     const [pagination, setPagination] = useState({ page: 1, limit: 10, totalPages: 1, totalResults: 0 });
@@ -318,6 +321,24 @@ export default function Events() {
                     .map((t) => (typeof t === 'string' ? t : t?.name))
                     .filter(Boolean);
                 setMasterEventTypes(names);
+            }
+        })();
+        return () => {
+            isMounted = false;
+        };
+    }, []);
+
+    // Load backend vendor categories for the "vendor type" filter tab, so the
+    // filter vocabulary matches what create-ad posts as service_needed.
+    useEffect(() => {
+        let isMounted = true;
+        (async () => {
+            const result = await categoryService.getVendorCategories(true);
+            if (isMounted && result?.success) {
+                const names = (result.data || [])
+                    .map((c) => (typeof c === 'string' ? c : c?.name))
+                    .filter(Boolean);
+                setMasterVendorTypes(names);
             }
         })();
         return () => {
@@ -712,14 +733,14 @@ export default function Events() {
         return types.map((name) => ({ category_id: name, name }));
     }, [events, masterEventTypes]);
 
-    // Vendor types (service_needed) for the second filter tab. These are the
-    // SERVICE roles an event needs (Photographer, Florist, ...) — the exact
-    // values events store in service_needed — NOT vendor service categories
-    // like "Photography/Videography", which would never match. Shared with the
-    // create-ad form so the post/filter vocabularies can't drift apart.
+    // Vendor types (service_needed) for the second filter tab — sourced from the
+    // SAME backend vendor categories the create-ad form posts as service_needed,
+    // so the post/filter vocabularies stay in sync. Falls back to the static
+    // list only until the categories API responds.
     const vendorTypeCategories = useMemo(
-        () => SERVICE_OPTIONS.map((name) => ({ category_id: name, name })),
-        [],
+        () => (masterVendorTypes.length > 0 ? masterVendorTypes : SERVICE_OPTIONS)
+            .map((name) => ({ category_id: name, name })),
+        [masterVendorTypes],
     );
 
     // The two dimensions the user can filter events by, shown as tabs at the

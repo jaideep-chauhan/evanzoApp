@@ -70,25 +70,35 @@ export default function EventDetailViewEnhanced() {
     const parseDate = (date) => {
         if (!date) return '30 May 2025';
 
-        // If it's already a formatted string, return it
-        if (typeof date === 'string' && !date.includes('-') && !date.includes('T')) {
-            return date;
-        }
-
+        // Always normalise to short format ("Dec 15, 2026") so long month names
+        // (e.g. "December 15, 2026") don't wrap inside the small date box.
         try {
             const dateObj = new Date(date);
-            // Check if date is valid
-            if (isNaN(dateObj.getTime())) {
-                return '30 May 2025';
+            if (!isNaN(dateObj.getTime())) {
+                return dateObj.toLocaleDateString('en-US', {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric'
+                });
             }
-            return dateObj.toLocaleDateString('en-US', {
-                day: 'numeric',
-                month: 'short',
-                year: 'numeric'
-            });
         } catch (e) {
-            return '30 May 2025';
+            // fall through
         }
+
+        // Hermes can't parse "December 15, 2026" via new Date(), so convert any
+        // long month name in the string to its short form directly.
+        if (typeof date === 'string') {
+            const months = [
+                ['January', 'Jan'], ['February', 'Feb'], ['March', 'Mar'],
+                ['April', 'Apr'], ['June', 'Jun'], ['July', 'Jul'],
+                ['August', 'Aug'], ['September', 'Sep'], ['October', 'Oct'],
+                ['November', 'Nov'], ['December', 'Dec'],
+            ];
+            let out = date;
+            for (const [long, short] of months) out = out.replace(long, short);
+            return out;
+        }
+        return '30 May 2025';
     };
 
     const parseBudget = (budget) => {

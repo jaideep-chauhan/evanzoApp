@@ -21,7 +21,7 @@ export const API_ENVIRONMENTS = {
 
 // 👇 Change this ONE line to switch environments. NOTE: set back to 'prod'
 // before building a release — 'local' points at your dev machine.
-export const ACTIVE_ENV = 'local';
+export const ACTIVE_ENV = 'prod';
 
 const BASE_URL = API_ENVIRONMENTS[ACTIVE_ENV];
 

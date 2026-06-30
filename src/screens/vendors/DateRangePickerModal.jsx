@@ -274,11 +274,8 @@ const styles = StyleSheet.create({
         marginBottom: 6,
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#2C3D5B',
-        shadowOpacity: 0.04,
-        shadowOffset: { width: 0, height: 2 },
-        shadowRadius: 4,
-        elevation: 1,
+        // No elevation/shadow here: on Android, elevation over a translucent
+        // background renders a thin white-line artifact along the chip edge.
     },
     quickRangeText: {
         fontWeight: '600',

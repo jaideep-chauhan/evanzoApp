@@ -1,0 +1,161 @@
+diff --git a/node_modules/react-native-document-picker/android/bin/build.gradle b/node_modules/react-native-document-picker/android/bin/build.gradle
+new file mode 100644
+index 0000000..fd24a6e
+--- /dev/null
++++ b/node_modules/react-native-document-picker/android/bin/build.gradle
+@@ -0,0 +1,66 @@
++buildscript {
++    repositories {
++        google()
++        mavenCentral()
++    }
++}
++
++def getExtOrIntegerDefault(name) {
++    return rootProject.ext.has(name) ? rootProject.ext.get(name) : (project.properties['ReactNativeDocumentPicker_' + name]).toInteger()
++}
++
++def isNewArchitectureEnabled() {
++    // To opt-in for the New Architecture, you can either:
++    // - Set `newArchEnabled` to true inside the `gradle.properties` file
++    // - Invoke gradle with `-newArchEnabled=true`
++    // - Set an environment variable `ORG_GRADLE_PROJECT_newArchEnabled=true`
++    return project.hasProperty("newArchEnabled") && project.newArchEnabled == "true"
++}
++
++apply plugin: 'com.android.library'
++if (isNewArchitectureEnabled()) {
++    apply plugin: "com.facebook.react"
++}
++
++
++android {
++    def agpVersion = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION
++    if (agpVersion.tokenize('.')[0].toInteger() >= 7) {
++      namespace "com.reactnativedocumentpicker"
++    }
++    compileSdkVersion getExtOrIntegerDefault('compileSdkVersion')
++
++    // Used to override the NDK path/version on internal CI or by allowing
++    // users to customize the NDK path/version from their root project (e.g. for M1 support)
++    if (rootProject.hasProperty("ndkPath")) {
++        ndkPath rootProject.ext.ndkPath
++    }
++    if (rootProject.hasProperty("ndkVersion")) {
++        ndkVersion rootProject.ext.ndkVersion
++    }
++
++    defaultConfig {
++        minSdkVersion getExtOrIntegerDefault('minSdkVersion')
++        targetSdkVersion getExtOrIntegerDefault('targetSdkVersion')
++        buildConfigField "boolean", "IS_NEW_ARCHITECTURE_ENABLED", isNewArchitectureEnabled().toString()
++    }
++
++    sourceSets.main {
++        java {
++            if (!isNewArchitectureEnabled()) {
++                srcDirs += 'src/paper/java'
++            }
++        }
++    }
++}
++
++repositories {
++    google()
++    mavenLocal()
++    mavenCentral()
++}
++
++dependencies {
++    //noinspection GradleDynamicVersion
++    implementation 'com.facebook.react:react-native:+' // from node_modules
++}
+diff --git a/node_modules/react-native-document-picker/android/bin/src/main/AndroidManifest.xml b/node_modules/react-native-document-picker/android/bin/src/main/AndroidManifest.xml
+new file mode 100644
+index 0000000..f2855c8
+--- /dev/null
++++ b/node_modules/react-native-document-picker/android/bin/src/main/AndroidManifest.xml
+@@ -0,0 +1,4 @@
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++          package="com.reactnativedocumentpicker">
++
++</manifest>
+diff --git a/node_modules/react-native-document-picker/android/bin/src/main/java/com/reactnativedocumentpicker/RNDocumentPickerModule$ProcessDataTask.class b/node_modules/react-native-document-picker/android/bin/src/main/java/com/reactnativedocumentpicker/RNDocumentPickerModule$ProcessDataTask.class
+new file mode 100644
+index 0000000..95800d9
+Binary files /dev/null and b/node_modules/react-native-document-picker/android/bin/src/main/java/com/reactnativedocumentpicker/RNDocumentPickerModule$ProcessDataTask.class differ
+diff --git a/node_modules/react-native-document-picker/android/bin/src/main/java/com/reactnativedocumentpicker/RNDocumentPickerModule.class b/node_modules/react-native-document-picker/android/bin/src/main/java/com/reactnativedocumentpicker/RNDocumentPickerModule.class
+new file mode 100644
+index 0000000..efe10bf
+Binary files /dev/null and b/node_modules/react-native-document-picker/android/bin/src/main/java/com/reactnativedocumentpicker/RNDocumentPickerModule.class differ
+diff --git a/node_modules/react-native-document-picker/android/bin/src/main/java/com/reactnativedocumentpicker/RNDocumentPickerPackage.class b/node_modules/react-native-document-picker/android/bin/src/main/java/com/reactnativedocumentpicker/RNDocumentPickerPackage.class
+new file mode 100644
+index 0000000..dd9c09e
+Binary files /dev/null and b/node_modules/react-native-document-picker/android/bin/src/main/java/com/reactnativedocumentpicker/RNDocumentPickerPackage.class differ
+diff --git a/node_modules/react-native-document-picker/android/bin/src/paper/java/com/reactnativedocumentpicker/NativeDocumentPickerSpec.class b/node_modules/react-native-document-picker/android/bin/src/paper/java/com/reactnativedocumentpicker/NativeDocumentPickerSpec.class
+new file mode 100644
+index 0000000..ccd9d70
+Binary files /dev/null and b/node_modules/react-native-document-picker/android/bin/src/paper/java/com/reactnativedocumentpicker/NativeDocumentPickerSpec.class differ
+diff --git a/node_modules/react-native-document-picker/android/src/main/java/com/reactnativedocumentpicker/RNDocumentPickerModule.java b/node_modules/react-native-document-picker/android/src/main/java/com/reactnativedocumentpicker/RNDocumentPickerModule.java
+index 5001525..20c2071 100644
+--- a/node_modules/react-native-document-picker/android/src/main/java/com/reactnativedocumentpicker/RNDocumentPickerModule.java
++++ b/node_modules/react-native-document-picker/android/src/main/java/com/reactnativedocumentpicker/RNDocumentPickerModule.java
+@@ -18,7 +18,6 @@ import androidx.annotation.NonNull;
+ import com.facebook.react.bridge.ActivityEventListener;
+ import com.facebook.react.bridge.Arguments;
+ import com.facebook.react.bridge.BaseActivityEventListener;
+-import com.facebook.react.bridge.GuardedResultAsyncTask;
+ import com.facebook.react.bridge.Promise;
+ import com.facebook.react.bridge.ReactApplicationContext;
+ import com.facebook.react.bridge.ReactContext;
+@@ -229,32 +228,36 @@ public class RNDocumentPickerModule extends NativeDocumentPickerSpec {
+     }
+   }
+ 
+-  private static class ProcessDataTask extends GuardedResultAsyncTask<ReadableArray> {
++  private static class ProcessDataTask {
+     private final WeakReference<Context> weakContext;
+     private final List<Uri> uris;
+     private final String copyTo;
+     private final Promise promise;
+ 
+     protected ProcessDataTask(ReactContext reactContext, List<Uri> uris, String copyTo, Promise promise) {
+-      super(reactContext.getExceptionHandler());
+       this.weakContext = new WeakReference<>(reactContext.getApplicationContext());
+       this.uris = uris;
+       this.copyTo = copyTo;
+       this.promise = promise;
+     }
+ 
+-    @Override
+-    protected ReadableArray doInBackgroundGuarded() {
+-      WritableArray results = Arguments.createArray();
+-      for (Uri uri : uris) {
+-        results.pushMap(getMetadata(uri));
+-      }
+-      return results;
+-    }
+-
+-    @Override
+-    protected void onPostExecuteGuarded(ReadableArray readableArray) {
+-      promise.resolve(readableArray);
++    // GuardedResultAsyncTask was removed in RN 0.78. Run the work on a plain
++    // background thread instead; promise.resolve/reject are thread-safe.
++    public void execute() {
++      new Thread(new Runnable() {
++        @Override
++        public void run() {
++          try {
++            WritableArray results = Arguments.createArray();
++            for (Uri uri : uris) {
++              results.pushMap(getMetadata(uri));
++            }
++            promise.resolve(results);
++          } catch (Exception e) {
++            promise.reject(E_UNEXPECTED_EXCEPTION, e.getLocalizedMessage(), e);
++          }
++        }
++      }).start();
+     }
+ 
+     private WritableMap getMetadata(Uri uri) {

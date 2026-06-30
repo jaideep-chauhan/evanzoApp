@@ -343,10 +343,13 @@ const CreateAddForm = ({ type, onClose }) => {
         'Photobooth',
     ];
 
-    // Service + event-type options come from the shared source of truth
-    // (data/eventOptions.js), the same lists the events filter uses — so what
-    // you can post and what you can filter by never drift apart.
-    const serviceOptions = SERVICE_OPTIONS;
+    // "What service you need?" pulls the SAME categories vendors list under,
+    // straight from the backend (so an event's needed service always matches a
+    // real vendor category, and admin edits flow through automatically).
+    // Falls back to the static list only if the categories API hasn't loaded.
+    const serviceOptions = vendorCategories.length > 0
+        ? vendorCategories.map((c) => c.name).filter(Boolean)
+        : SERVICE_OPTIONS;
     const eventTypeOptions = EVENT_TYPE_OPTIONS;
 
     // Event type tags
