@@ -8,6 +8,7 @@ import { AuthProvider } from './src/context/AuthContext';
 import notificationService from './src/services/notificationService';
 import socketService from './src/services/socketService';
 import { initAds } from './src/services/adsService';
+import { requestStartupPermissions } from './src/utils/startupPermissions';
 import {
   checkForUpdate,
   snoozeUpdatePrompt,
@@ -40,6 +41,11 @@ const App = () => {
     // Initialize AdMob (banners + interstitial preload) and notifications.
     initAds();
     notificationService.initialize();
+
+    // Ask for the runtime permissions the app needs (notifications, gallery,
+    // location) up front so those features work the first time. Runs once the
+    // UI is up; the OS only shows a dialog when a permission isn't already set.
+    requestStartupPermissions();
 
     // Check for a newer app version. Runs after the UI is interactive so it
     // doesn't compete with auth + nav + ads init. Backend tells us whether
