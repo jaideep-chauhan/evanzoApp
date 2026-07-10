@@ -48,7 +48,6 @@ export default function Vendor() {
     const [selectedCategoryNames, setSelectedCategoryNames] = useState([]);
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [showPreSaveModal, setShowPreSaveModal] = useState(false);
-    const [focusedCardIndex, setFocusedCardIndex] = useState(0);
     const scrollViewRef = useRef(null);
     const scrollY = useRef(new Animated.Value(0)).current;
     const [activeTab, setActiveTab] = useState(null); // No tab active by default
@@ -490,13 +489,13 @@ export default function Vendor() {
                 onScroll={Animated.event(
                     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
                     {
+                        // Native driver + NO JS listener — same as the events list.
+                        // The old listener called setFocusedCardIndex on every
+                        // scroll frame (~60/s), re-rendering the whole heavy card
+                        // list and flipping each card's auto-carousel timer, which
+                        // was the vendor-list scroll jank. Dropping it makes the
+                        // vendor list scroll as smoothly as the events list.
                         useNativeDriver: true,
-                        listener: (event) => {
-                            const offsetY = event.nativeEvent.contentOffset.y;
-                            const cardHeight = 420;
-                            const currentIndex = Math.floor(offsetY / cardHeight);
-                            setFocusedCardIndex(Math.max(0, currentIndex));
-                        }
                     }
                 )}
             >
@@ -673,7 +672,7 @@ export default function Vendor() {
                                     location={vendor.location}
                                     offers={vendor.offers || []} // Add offers prop
                                     currency={vendor.currency} // Currency unit for offer amounts
-                                    isFocused={idx === focusedCardIndex}
+                                    isFocused={false}
                                     isCheckingChat={checkingChat === `vendor_${vendor._original?.user_id}`}
                                     onChatPress={async () => {
                                         // Get current user ID
