@@ -20,7 +20,7 @@ const SplashScreen = () => {
             <Video
                 source={logo}
                 style={[StyleSheet.absoluteFill, { opacity: ready ? 1 : 0 }]}
-                resizeMode="contain"
+                resizeMode="cover"
                 onLoad={() => setReady(true)}
                 repeat={false}
                 muted
@@ -51,8 +51,8 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         position: 'relative',
-        // Match the video's own white background so there's no coloured flash
-        // and the contain-mode letterbox bars are invisible.
+        // Match the video's own white background so the brief pre-load moment
+        // (video hidden until onLoad) shows white, not a coloured flash.
         backgroundColor: '#ffffff',
     },
 });

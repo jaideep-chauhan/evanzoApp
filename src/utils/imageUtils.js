@@ -1,7 +1,19 @@
 import { Platform } from 'react-native';
+import { MEDIA_BASE_URL } from '../services/api';
 
 // Get machine IP dynamically - you might want to update this with your actual IP
 const MACHINE_IP = '10.169.115.131'; // Your machine's IP address
+
+// Some rows can carry a baked-in LOCAL backend host in their image URLs (e.g.
+// uploads made while the app pointed at a local/dev backend). On prod those
+// hosts are unreachable and the <Image> hangs/errors. Rewrite any such host to
+// the ACTIVE media host so the URL at least targets the right server. No-op
+// when the active host already IS local (dev), and for non-local URLs.
+const LOCAL_HOST_RE = /https?:\/\/(?:localhost|127\.0\.0\.1|10\.0\.2\.2|10\.169\.115\.131)(?::\d+)?/i;
+export const normalizeMediaUrl = (url) => {
+    if (typeof url !== 'string') return url;
+    return url.replace(LOCAL_HOST_RE, MEDIA_BASE_URL);
+};
 
 /**
  * Fix localhost URLs for mobile simulators/devices
@@ -56,7 +68,10 @@ export const fixImageArray = (imageArray) => {
  * @returns {string}
  */
 export const thumbnailUrl = (url, width = 600, quality = 70) => {
-    if (typeof url !== 'string' || !url.includes('/uploads/')) {
+    if (typeof url !== 'string') return url;
+    // Repoint any stray local-backend host at the active media host first.
+    url = normalizeMediaUrl(url);
+    if (!url.includes('/uploads/')) {
         return url;
     }
     if (/[?&]w=/.test(url)) {

@@ -143,12 +143,12 @@ const MainNavigator = () => {
 
         preloadImages();
 
-        // Minimum splash screen display time
+        // Minimum splash screen display time (kept short so the app opens fast).
         splashTimer = setTimeout(() => {
             if (isMounted) {
                 setSplashTimerDone(true);
             }
-        }, 2800);
+        }, 1200);
 
         // Maximum loading time to prevent infinite loading
         maxLoadTimer = setTimeout(() => {
@@ -156,7 +156,7 @@ const MainNavigator = () => {
                 setIsReady(true);
                 setSplashTimerDone(true);
             }
-        }, 5000); // 5 seconds maximum
+        }, 3000); // 3 seconds maximum
 
         return () => {
             isMounted = false;
