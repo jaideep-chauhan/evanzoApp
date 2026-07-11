@@ -143,20 +143,17 @@ const MainNavigator = () => {
 
         preloadImages();
 
-        // Minimum splash screen display time (kept short so the app opens fast).
-        splashTimer = setTimeout(() => {
-            if (isMounted) {
-                setSplashTimerDone(true);
-            }
-        }, 1200);
-
-        // Maximum loading time to prevent infinite loading
+        // No fixed minimum timer any more — the splash stays until the logo
+        // VIDEO finishes (SplashScreen's onFinish flips splashTimerDone), so the
+        // animation always plays to completion and then dismisses immediately.
+        // This fallback only fires if onEnd never comes (e.g. video failed to
+        // load), so the app can never get stuck on the splash.
         maxLoadTimer = setTimeout(() => {
             if (isMounted && (!isReady || !splashTimerDone)) {
                 setIsReady(true);
                 setSplashTimerDone(true);
             }
-        }, 3000); // 3 seconds maximum
+        }, 6000); // safety cap only
 
         return () => {
             isMounted = false;
@@ -169,9 +166,10 @@ const MainNavigator = () => {
         };
     }, []);
 
-    // Show splash screen until both conditions are met
+    // Show the splash until the logo animation has finished (splashTimerDone,
+    // set by the video's onEnd) AND the initial data/auth is ready.
     if (!isReady || !splashTimerDone || authLoading) {
-        return <SplashScreen />;
+        return <SplashScreen onFinish={() => setSplashTimerDone(true)} />;
     }
 
     return (

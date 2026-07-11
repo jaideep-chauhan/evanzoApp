@@ -12,7 +12,10 @@ import logo from '../assets/images/ELogo_2.mp4';
 // hidden (opacity 0) until onLoad fires — so the stretched pre-load frame is
 // never visible. The user only ever sees white (the clip's own background) and
 // then the correctly-sized logo animation.
-const SplashScreen = () => {
+// onFinish (optional) fires when the logo animation finishes playing, so the
+// navigator can dismiss the splash exactly when the animation ends — not on a
+// fixed timer that either cuts the animation short or lingers too long.
+const SplashScreen = ({ onFinish }) => {
     const [ready, setReady] = useState(false);
 
     return (
@@ -22,6 +25,7 @@ const SplashScreen = () => {
                 style={[StyleSheet.absoluteFill, { opacity: ready ? 1 : 0 }]}
                 resizeMode="cover"
                 onLoad={() => setReady(true)}
+                onEnd={() => onFinish && onFinish()}
                 repeat={false}
                 muted
                 controls={false}
