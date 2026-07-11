@@ -2606,10 +2606,16 @@ export default function ChatScreen({ route, navigation }) {
     // sees the chat layout right away instead of a centered spinner.
 
     return (
-        <KeyboardAvoidingView 
+        <KeyboardAvoidingView
             style={styles.container}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+            // Android already resizes the window via windowSoftInputMode=
+            // "adjustResize", so KeyboardAvoidingView must be a no-op there
+            // (behavior=undefined). behavior="height" double-adjusts and leaves
+            // a gap at the bottom when the keyboard closes. iOS needs "padding"
+            // because it does NOT auto-resize.
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            enabled={Platform.OS === 'ios'}
+            keyboardVerticalOffset={0}
         >
             <StatusBar barStyle="light-content" backgroundColor={theme.colors.primary} />
             {/* Header */}

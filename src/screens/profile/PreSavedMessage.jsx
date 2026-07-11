@@ -300,29 +300,31 @@ const PreSavedMessage = ({ onClose, visible }) => {
                         </Text>
                     </TouchableOpacity>
                 </View>
-                <View style={styles.row}>
-                    <View style={[styles.fieldGroup, styles.half]}>
-                        <Text style={[styles.label, { color: theme.colors.primary }]}>Time</Text>
-                        <TouchableOpacity
-                            style={[styles.input, styles.timeButton]}
-                            onPress={() => setShowTimePicker(true)}
-                        >
-                            <Icon name="time-outline" size={20} color={theme.colors.primary} />
-                            <Text style={styles.timeText}>
-                                {time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                    <View style={[styles.fieldGroup, styles.half]}>
-                        <Text style={[styles.label, { color: theme.colors.primary }]}>Duration</Text>
-                        <TouchableOpacity
-                            style={[styles.input, styles.dropdownButton]}
-                            onPress={() => setShowDurationDropdown(true)}
-                        >
-                            <Text style={styles.dropdownText}>{duration || 'Select Duration'}</Text>
-                            <Icon name="chevron-down" size={20} color="#999" />
-                        </TouchableOpacity>
-                    </View>
+                {/* Time and Duration on their own full-width rows so the
+                    "Select Duration" label fits on one line inside the box. */}
+                <View style={styles.fieldGroup}>
+                    <Text style={[styles.label, { color: theme.colors.primary }]}>Time</Text>
+                    <TouchableOpacity
+                        style={[styles.input, styles.timeButton]}
+                        onPress={() => setShowTimePicker(true)}
+                    >
+                        <Icon name="time-outline" size={20} color={theme.colors.primary} />
+                        <Text style={styles.timeText}>
+                            {time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+                <View style={styles.fieldGroup}>
+                    <Text style={[styles.label, { color: theme.colors.primary }]}>Duration</Text>
+                    <TouchableOpacity
+                        style={[styles.input, styles.dropdownButton]}
+                        onPress={() => setShowDurationDropdown(true)}
+                    >
+                        <Text style={styles.dropdownText} numberOfLines={1}>
+                            {duration || 'Select Duration'}
+                        </Text>
+                        <Icon name="chevron-down" size={20} color="#999" />
+                    </TouchableOpacity>
                 </View>
 
                 <View style={styles.fieldGroup}>
@@ -559,13 +561,6 @@ const styles = StyleSheet.create({
         height: 100,
         textAlignVertical: 'top',
     },
-    row: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-    },
-    half: {
-        width: '48%',
-    },
     buttonRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -611,6 +606,7 @@ const styles = StyleSheet.create({
     dropdownText: {
         color: '#444',
         fontSize: 15,
+        flex: 1,
     },
     dateButton: {
         flexDirection: 'row',

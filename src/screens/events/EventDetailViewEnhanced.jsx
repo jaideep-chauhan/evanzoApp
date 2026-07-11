@@ -160,7 +160,7 @@ export default function EventDetailViewEnhanced() {
             if (typeof raw === 'string') {
                 try { arr = JSON.parse(raw); } catch (_) { arr = []; }
             }
-            if (!Array.isArray(arr) || arr.length === 0) return [img];
+            if (!Array.isArray(arr) || arr.length === 0) return [];
             // Attachment urls/paths from raw rows are RELATIVE
             // ("/uploads/event-ads/..."). Without the media host the <Image>
             // gets a hostless uri and silently fails to load — which is why
@@ -179,7 +179,7 @@ export default function EventDetailViewEnhanced() {
                     return u ? { uri: u } : null;
                 })
                 .filter(Boolean);
-            return out.length > 0 ? out : [img];
+            return out;
         })(),
         organizer: getOrganizerData(eventFromParams),
         status: eventFromParams.status || 'active',
@@ -382,25 +382,25 @@ export default function EventDetailViewEnhanced() {
                 <View style={styles.aboutSection}>
                     <Text style={styles.sectionTitle}>About</Text>
 
-                    {/* Images Carousel */}
-                    <ScrollView
-                        horizontal
-                        pagingEnabled
-                        showsHorizontalScrollIndicator={false}
-                        style={styles.carousel}
-                        nestedScrollEnabled={true}
-                        snapToInterval={width - 40}
-                        decelerationRate="fast"
-                        snapToAlignment="start"
-                        onScroll={(event) => {
-                            const slideSize = event.nativeEvent.layoutMeasurement.width;
-                            const index = Math.floor(event.nativeEvent.contentOffset.x / slideSize);
-                            setCurrentImageIndex(index);
-                        }}
-                        scrollEventThrottle={16}
-                    >
-                        {eventData.images && eventData.images.length > 0 ? (
-                            eventData.images.map((imageSource, idx) => (
+                    {/* Images Carousel — only rendered when the ad actually has photos */}
+                    {eventData.images && eventData.images.length > 0 && (
+                        <ScrollView
+                            horizontal
+                            pagingEnabled
+                            showsHorizontalScrollIndicator={false}
+                            style={styles.carousel}
+                            nestedScrollEnabled={true}
+                            snapToInterval={width - 40}
+                            decelerationRate="fast"
+                            snapToAlignment="start"
+                            onScroll={(event) => {
+                                const slideSize = event.nativeEvent.layoutMeasurement.width;
+                                const index = Math.floor(event.nativeEvent.contentOffset.x / slideSize);
+                                setCurrentImageIndex(index);
+                            }}
+                            scrollEventThrottle={16}
+                        >
+                            {eventData.images.map((imageSource, idx) => (
                                 <View key={idx} style={styles.photoWrapper}>
                                     <Image
                                         source={imageSource}
@@ -411,17 +411,9 @@ export default function EventDetailViewEnhanced() {
                                         }}
                                     />
                                 </View>
-                            ))
-                        ) : (
-                            <View style={styles.photoWrapper}>
-                                <Image
-                                    source={img}
-                                    style={styles.eventImage}
-                                    resizeMode="cover"
-                                />
-                            </View>
-                        )}
-                    </ScrollView>
+                            ))}
+                        </ScrollView>
+                    )}
 
                     {/* Description */}
                     <View style={styles.descContainer}>
@@ -787,7 +779,8 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#2C3D5B',
-        padding: 16,
+        paddingHorizontal: 8,
+        paddingVertical: 6,
         borderRadius: 50,
     },
     quoteInput: {
@@ -796,16 +789,16 @@ const styles = StyleSheet.create({
         borderColor: '#ccc',
         borderWidth: 1,
         borderRadius: 10,
-        paddingVertical: 12,
+        paddingVertical: 6,
         paddingHorizontal: 12,
         color: '#fff',
         marginRight: 10,
-        minHeight: 45,
+        minHeight: 38,
         maxHeight: 100,
     },
     sendBtn: {
         backgroundColor: '#fff',
-        paddingVertical: 10,
+        paddingVertical: 8,
         paddingHorizontal: 20,
         borderRadius: 10,
         justifyContent: 'center',
