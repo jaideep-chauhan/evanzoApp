@@ -122,6 +122,14 @@ function VendorCard({
     // back to the colored initials circle instead of leaving a gray rectangle.
     const [avatarFailed, setAvatarFailed] = useState(false);
 
+    // Lazy-load the carousel: until the user actually swipes THIS card's
+    // carousel, only the first (visible) slide is fetched — the rest stay as
+    // light placeholders. Loading every off-screen carousel image of every card
+    // on list load fired ~7-9 requests per card (~70-90 total), which is fine on
+    // low-latency networks but stalls scrolling on high-latency ones (US/Canada
+    // → India origin). One request per card on load instead.
+    const [carouselTouched, setCarouselTouched] = useState(false);
+
     // Position the carousel on its first real slide ONCE, on mount. This used
     // to live in the same effect as the auto-scroll timer (keyed on isFocused),
     // so every time the card's focus flipped while the user scrolled the list,
@@ -426,18 +434,29 @@ function VendorCard({
                             showsHorizontalScrollIndicator={false}
                             style={styles.carouselContainer}
                             scrollEventThrottle={16}
+                            onScrollBeginDrag={() => setCarouselTouched(true)}
                             onMomentumScrollEnd={handleScrollEnd}
                             snapToInterval={carouselWidth}
                             decelerationRate="fast"
                         >
-                            {extendedImages.map((src, idx) => (
-                                <FastImage
-                                    key={idx}
-                                    source={toFastSource(src, img)}
-                                    style={[styles.carouselImage, { width: carouselWidth }]}
-                                    resizeMode={FastImage.resizeMode.cover}
-                                />
-                            ))}
+                            {extendedImages.map((src, idx) => {
+                                // First real slide (index 1) loads immediately;
+                                // the rest only once the user swipes this card.
+                                const shouldLoad = carouselTouched || idx === 1;
+                                return shouldLoad ? (
+                                    <FastImage
+                                        key={idx}
+                                        source={toFastSource(src, img)}
+                                        style={[styles.carouselImage, { width: carouselWidth }]}
+                                        resizeMode={FastImage.resizeMode.cover}
+                                    />
+                                ) : (
+                                    <View
+                                        key={idx}
+                                        style={[styles.carouselImage, { width: carouselWidth, backgroundColor: '#eef1f5' }]}
+                                    />
+                                );
+                            })}
                         </Animated.ScrollView>
                     </View>
                     <View style={styles.smallImages}>
