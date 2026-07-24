@@ -2619,7 +2619,7 @@ export default function ChatScreen({ route, navigation }) {
         >
             <StatusBar barStyle="light-content" backgroundColor={theme.colors.primary} />
             {/* Header */}
-            <View style={[styles.header, { backgroundColor: theme.colors.primary }]}>
+            <View style={[styles.header, { backgroundColor: theme.colors.primary, paddingTop: insets.top + 12 }]}>
                 <TouchableOpacity
                     style={styles.backButton}
                     onPress={() => navigation.goBack()}
@@ -2627,7 +2627,21 @@ export default function ChatScreen({ route, navigation }) {
                     <Icon name="arrow-back" size={24} color="#fff" />
                 </TouchableOpacity>
 
-                <View style={styles.headerContent}>
+                <TouchableOpacity
+                    style={styles.headerContent}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                        // Tap the avatar/name → open the other user's profile
+                        // (their ads + details). recipientId is the chat partner.
+                        if (recipientId) {
+                            navigation.navigate('UserProfile', {
+                                userId: recipientId,
+                                userName: chatName,
+                                userAvatar: avatar,
+                            });
+                        }
+                    }}
+                >
                     <View style={styles.avatarContainer}>
                         {avatar ? (
                             <Image source={{ uri: avatar }} style={styles.headerAvatar} />
@@ -2650,7 +2664,7 @@ export default function ChatScreen({ route, navigation }) {
                             {isTyping ? 'Typing...' : isOnline ? 'Online' : 'Last seen recently'}
                         </Text>
                     </View>
-                </View>
+                </TouchableOpacity>
 
                 <View style={styles.headerActions}>
                     <TouchableOpacity
@@ -3155,7 +3169,8 @@ const styles = StyleSheet.create({
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.15,
-        paddingTop: Platform.OS === 'ios' ? 60 : StatusBar.currentHeight,
+        // Top inset (status bar / notch) is applied inline via insets.top so it
+        // never overlaps the system status bar on notched / edge-to-edge phones.
         shadowRadius: 8,
     },
     backButton: {

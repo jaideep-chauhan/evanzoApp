@@ -212,6 +212,11 @@ export default function Vendor() {
                 }
                 setPagination(response.pagination || { page: 1, limit: 10, totalPages: 1, totalResults: 0 });
                 setCurrentFilters(searchFilters);
+                // Keep the ref in sync SYNCHRONOUSLY too, so a filter applied
+                // immediately after (e.g. type a search right after picking a
+                // location) merges with the real current set instead of a stale
+                // render closure — otherwise the earlier filter gets dropped.
+                currentFiltersRef.current = searchFilters;
                 console.log('✅ fetchVendors completed successfully');
             } else {
                 console.log('❌ Response not successful, setting network error');
@@ -362,8 +367,9 @@ export default function Vendor() {
             setActiveTab(null);
         }
 
-        // Apply location filter
-        const newFilters = { ...currentFilters, location };
+        // Apply location filter — merge with the LIVE filter set (ref) so a
+        // category/search already applied isn't dropped (AND all active filters).
+        const newFilters = { ...currentFiltersRef.current, location };
         if (!location) {
             delete newFilters.location;
         }
@@ -394,8 +400,9 @@ export default function Vendor() {
             setActiveTab(null);
         }
 
-        // Apply category filter
-        const newFilters = { ...currentFilters };
+        // Apply category filter — merge with the LIVE filter set (ref) so an
+        // active location/search isn't dropped (AND all active filters).
+        const newFilters = { ...currentFiltersRef.current };
         if (categoryIds && categoryIds.length > 0) {
             newFilters.categories = Array.isArray(categoryIds) ? categoryIds : [categoryIds];
         } else {
@@ -509,7 +516,9 @@ export default function Vendor() {
                             setSearchQuery(text);
                             filterService.debouncedSearch(
                                 (filters) => fetchVendors(filters, true),
-                                { ...currentFilters, keyword: text },
+                                // Merge with the LIVE filter set (ref) so the active
+                                // location/category isn't dropped when searching (AND).
+                                { ...currentFiltersRef.current, keyword: text },
                                 500,
                                 'vendor-header-search'
                             );

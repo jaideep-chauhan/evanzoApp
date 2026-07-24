@@ -47,6 +47,23 @@ export default function EventAdCard({
     const theme = useTheme();
     const navigation = useNavigation();
     const safeAttachments = Array.isArray(attachments) ? attachments : [];
+
+    // Card avatar: prefer the organizer's real profile image, then fall back to
+    // the first uploaded attachment. Never show the static dummy png — if there
+    // is genuinely no image, render an initials circle instead.
+    const toRemoteSource = (val, width) => {
+        if (typeof val === 'string' && val.trim()) {
+            const url = val.startsWith('http') ? val : `https://api.evnzo.com${val}`;
+            return { uri: thumbnailUrl(url, width), priority: FastImage.priority.normal };
+        }
+        if (val && typeof val === 'object' && val.uri) {
+            return { uri: thumbnailUrl(val.uri, width), priority: FastImage.priority.normal };
+        }
+        return null; // require'd dummy (a number) / null → not a real image
+    };
+    const avatarSource =
+        toRemoteSource(profile?.image, 150) || toRemoteSource(safeAttachments[0], 150);
+
     const [isCompleting, setIsCompleting] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -228,7 +245,19 @@ export default function EventAdCard({
             {/* Profile + Description */}
             <View style={[styles.profileRow, { marginTop: 6, marginBottom: 12 }]}> {/* Adjusted spacing */}
                 <View style={{ alignItems: 'center', marginRight: 12 }}>
-                    <Image source={profile.image} style={styles.avatar} />
+                    {avatarSource ? (
+                        <FastImage
+                            source={avatarSource}
+                            style={styles.avatar}
+                            resizeMode={FastImage.resizeMode.cover}
+                        />
+                    ) : (
+                        <View style={[styles.avatar, { alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.primary }]}>
+                            <Text style={{ color: '#fff', fontSize: 28, fontWeight: '700' }}>
+                                {(profile?.name || 'E').trim().charAt(0).toUpperCase()}
+                            </Text>
+                        </View>
+                    )}
                     <Text style={[styles.profileName, { color: theme.colors.primary, marginTop: 6 }]} numberOfLines={1} ellipsizeMode="tail">{profile.name}</Text>
                 </View>
                 <View style={{ flex: 1 }}>

@@ -12,7 +12,7 @@ import { useNavigation } from '@react-navigation/native';
 export default function PrivacyPolicy() {
     const navigation = useNavigation();
 
-    const privacyContent = `At Evanzo, we are committed to protecting your privacy and personal information. This Privacy Policy explains how we collect, use, and safeguard your data when you use our event planning platform.
+    const privacyContent = `At Evnzo, we are committed to protecting your privacy and personal information. This Privacy Policy explains how we collect, use, and safeguard your data when you use our event planning platform.
 
 INFORMATION WE COLLECT
 

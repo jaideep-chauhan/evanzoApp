@@ -437,11 +437,27 @@ export default function EventDetailViewEnhanced() {
                 <View style={styles.userInfoSection}>
                     <Text style={styles.sectionTitle}>User Information</Text>
                     <View style={styles.userCard}>
-                        <View style={styles.userInfo}>
-                            {/* Render the actual organiser avatar when we
-                                have one (from the joined user row). Falls
-                                back to the generic person-circle icon when
-                                the organiser hasn't uploaded a profile pic. */}
+                        {/* Tapping the organiser (avatar + name) opens their
+                            profile — the old separate "See all" button is gone. */}
+                        <TouchableOpacity
+                            style={styles.userInfo}
+                            activeOpacity={0.7}
+                            onPress={() => {
+                                const userId = eventData.organizer.user_id ||
+                                             eventFromParams.user_id ||
+                                             eventFromParams._original?.user_id;
+
+                                if (userId) {
+                                    navigation.navigate('UserProfile', {
+                                        userId: userId,
+                                        userName: eventData.organizer.name,
+                                        userAvatar: eventData.organizer.avatar
+                                    });
+                                } else {
+                                    Alert.alert('Error', 'Unable to view user profile');
+                                }
+                            }}
+                        >
                             {eventData?.organizer?.avatar &&
                             typeof eventData.organizer.avatar === 'string' ? (
                                 <Image
@@ -452,36 +468,21 @@ export default function EventDetailViewEnhanced() {
                                 <Icon name="person-circle" size={40} color="#334462" />
                             )}
                             <Text style={styles.userName}>{eventData.organizer.name}</Text>
-                        </View>
+                        </TouchableOpacity>
+                        {/* Stars always show (blank outlines when there are no
+                            reviews); the numeric rating + count only appear once
+                            the organiser actually has reviews. */}
                         <View style={styles.ratingContainer}>
                             <View style={styles.stars}>
                                 {renderStars(organizerRating)}
                             </View>
-                            <Text style={styles.ratingText}>
-                                {organizerRating.toFixed(1)} ({organizerReviewCount})
-                            </Text>
+                            {organizerReviewCount > 0 && (
+                                <Text style={styles.ratingText}>
+                                    {organizerRating.toFixed(1)} ({organizerReviewCount})
+                                </Text>
+                            )}
                         </View>
                     </View>
-                    <TouchableOpacity
-                        style={styles.seeAllButton}
-                        onPress={() => {
-                            const userId = eventData.organizer.user_id ||
-                                         eventFromParams.user_id ||
-                                         eventFromParams._original?.user_id;
-
-                            if (userId) {
-                                navigation.navigate('UserProfile', {
-                                    userId: userId,
-                                    userName: eventData.organizer.name,
-                                    userAvatar: eventData.organizer.avatar
-                                });
-                            } else {
-                                Alert.alert('Error', 'Unable to view user profile');
-                            }
-                        }}
-                    >
-                        <Text style={styles.seeAllText}>See all</Text>
-                    </TouchableOpacity>
                 </View>
 
                 {/* Similar Events — title intentionally not rendered here.
@@ -509,9 +510,7 @@ export default function EventDetailViewEnhanced() {
                         placeholderTextColor="#ccc"
                         value={quoteText}
                         onChangeText={setQuoteText}
-                        multiline
                         maxLength={500}
-                        textAlignVertical="top"
                         editable={!isSubmittingQuote}
                     />
                     <TouchableOpacity
@@ -730,7 +729,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 16,
     },
     userInfo: {
         flexDirection: 'row',
@@ -754,14 +752,6 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#64748B',
     },
-    seeAllButton: {
-        alignSelf: 'flex-end',
-    },
-    seeAllText: {
-        fontSize: 13,
-        color: '#334462',
-        fontWeight: '600',
-    },
     similarSection: {
         paddingHorizontal: 20,
         marginBottom: 20,
@@ -779,22 +769,25 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#2C3D5B',
-        paddingHorizontal: 8,
-        paddingVertical: 6,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
         borderRadius: 50,
     },
     quoteInput: {
         flex: 1,
+        height: 46,
         backgroundColor: 'transparent',
         borderColor: '#ccc',
         borderWidth: 1,
         borderRadius: 10,
-        paddingVertical: 6,
-        paddingHorizontal: 12,
+        paddingVertical: 0,
+        paddingHorizontal: 16,
         color: '#fff',
-        marginRight: 10,
-        minHeight: 38,
-        maxHeight: 100,
+        marginRight: 14,
+        // Single-line input: center the text and drop Android's extra font
+        // padding so it lines up the same as the iOS reference.
+        textAlignVertical: 'center',
+        includeFontPadding: false,
     },
     sendBtn: {
         backgroundColor: '#fff',

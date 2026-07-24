@@ -199,13 +199,21 @@ const ProfileCardCarousel = ({ vendorId }) => {
                     
                     // Check if we've reached the end clone
                     if (currentIndex.current >= extendedData.length - 1) {
-                        // Reset to the first real item after showing last clone
+                        // Reset to the first real item after showing last clone.
+                        // Re-check the ref: 500ms later the list may have
+                        // unmounted or emptied, making scrollRef.current null.
                         setTimeout(() => {
                             currentIndex.current = 1;
-                            scrollRef.current.scrollToIndex({ 
-                                index: 1, 
-                                animated: false 
-                            });
+                            try {
+                                if (scrollRef.current) {
+                                    scrollRef.current.scrollToIndex({
+                                        index: 1,
+                                        animated: false
+                                    });
+                                }
+                            } catch (_) {
+                                // list changed/unmounted — safe to ignore
+                            }
                         }, 500);
                     } else {
                         scrollRef.current.scrollToIndex({ 

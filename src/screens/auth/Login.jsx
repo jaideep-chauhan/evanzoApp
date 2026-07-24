@@ -74,7 +74,7 @@ export default function LoginScreen() {
                 Toast.show({
                     type: 'success',
                     text1: 'Google Login Successful',
-                    text2: 'Welcome to Evanzo!',
+                    text2: 'Welcome to Evnzo!',
                 });
 
                 navigation.reset({
@@ -109,7 +109,7 @@ export default function LoginScreen() {
                 Toast.show({
                     type: 'success',
                     text1: 'Apple Login Successful',
-                    text2: 'Welcome to Evanzo!',
+                    text2: 'Welcome to Evnzo!',
                 });
 
                 navigation.reset({

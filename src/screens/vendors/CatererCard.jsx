@@ -11,7 +11,7 @@ const { width } = Dimensions.get('window');
 
 
 const slides = [
-    { bgColor: '#FFB6C1', header: 'Welcome to Evanzo!' },
+    { bgColor: '#FFB6C1', header: 'Welcome to Evnzo!' },
     { bgColor: '#B0E0E6', header: 'Best Catering Services' },
     { bgColor: '#FFD700', header: 'Book Your Event Today' }
 ];

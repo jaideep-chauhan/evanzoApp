@@ -1,8 +1,8 @@
-# Evanzo v2.0 — Release Notes (versionCode 32)
+# Evnzo v2.0 — Release Notes (versionCode 32)
 
 ## Play Store "What's new" (short, user-facing)
 
-What's new in Evanzo 2.0
+What's new in Evnzo 2.0
 
 • Event chat is better than ever — cleaner reply & quoted messages
 • Faster, smarter search with improved suggestions
@@ -13,13 +13,14 @@ What's new in Evanzo 2.0
 • Refreshed app icons and new venue icons
 • Helpful in-app prompts to keep you on the latest version
 
-Thanks for using Evanzo! Got feedback? We'd love to hear it.
+Thanks for using Evnzo! Got feedback? We'd love to hear it.
 
 ---
 
 ## Full changelog (internal / closed-testing)
 
 ### Features & Improvements
+
 - **Event Chat:** enhanced quoted/reply message formatting for easier conversations
 - **Search:** optimized autocomplete and suggestion handling for faster results
 - **Vendor Ads:** owners can now mark ads complete or delete them
@@ -31,4 +32,5 @@ Thanks for using Evanzo! Got feedback? We'd love to hear it.
 - **Reliability:** in-app update prompts based on version checks
 
 ### Under the hood
+
 - Build/signing pipeline corrected and hardened (upload key restored, credentials moved to git-ignored `local.properties`)

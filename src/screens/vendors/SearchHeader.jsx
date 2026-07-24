@@ -38,7 +38,8 @@ export default function SearchHeader({ onSearchChange, searchValue = '', searchT
     };
 
     const placeholders = [
-        'Search for vendors...',
+        // Reflect the screen: events → "Search for events...", vendors → "...vendors..."
+        searchType === 'events' ? 'Search for events...' : 'Search for vendors...',
         'Search by location...',
         'Search by category...',
         'Type to search...',

@@ -48,8 +48,8 @@ export default function UpdatePromptModal({
           </Text>
           <Text style={styles.subtitle}>
             {forceUpdate
-              ? `Version ${latest} is required to keep using Evanzo. Please update to continue.`
-              : `A newer version (${latest}) of Evanzo is available. Update now for the latest features and fixes.`}
+              ? `Version ${latest} is required to keep using Evnzo. Please update to continue.`
+              : `A newer version (${latest}) of Evnzo is available. Update now for the latest features and fixes.`}
           </Text>
 
           {releaseNotes ? (

@@ -146,7 +146,7 @@ export default function OTPVerify() {
             
             if (result.success) {
                 // Show success toast then navigate
-                showToast('Registration successful! Welcome to Evanzo!', 'success');
+                showToast('Registration successful! Welcome to Evnzo!', 'success');
                 
                 // Navigate to Main (TabNavigator) after a short delay
                 setTimeout(() => {

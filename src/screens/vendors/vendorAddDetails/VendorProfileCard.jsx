@@ -196,7 +196,8 @@ const ActionIcons = ({ vendor, navigation }) => {
 
     return (
         <View style={actionIconStyles.container}>
-            {/* Rating */}
+            {/* Rating + Reviews — always shown (even at 0), so the action bar
+                is consistent for every vendor. */}
             <TouchableOpacity style={actionIconStyles.item} onPress={handleRatingPress}>
                 <View style={actionIconStyles.iconCircle}>
                     <FontAwesome name="star" size={12} color="#2c2c3d" />
@@ -205,10 +206,9 @@ const ActionIcons = ({ vendor, navigation }) => {
                 <Text style={actionIconStyles.label}>Rating</Text>
             </TouchableOpacity>
 
-            {/* Reviews */}
             <TouchableOpacity style={actionIconStyles.item} onPress={handleReviewsPress}>
                 <View style={actionIconStyles.iconCircle}>
-                    <Text style={actionIconStyles.reviewText}>{reviewCount}</Text>
+                    <Text style={actionIconStyles.reviewText}>{Number(reviewCount) || 0}</Text>
                 </View>
                 <Text style={actionIconStyles.label}>Reviews</Text>
             </TouchableOpacity>

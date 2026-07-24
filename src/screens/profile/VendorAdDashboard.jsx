@@ -28,7 +28,6 @@ import {
     renderSkeletons,
 } from '../../components/SkeletonLoader';
 import useCachedList from '../../hooks/useCachedList';
-import img from '../../assets/images/dummy.png';
 import bg from '../../assets/images/profileBG.png';
 
 import { useTheme } from '../../ThemeContext';
@@ -378,7 +377,9 @@ export default function VendorAdDashboard({ navigation }) {
                                     attachments={event.attachments || event.images}
                                     profile={{
                                         name: user?.full_name || 'User',
-                                        image: img,
+                                        // Real profile pic when present; EventAdCard falls back to
+                                        // the first uploaded attachment (never the dummy png).
+                                        image: user?.profile_pic || null,
                                     }}
                                     onComplete={() => eventList.refresh()}
                                     onDelete={() => {
