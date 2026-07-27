@@ -1,6 +1,6 @@
 import api, { API_BASE_URL, MEDIA_BASE_URL } from './api';
 import dummyImage from '../assets/images/dummy.png';
-import authFetch from './authFetch';
+import authFetch, { authUpload } from './authFetch';
 
 class VendorService {
     constructor() {
@@ -176,28 +176,25 @@ class VendorService {
         return this.getPublicVendorAds();
     }
 
-    // Create vendor ad. FormData (file upload) path uses native fetch via
-    // authFetch — axios's XHR layer breaks multipart on Android. The
-    // non-FormData path stays on axios.
-    // onUploadProgress (optional) is called with a 0-100 number so the
-    // form can drive a progress UI. fetch can't surface real upload bytes,
-    // so we approximate: 10 right before the network call, 100 once we
-    // have a response. Real per-chunk progress lives in the compression
-    // step on the form side.
+    // Create vendor ad. FormData (file upload) path uses authUpload (raw XHR) —
+    // axios's XHR layer breaks multipart on Android, but raw XHR is fine and,
+    // unlike fetch, reports REAL upload progress. The non-FormData path stays
+    // on axios. onUploadProgress (optional) is called with a live 0-100 number.
     async createVendorAd(vendorData, onUploadProgress = null) {
         try {
             if (vendorData instanceof FormData) {
-                if (onUploadProgress) onUploadProgress(10);
-                const res = await authFetch(`${API_BASE_URL}/vendor_ad`, {
-                    method: 'POST',
-                    body: vendorData,
+                const result = await authUpload(`${API_BASE_URL}/vendor_ad`, vendorData, {
+                    onProgress: onUploadProgress || undefined,
                 });
-                const data = await res.json().catch(() => ({}));
                 if (onUploadProgress) onUploadProgress(100);
-                if (!res.ok) {
+                const data = result.json || {};
+                if (!result.ok) {
                     return {
                         success: false,
-                        message: data?.message || `Server error: ${res.status}`,
+                        message: data?.message
+                            || (result.timeout ? 'Upload timed out. Please check your connection and try again.'
+                                : result.networkError ? 'Network error during upload. Please try again.'
+                                : `Server error: ${result.status}`),
                         data: null,
                     };
                 }

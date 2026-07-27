@@ -95,4 +95,67 @@ export const authFetch = async (url, init = {}) => {
     return fetch(url, { ...init, headers: buildHeaders(init, newAccess) });
 };
 
+// ─────────────────────────────────────────────────────────────────────────
+// authUpload — multipart upload with REAL progress.
+//
+// fetch() can't report upload progress, so the ad-create screens showed a
+// fake 10%→100% jump and sat "frozen" for the whole upload. This uses raw
+// XMLHttpRequest (which is what RN's fetch is built on, so multipart/form-data
+// boundaries are handled correctly by the native layer — the axios breakage
+// noted above does NOT apply to raw XHR) and exposes upload.onprogress.
+//
+// Returns { ok, status, json, timeout?, networkError? }. onProgress(percent)
+// is called with real 0–95 during byte transfer; the caller bumps to 100 once
+// the server has responded (the last 5% covers server-side image processing).
+// ─────────────────────────────────────────────────────────────────────────
+const UPLOAD_TIMEOUT_MS = 180000; // 3 min ceiling so a stuck upload fails instead of hanging forever
+
+const xhrUpload = (url, formData, token, onProgress) =>
+    new Promise((resolve) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', url);
+        xhr.setRequestHeader('X-Client-Type', 'mobile');
+        if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        // Deliberately DON'T set Content-Type — the native layer must inject
+        // the multipart boundary itself. Setting it breaks the upload.
+        xhr.timeout = UPLOAD_TIMEOUT_MS;
+
+        if (onProgress && xhr.upload) {
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    // Cap at 95 while bytes stream; reserve 95→100 for the
+                    // server finishing (sharp resize) after the body lands.
+                    onProgress(Math.min(95, Math.round((e.loaded / e.total) * 95)));
+                }
+            };
+        }
+
+        xhr.onload = () => {
+            let json = {};
+            try { json = JSON.parse(xhr.responseText || '{}'); } catch (_) {}
+            resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, json });
+        };
+        xhr.onerror = () => resolve({ ok: false, status: xhr.status || 0, json: {}, networkError: true });
+        xhr.ontimeout = () => resolve({ ok: false, status: 0, json: {}, timeout: true });
+
+        xhr.send(formData);
+    });
+
+export const authUpload = async (url, formData, { onProgress } = {}) => {
+    const token = await secureStorage.getItem('authToken');
+
+    let result = await xhrUpload(url, formData, token, onProgress);
+    if (result.status !== 401 || !token) return result;
+
+    // 401 → refresh once and retry (same policy as authFetch).
+    let newAccess;
+    try {
+        newAccess = await startRefresh();
+    } catch (refreshErr) {
+        if (__DEV__) console.log('[authUpload] refresh failed:', refreshErr?.message);
+        return result; // surface the original 401
+    }
+    return xhrUpload(url, formData, newAccess, onProgress);
+};
+
 export default authFetch;

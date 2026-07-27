@@ -1,6 +1,6 @@
 import api, { API_BASE_URL } from './api';
 import dummyImage from '../assets/images/dummy.png';
-import authFetch from './authFetch';
+import authFetch, { authUpload } from './authFetch';
 
 // Backend stores `duration` as a free-text varchar (legacy ads sometimes
 // have just "4" without units). Format it for display:
@@ -20,25 +20,23 @@ export const formatDuration = (raw) => {
 };
 
 class EventService {
-    // Create event ad. Multipart upload routes through authFetch (native
-    // fetch + refresh-on-401), same reason as createVendorAd.
-    // Mirror createVendorAd's onUploadProgress contract: 10 right before
-    // POST, 100 on response. Real upload-byte progress isn't exposed by
-    // fetch; per-image progress lives in the compression step.
+    // Create event ad. Multipart upload routes through authUpload (raw XHR +
+    // refresh-on-401), same reason as createVendorAd — real upload progress.
     async createEventAd(eventData, onUploadProgress = null) {
         try {
             if (eventData instanceof FormData) {
-                if (onUploadProgress) onUploadProgress(10);
-                const res = await authFetch(`${API_BASE_URL}/event_ad`, {
-                    method: 'POST',
-                    body: eventData,
+                const result = await authUpload(`${API_BASE_URL}/event_ad`, eventData, {
+                    onProgress: onUploadProgress || undefined,
                 });
-                const data = await res.json().catch(() => ({}));
                 if (onUploadProgress) onUploadProgress(100);
-                if (!res.ok) {
+                const data = result.json || {};
+                if (!result.ok) {
                     return {
                         success: false,
-                        message: data?.message || `Server error: ${res.status}`,
+                        message: data?.message
+                            || (result.timeout ? 'Upload timed out. Please check your connection and try again.'
+                                : result.networkError ? 'Network error during upload. Please try again.'
+                                : `Server error: ${result.status}`),
                     };
                 }
                 return {

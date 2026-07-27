@@ -255,6 +255,10 @@ const CreateAddForm = ({ type, onClose }) => {
             loadVendorCategories();
         } else if (type === 'event') {
             loadEventCategories();
+            // "What service you need?" lists the SAME vendor categories as the
+            // create-vendor-ad form, so load them here too — otherwise the
+            // dropdown falls back to the static SERVICE_OPTIONS list.
+            loadVendorCategories();
         }
     }, [type]);
 

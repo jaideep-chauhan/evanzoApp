@@ -67,6 +67,18 @@ class VendorDetailsService {
     }
   }
 
+  // How many users have saved this vendor (public count).
+  async getVendorSavesCount(vendorId) {
+    try {
+      const id = parseInt(vendorId, 10);
+      if (isNaN(id)) return 0;
+      const response = await api.get(`/vendor-enhanced/${id}/saves-count`);
+      return Number(response.data?.data?.count) || 0;
+    } catch (error) {
+      return 0;
+    }
+  }
+
   // Shared review-submit core. When media files are attached, the request
   // goes out as multipart so the backend's multer middleware can persist them
   // under /uploads/vendor-reviews. Axios's XHR multipart is broken on

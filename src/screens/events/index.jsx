@@ -33,6 +33,37 @@ import filterService from '../../services/filterService';
 import categoryService from '../../services/categoryService';
 import { SERVICE_OPTIONS } from '../../data/eventOptions';
 
+// Old free-text service labels (from the retired static "What service you need"
+// list) mapped to the CURRENT vendor-category names. Events created before the
+// taxonomy change stored e.g. "Photographer"; the Vendor Type filter offers
+// "Photography/Videography". Canonicalizing both sides lets old + new data match.
+const SERVICE_SYNONYMS = {
+    'photographer': 'photography/videography',
+    'videographer': 'photography/videography',
+    'photography': 'photography/videography',
+    'videography': 'photography/videography',
+    'caterer': 'catering',
+    'decorator': 'decoration',
+    'dj': 'dj / music',
+    'florist': 'decoration',
+    'makeup artist': 'beauty & styling',
+    'venue': 'venues',
+    'transport': 'car rentals',
+    'transportation': 'car rentals',
+    'security': 'security services',
+    'sound system': 'dj / music',
+    'lighting': 'decoration',
+    'entertainment': 'entertainers',
+    'bartender': 'bartending services',
+    'bartending': 'bartending services',
+};
+// Normalise a service label to a comparable canonical form (trim, lowercase,
+// map known old synonyms to the current category name).
+const canonicalService = (name) => {
+    const n = (name || '').trim().toLowerCase();
+    return SERVICE_SYNONYMS[n] || n;
+};
+
 export default function Events() {
     const navigation = useNavigation();
     const theme = useTheme();
@@ -57,6 +88,11 @@ export default function Events() {
     // Vendor categories from the backend — power the "vendor type" filter tab so
     // it matches what the create-ad form posts as service_needed.
     const [masterVendorTypes, setMasterVendorTypes] = useState([]);
+    // Maps a subcategory NAME → its parent category NAME (e.g. "Bollywood DJ" →
+    // "DJ / Music"). Events store service_needed/event_type at the PARENT level,
+    // but the filter modal lets users pick a subcategory — so we expand a picked
+    // subcategory back to its parent name when matching. See handleCategorySelect.
+    const parentNameByChildRef = useRef({});
     const [searchQuery, setSearchQuery] = useState('');
     const [currentFilters, setCurrentFilters] = useState({});
     const [pagination, setPagination] = useState({ page: 1, limit: 10, totalPages: 1, totalResults: 0 });
@@ -176,12 +212,13 @@ export default function Events() {
 
                         // Vendor-type filter — match the service the event needs
                         // (service_needed) against the chosen vendor categories.
+                        // Canonicalise both sides so old labels ("Photographer")
+                        // match current categories ("Photography/Videography").
                         if (searchFilters.serviceType) {
-                            const services = searchFilters.serviceType.split(',');
-                            filteredEvents = filteredEvents.filter(event => {
-                                const need = (event.service_needed || '').toLowerCase();
-                                return services.some(s => need === s.toLowerCase());
-                            });
+                            const wanted = searchFilters.serviceType.split(',').map(canonicalService);
+                            filteredEvents = filteredEvents.filter(event =>
+                                wanted.includes(canonicalService(event.service_needed))
+                            );
                         }
                         
                         // Apply date range filtering
@@ -339,6 +376,15 @@ export default function Events() {
                     .map((c) => (typeof c === 'string' ? c : c?.name))
                     .filter(Boolean);
                 setMasterVendorTypes(names);
+                // Record each subcategory → parent-name so the filter can expand
+                // a picked subcategory to the parent-level name events actually store.
+                (result.data || []).forEach((parent) => {
+                    (parent?.subcategories || []).forEach((sub) => {
+                        if (sub?.name && parent?.name) {
+                            parentNameByChildRef.current[sub.name.toLowerCase()] = parent.name;
+                        }
+                    });
+                });
             }
         })();
         return () => {
@@ -594,10 +640,20 @@ export default function Events() {
         const newFilters = { ...currentFilters };
         delete newFilters.category;
         delete newFilters.serviceType;
-        const categoryNames = (categoryData || []).map((c) => c.name).filter(Boolean);
-        if (categoryNames.length > 0) {
+        // Include both the picked name AND its parent-level name, because events
+        // store service_needed/event_type at the parent level (e.g. an event
+        // needing "DJ / Music" won't equal a picked "Bollywood DJ" subcategory).
+        const categoryNames = [];
+        (categoryData || []).forEach((c) => {
+            if (!c?.name) return;
+            categoryNames.push(c.name);
+            const parent = parentNameByChildRef.current[c.name.toLowerCase()];
+            if (parent) categoryNames.push(parent);
+        });
+        const uniqueNames = [...new Set(categoryNames)];
+        if (uniqueNames.length > 0) {
             const key = dimension === 'vendor' ? 'serviceType' : 'category';
-            newFilters[key] = categoryNames.join(',');
+            newFilters[key] = uniqueNames.join(',');
         }
 
         console.log('🎯 Event filters to apply:', newFilters);

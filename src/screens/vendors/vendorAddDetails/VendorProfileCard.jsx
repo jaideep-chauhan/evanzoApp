@@ -32,6 +32,15 @@ const ActionIcons = ({ vendor, navigation }) => {
     const [isCheckingStatus, setIsCheckingStatus] = useState(true); // Separate loading state for initial check
     const [rating, setRating] = useState(Number(vendor?.rating) || 0);
     const [reviewCount, setReviewCount] = useState(vendor?.reviews_count || 0);
+    // How many users saved this vendor (shown on the Save button when > 0).
+    const [savesCount, setSavesCount] = useState(Number(vendor?.saves_count) || 0);
+
+    const fetchSavesCount = async () => {
+        const vendorId = vendor?._original?.vendor_ad_id || vendor?.vendor_ad_id || vendor?.id || vendor?._id;
+        if (!vendorId) return;
+        const count = await vendorDetailsService.getVendorSavesCount(vendorId);
+        setSavesCount(count);
+    };
 
     useEffect(() => {
         // Don't reset saved state immediately, let checkSavedStatus determine it
@@ -41,6 +50,8 @@ const ActionIcons = ({ vendor, navigation }) => {
         checkSavedStatus();
         // Fetch reviews
         fetchReviews();
+        // Fetch how many people saved this vendor
+        fetchSavesCount();
     }, [vendor]); // Re-run when vendor prop changes
 
     // Refetch on every focus too, so returning from the AllReviews screen
@@ -51,6 +62,7 @@ const ActionIcons = ({ vendor, navigation }) => {
         useCallback(() => {
             fetchReviews();
             checkSavedStatus();
+            fetchSavesCount();
             return undefined;
         }, [vendor]),
     );
@@ -117,6 +129,7 @@ const ActionIcons = ({ vendor, navigation }) => {
         // Optimistically update UI immediately for better UX
         const newSavedState = !isSaved;
         setIsSaved(newSavedState);
+        setSavesCount((c) => Math.max(0, c + (newSavedState ? 1 : -1)));
         setIsLoading(true);
         
         // Prepare vendor data to save
@@ -141,10 +154,12 @@ const ActionIcons = ({ vendor, navigation }) => {
                 setIsSaved(finalSavedState);
             } else {
                 setIsSaved(!newSavedState);
+                setSavesCount((c) => Math.max(0, c + (newSavedState ? -1 : 1)));
                 Alert.alert('Error', response.message || 'Failed to save vendor');
             }
         } catch (error) {
             setIsSaved(!newSavedState);
+            setSavesCount((c) => Math.max(0, c + (newSavedState ? -1 : 1)));
             Alert.alert('Error', 'Failed to save vendor. Please try again.');
         }
         
@@ -227,7 +242,7 @@ const ActionIcons = ({ vendor, navigation }) => {
                     )}
                 </View>
                 <Text style={[actionIconStyles.label, isSaved && actionIconStyles.savedLabel]}>
-                    {isSaved ? 'Saved' : 'Save'}
+                    {(isSaved ? 'Saved' : 'Save') + (Number(savesCount) > 0 ? ` (${savesCount})` : '')}
                 </Text>
             </TouchableOpacity>
 

@@ -5,6 +5,7 @@ import { Image, AppState } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { navigationRef, setAuthLogout } from '../services/navigationService';
 import { linking } from '../services/deepLinkService';
+import notificationService from '../services/notificationService';
 // Screens
 import SplashScreen from '../screens/SplashScreen';
 import LoginScreen from '../screens/auth/Login';
@@ -93,6 +94,12 @@ const MainNavigator = () => {
     // Handle app state changes
     useEffect(() => {
         const handleAppStateChange = (nextAppState) => {
+            // On return to foreground, re-sync the app-icon badge with the
+            // backend unread count so it clears after messages/notifications
+            // are read (iOS badge doesn't auto-clear).
+            if (nextAppState === 'active' && appState.match(/inactive|background/)) {
+                notificationService.updateBadgeCount().catch(() => {});
+            }
             setAppState(nextAppState);
         };
 

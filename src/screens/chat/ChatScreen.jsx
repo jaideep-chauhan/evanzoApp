@@ -25,6 +25,7 @@ import MessageStatus from './MessageStatus';
 import { useTheme } from '../../ThemeContext';
 import socketService from '../../services/socketService';
 import chatService from '../../services/chatService';
+import notificationService from '../../services/notificationService';
 import api from '../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { secureStorage } from '../../utils/secureStorage';
@@ -499,8 +500,10 @@ export default function ChatScreen({ route, navigation }) {
             // Setup socket event listeners
             setupSocketListeners();
 
-            // Mark chat as read
+            // Mark chat as read, then refresh the app-icon badge so it clears
+            // once the message notifications for this chat are marked read.
             await chatService.markChatAsRead(actualChatId);
+            notificationService.updateBadgeCount().catch(() => {});
 
         } catch (error) {
             console.error('Failed to initialize chat:', error);
