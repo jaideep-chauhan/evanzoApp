@@ -186,15 +186,28 @@ export default function NotificationInbox() {
             }
         }
 
-        // Drill into the relevant screen based on type / action.
-        const data = notification.data || {};
+        // Drill into the relevant screen based on type / action. The target id
+        // lives in `data` and/or `action_data`, and either may arrive as a JSON
+        // string depending on the source — normalise both and merge so we find
+        // the id wherever it was stored (older message notifications kept
+        // chat_id only in action_data, which is why tapping did nothing).
+        const parseMaybe = (v) => {
+            if (!v) return {};
+            if (typeof v === 'string') {
+                try { return JSON.parse(v); } catch { return {}; }
+            }
+            return v;
+        };
+        const data = { ...parseMaybe(notification.action_data), ...parseMaybe(notification.data) };
         switch (notification.action_type || notification.type) {
             case 'open_chat':
             case 'message':
                 if (data.chat_id) {
                     navigation.navigate('ChatScreen', {
                         chatId: data.chat_id,
-                        chatName: data.sender_name || 'Chat',
+                        chatName: data.sender_name
+                            || notification.title?.replace(/^New message from\s*/i, '')
+                            || 'Chat',
                     });
                 }
                 break;

@@ -34,7 +34,7 @@ import categoryService from '../../services/categoryService';
 import { SERVICE_OPTIONS } from '../../data/eventOptions';
 
 // Old free-text service labels (from the retired static "What service you need"
-// list) mapped to the CURRENT vendor-category names. Events created before the
+// list) mapped to the CURRENT vendor-category names. Gigs created before the
 // taxonomy change stored e.g. "Photographer"; the Vendor Type filter offers
 // "Photography/Videography". Canonicalizing both sides lets old + new data match.
 const SERVICE_SYNONYMS = {
@@ -64,7 +64,7 @@ const canonicalService = (name) => {
     return SERVICE_SYNONYMS[n] || n;
 };
 
-export default function Events() {
+export default function Gigs() {
     const navigation = useNavigation();
     const theme = useTheme();
     const [selectedLocation, setSelectedLocation] = useState(null);
@@ -89,7 +89,7 @@ export default function Events() {
     // it matches what the create-ad form posts as service_needed.
     const [masterVendorTypes, setMasterVendorTypes] = useState([]);
     // Maps a subcategory NAME → its parent category NAME (e.g. "Bollywood DJ" →
-    // "DJ / Music"). Events store service_needed/event_type at the PARENT level,
+    // "DJ / Music"). Gigs store service_needed/event_type at the PARENT level,
     // but the filter modal lets users pick a subcategory — so we expand a picked
     // subcategory back to its parent name when matching. See handleCategorySelect.
     const parentNameByChildRef = useRef({});
@@ -169,7 +169,7 @@ export default function Events() {
                 }
             } else {
                 // All event filtering (keyword, location, category, date) runs
-                // client-side. Events store event_type as a NAME string —
+                // client-side. Gigs store event_type as a NAME string —
                 // event_type_id is null in the data — and the backend
                 // /event_ad/search only filters by event_type_id (and rejects an
                 // `eventType` param), so a server-side category filter never
@@ -193,7 +193,7 @@ export default function Events() {
                                 event.category?.toLowerCase().includes(keyword) ||
                                 event.event_type?.toLowerCase().includes(keyword)
                             );
-                            console.log(`🔍 Event keyword search for "${searchFilters.keyword}" found ${filteredEvents.length} results`);
+                            console.log(`🔍 Gig keyword search for "${searchFilters.keyword}" found ${filteredEvents.length} results`);
                         }
                         
                         if (searchFilters.location) {
@@ -240,7 +240,7 @@ export default function Events() {
                                     const isInRange = eventDate >= startDate && eventDate <= endDate;
                                     
                                     if (!isInRange) {
-                                        console.log(`❌ Event "${event.title}" date ${eventDate.toLocaleDateString()} is outside range`);
+                                        console.log(`❌ Gig "${event.title}" date ${eventDate.toLocaleDateString()} is outside range`);
                                     }
                                     
                                     return isInRange;
@@ -250,7 +250,7 @@ export default function Events() {
                                 }
                             });
                             
-                            console.log('📅 Events after date filter:', filteredEvents.length);
+                            console.log('📅 Gigs after date filter:', filteredEvents.length);
                         }
                         
                         response = {
@@ -407,7 +407,7 @@ export default function Events() {
     useFocusEffect(
         useCallback(() => {
             // Reset to top whenever the tab gains focus, so switching to
-            // Events lands on the newest items rather than mid-scroll.
+            // Gigs lands on the newest items rather than mid-scroll.
             scrollViewRef.current?.scrollTo?.({ y: 0, animated: false });
 
             if (isFirstFocusRef.current) {
@@ -424,7 +424,7 @@ export default function Events() {
     const dummyEvents = [
         {
             id: 1,
-            title: 'Corporate Event',
+            title: 'Corporate Gig',
             location: 'Ontario, Canada',
             duration: '2 hours',
             date: 'October 30, 2023',
@@ -656,7 +656,7 @@ export default function Events() {
             newFilters[key] = uniqueNames.join(',');
         }
 
-        console.log('🎯 Event filters to apply:', newFilters);
+        console.log('🎯 Gig filters to apply:', newFilters);
 
         // Check if we're clearing all filters
         const hasAnyFilter = Object.keys(newFilters).some(key =>
@@ -669,7 +669,7 @@ export default function Events() {
     const handleGiveQuote = async (event) => {
         // Navigate to chat screen with event organizer
         console.log('Give quote for event:', event.title);
-        console.log('Event object structure:', JSON.stringify(event, null, 2));
+        console.log('Gig object structure:', JSON.stringify(event, null, 2));
 
         try {
             // Get event organizer information
@@ -679,7 +679,7 @@ export default function Events() {
                                event.organizer?.id ||
                                event.organizer?.user_id;
 
-            const organizerName = event.organizer?.name || 'Event Organizer';
+            const organizerName = event.organizer?.name || 'Gig Organizer';
             const organizerAvatar = event.organizer?.avatar || 'https://randomuser.me/api/portraits/lego/1.jpg';
 
             console.log('Extracted organizer info:', {
@@ -730,7 +730,7 @@ export default function Events() {
             return;
         }
 
-        console.log('🔄 Event refresh triggered');
+        console.log('🔄 Gig refresh triggered');
         setRefreshing(true);
 
         try {
@@ -742,7 +742,7 @@ export default function Events() {
             // Fetch fresh data with existing filters
             await fetchEvents(currentFilters, true, !hasFilters);
 
-            console.log('Events refreshed successfully');
+            console.log('Gigs refreshed successfully');
         } catch (error) {
             console.error('Error refreshing events:', error);
         } finally {
@@ -765,8 +765,8 @@ export default function Events() {
         extrapolateLeft: 'identity',
     });
 
-    // The Events "Category" filter is actually by EVENT TYPE (Wedding,
-    // Birthday, ...). Events store event_type as a string, so we offer the
+    // The Gigs "Category" filter is actually by EVENT TYPE (Wedding,
+    // Birthday, ...). Gigs store event_type as a string, so we offer the
     // distinct types present in the loaded data (with a sensible fallback for
     // the first paint) and filter event.event_type by the chosen name(s).
     const eventTypeCategories = useMemo(() => {
@@ -783,7 +783,7 @@ export default function Events() {
             ? masterEventTypes
             : fromData.length > 0
                 ? fromData
-                : ['Wedding', 'Birthday', 'Corporate Event', 'Product Launch', 'Engagement'];
+                : ['Wedding', 'Birthday', 'Corporate Gig', 'Product Launch', 'Engagement'];
         // category_id = name so the existing selection/filter (which works on
         // names) stays consistent.
         return types.map((name) => ({ category_id: name, name }));
@@ -800,10 +800,10 @@ export default function Events() {
     );
 
     // The two dimensions the user can filter events by, shown as tabs at the
-    // top of the category modal. Events only — vendors keep the single list.
+    // top of the category modal. Gigs only — vendors keep the single list.
     const categoryTabs = useMemo(
         () => [
-            { key: 'event', label: 'Event Type', items: eventTypeCategories },
+            { key: 'event', label: 'Gig Type', items: eventTypeCategories },
             { key: 'vendor', label: 'Vendor Type', items: vendorTypeCategories },
         ],
         [eventTypeCategories, vendorTypeCategories],
@@ -1122,7 +1122,7 @@ export default function Events() {
                 onCategorySelect={handleCategorySelect}
                 currentCategory={selectedCategory}
                 screenType="events"
-                // Two tabs at the top: "Event Type" (Wedding, Birthday, ...)
+                // Two tabs at the top: "Gig Type" (Wedding, Birthday, ...)
                 // and "Vendor Type" (the service the event needs). The user
                 // picks from whichever dimension they want to filter by.
                 categoryTabs={categoryTabs}

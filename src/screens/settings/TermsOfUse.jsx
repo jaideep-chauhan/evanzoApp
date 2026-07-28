@@ -1,4 +1,5 @@
 import React from 'react';
+import Icon from 'react-native-vector-icons/Ionicons';
 import {
     View,
     Text,
@@ -44,7 +45,7 @@ Last updated: January 2025`;
         <SafeAreaView style={styles.safe}>
             <View style={styles.header}>
                 <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-                    <Text style={styles.backIcon}>{'\u2190'}</Text>
+                    <Icon name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Terms of Use</Text>
             </View>

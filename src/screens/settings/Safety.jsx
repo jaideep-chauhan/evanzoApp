@@ -50,7 +50,7 @@ export default function Safety() {
             <View style={styles.androidPad} />
             <View style={styles.header}>
                 <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-                    <Text style={styles.backIcon}>{'\u2190'}</Text>
+                    <Icon name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Safety & Privacy</Text>
             </View>

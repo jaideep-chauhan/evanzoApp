@@ -245,6 +245,8 @@ export default function EditProfileModal({ visible, onClose, onUpdate }) {
             visible={visible}
             transparent={true}
             animationType="slide"
+            statusBarTranslucent={true}
+            navigationBarTranslucent={true}
             onRequestClose={onClose}
         >
             <KeyboardAvoidingView 

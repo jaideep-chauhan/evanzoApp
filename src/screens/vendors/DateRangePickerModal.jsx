@@ -11,9 +11,11 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import DatePicker from 'react-native-date-picker';
 import { useTheme } from '../../ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function DateRangePickerModal({ visible, onClose, onDateRangeSelect, currentDateRange }) {
     const theme = useTheme();
+    const insets = useSafeAreaInsets();
     const [startDate, setStartDate] = useState(currentDateRange?.startDate || new Date());
     const [endDate, setEndDate] = useState(currentDateRange?.endDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)); // 7 days from now
     const [showStartPicker, setShowStartPicker] = useState(false);
@@ -69,10 +71,12 @@ export default function DateRangePickerModal({ visible, onClose, onDateRangeSele
             visible={visible}
             animationType="slide"
             transparent={true}
+            statusBarTranslucent={true}
+            navigationBarTranslucent={true}
             onRequestClose={onClose}
         >
             <View style={styles.modalOverlay}>
-                <View style={[styles.container, styles.safeAreaPad]}>
+                <View style={[styles.container, styles.safeAreaPad, { paddingBottom: insets.bottom + 12 }]}>
                     {/* Header */}
                     <View style={styles.header}>
                         <TouchableOpacity onPress={onClose} style={styles.headerBtn}>
@@ -191,7 +195,6 @@ export default function DateRangePickerModal({ visible, onClose, onDateRangeSele
 
 const styles = StyleSheet.create({
     safeAreaPad: {
-        paddingTop: 18,
     },
     modalOverlay: {
         flex: 1,
@@ -202,8 +205,8 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
-        paddingTop: 20,
-        maxHeight: '60%',
+        overflow: 'hidden',
+        maxHeight: '85%',
     },
     header: {
         flexDirection: 'row',
@@ -213,13 +216,6 @@ const styles = StyleSheet.create({
         paddingVertical: 14,
         borderBottomWidth: 1,
         borderBottomColor: '#f0f0f0',
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        shadowColor: '#2C3D5B',
-        shadowOpacity: 0.06,
-        shadowOffset: { width: 0, height: 2 },
-        shadowRadius: 4,
-        elevation: 2,
     },
     headerBtn: {
         padding: 6,

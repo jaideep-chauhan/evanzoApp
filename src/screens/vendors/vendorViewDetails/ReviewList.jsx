@@ -106,7 +106,7 @@ const vendors = [
     {
         initials: 'EV',
         name: 'Eventify',
-        type: 'Event Planner',
+        type: 'Gig Planner',
         rating: 5,
         description: 'Making your events memorable and stress-free.',
         images: [img, img, img],

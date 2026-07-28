@@ -1,4 +1,5 @@
 import React from 'react';
+import Icon from 'react-native-vector-icons/Ionicons';
 import {
     View,
     Text,
@@ -19,7 +20,7 @@ INFORMATION WE COLLECT
 Personal Information:
 • Name, email address, phone number
 • Profile information and preferences
-• Event details and vendor interactions
+• Gig details and vendor interactions
 • Payment information (processed securely)
 
 Usage Information:
@@ -91,7 +92,7 @@ Last updated: January 2025`;
         <SafeAreaView style={styles.safe}>
             <View style={styles.header}>
                 <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-                    <Text style={styles.backIcon}>{'\u2190'}</Text>
+                    <Icon name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Privacy Policy</Text>
             </View>

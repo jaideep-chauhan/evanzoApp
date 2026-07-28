@@ -216,7 +216,11 @@ export default function VendorChat({ navigation }) {
     return (
         <KeyboardAvoidingView
             style={styles.safe}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            // Android: disable KAV (native adjustResize handles it). 'height'
+            // leaves the quote bar floating above its resting spot after the
+            // keyboard closes. Matches the chat screen's fix.
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            enabled={Platform.OS === 'ios'}
         >
             <View style={styles.container}>
                 <ScrollView
@@ -340,7 +344,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#2C3D5B',
-        padding: 16,
+        // Slimmed to match the bottom tab-bar pill height (~56) and its 20px
+        // horizontal inset, so this detail-page bar lines up with the tab bar.
+        paddingVertical: 12,
+        paddingHorizontal: 16,
         borderRadius: 50,
     },
     inputWrapper: {

@@ -24,7 +24,7 @@ const RECENT_SEARCHES_KEY = '@evnzo_recent_searches';
 const RECENT_LIMIT = 8;
 
 // Standalone Search screen that opens when the user taps the search bar on
-// Vendors or Events. Layout: back arrow + input header, recent searches as
+// Vendors or Gigs. Layout: back arrow + input header, recent searches as
 // trending chips, popular categories grid using the new PNG icons, and live
 // search results below as the user types.
 export default function SearchScreen() {

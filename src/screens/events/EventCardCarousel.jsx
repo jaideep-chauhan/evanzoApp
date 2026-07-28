@@ -87,7 +87,7 @@ const SimilarEventCard = ({ item, onPress }) => {
             </View>
 
             <Text style={styles.eventTitle} numberOfLines={1}>
-                {item.title || 'Event'}
+                {item.title || 'Gig'}
             </Text>
 
             {/* Owner row */}

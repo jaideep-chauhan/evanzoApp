@@ -101,7 +101,7 @@ export default function UserProfile() {
 
             // Fetch user's event ads
             const eventsResponse = await api.get(`/event_ad/user/${userId}`);
-            console.log('📅 Events API response:', eventsResponse.data);
+            console.log('📅 Gigs API response:', eventsResponse.data);
 
             if (eventsResponse.data?.success) {
                 const events = eventsResponse.data.data || [];
@@ -111,7 +111,7 @@ export default function UserProfile() {
                 const formattedEvents = events.map(event => eventService.formatEventForDisplay(event));
                 setEventAds(formattedEvents);
             } else {
-                console.log('❌ Events API returned success=false');
+                console.log('❌ Gigs API returned success=false');
             }
 
             // Fetch user's vendor ads
@@ -242,7 +242,7 @@ export default function UserProfile() {
                         </View>
                         <View style={styles.statBox}>
                             <Text style={styles.statValue}>{eventAds.length}</Text>
-                            <Text style={styles.statLabel}>Events</Text>
+                            <Text style={styles.statLabel}>Gigs</Text>
                         </View>
                         <View style={styles.statBox}>
                             <Text style={styles.statValue}>{vendorAds.length}</Text>
@@ -281,7 +281,7 @@ export default function UserProfile() {
                             styles.tabText,
                             activeTab === 'events' && [styles.activeTabText, { color: theme.colors.primary }]
                         ]}>
-                            Event Ads ({eventAds.length})
+                            Gig Ads ({eventAds.length})
                         </Text>
                     </TouchableOpacity>
                     <TouchableOpacity

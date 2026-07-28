@@ -31,7 +31,7 @@ const CreateAd = ({ onClose, onTabPress }) => {
                     <Text style={styles.title}>Create Ad</Text>
                     <View style={styles.tabColumnWrap}>
                         {/* Both options are pure choices, not active/inactive
-                            state — equal visual weight so Event doesn't read
+                            state — equal visual weight so Gig doesn't read
                             as "secondary" relative to Vendor. */}
                         <TouchableOpacity
                             style={[styles.tabColumnBtn, { backgroundColor: theme.colors.primary }]}
@@ -45,7 +45,7 @@ const CreateAd = ({ onClose, onTabPress }) => {
                             onPress={() => onTabPress && onTabPress('event')}
                             activeOpacity={0.7}
                         >
-                            <Text style={styles.tabBtnText}>Event</Text>
+                            <Text style={styles.tabBtnText}>Gig</Text>
                         </TouchableOpacity>
                     </View>
                 </>

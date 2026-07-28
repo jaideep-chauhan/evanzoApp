@@ -44,7 +44,7 @@ export const VendorCardSkeleton = () => (
     </View>
 );
 
-// Event card skeleton — title row + meta row + description + CTA strip.
+// Gig card skeleton — title row + meta row + description + CTA strip.
 export const EventCardSkeleton = () => (
     <View style={styles.eventCard}>
         <Pulse style={styles.lineWide} />
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
     heroImage: { height: 180, borderRadius: 14, backgroundColor: BASE },
     vendorFooter: { gap: 6 },
 
-    // Event card
+    // Gig card
     eventCard: {
         backgroundColor: '#fff',
         borderRadius: 20,

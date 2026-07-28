@@ -1,5 +1,11 @@
 <resources>
     <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
-        <!-- Customize your theme here -->
+        <!-- Theme accent for native controls (date-picker selection & header,
+             OK/Cancel buttons, switches, radio/checkboxes, etc.). Navy #2C3D5B
+             to match the app theme instead of the AppCompat default green. -->
+        <item name="colorPrimary">#2C3D5B</item>
+        <item name="colorPrimaryDark">#2C3D5B</item>
+        <item name="colorAccent">#2C3D5B</item>
+        <item name="android:colorControlActivated">#2C3D5B</item>
     </style>
 </resources>

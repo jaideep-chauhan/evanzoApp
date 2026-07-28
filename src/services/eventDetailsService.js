@@ -59,7 +59,7 @@ class EventDetailsService {
             await savedEventsStorage.unsaveEvent(eventIdNum);
           }
 
-          console.log('✅ Event saved status (from backend):', isSaved);
+          console.log('✅ Gig saved status (from backend):', isSaved);
           return isSaved;
         }
 
@@ -82,7 +82,7 @@ class EventDetailsService {
           eventIdNum,
         );
         console.log(
-          '✅ Event saved status (from local storage):',
+          '✅ Gig saved status (from local storage):',
           isLocallySaved,
         );
         return isLocallySaved;
@@ -127,7 +127,7 @@ class EventDetailsService {
       const message =
         response.data.data?.message ||
         response.data.message ||
-        (isSaved ? 'Event saved' : 'Event unsaved');
+        (isSaved ? 'Gig saved' : 'Gig unsaved');
 
       // Update local storage to match backend state
       if (isSaved) {
@@ -175,7 +175,7 @@ class EventDetailsService {
 
 ${event.description}
 
-Event organized by ${event.organizer?.name || 'Event Organizer'}
+Gig organized by ${event.organizer?.name || 'Gig Organizer'}
 
 👉 Open it on Evnzo: ${link}
                 `.trim(),

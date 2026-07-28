@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Icon from 'react-native-vector-icons/Ionicons';
 import {
     View,
     Text,
@@ -21,7 +22,7 @@ export default function Notifications() {
 
     const notificationItems = [
         {
-            title: 'Event Updates',
+            title: 'Gig Updates',
             subtitle: 'Reminders and changes related to your posted events',
             value: eventUpdates,
             onToggle: setEventUpdates
@@ -72,7 +73,7 @@ export default function Notifications() {
             <View style={styles.androidPad} />
             <View style={styles.header}>
                 <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-                    <Text style={styles.backIcon}>{'\u2190'}</Text>
+                    <Icon name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Notifications</Text>
             </View>

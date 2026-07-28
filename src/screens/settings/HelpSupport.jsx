@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Icon from 'react-native-vector-icons/Ionicons';
 import {
     View,
     Text,
@@ -20,7 +21,7 @@ export default function HelpSupport() {
     const faqs = [
         {
             question: 'How do I post an event ?',
-            answer: 'Go to the Events tab and click "Post Event". Fill in the details about your event including date, location, and requirements.'
+            answer: 'Go to the Gigs tab and click "Post Gig". Fill in the details about your event including date, location, and requirements.'
         },
         {
             question: 'What happens after I hire a vendor?',
@@ -62,7 +63,7 @@ export default function HelpSupport() {
             <View style={styles.androidPad} />
             <View style={styles.header}>
                 <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-                    <Text style={styles.backIcon}>{'\u2190'}</Text>
+                    <Icon name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Help & Support</Text>
             </View>

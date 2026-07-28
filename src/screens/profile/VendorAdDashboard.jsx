@@ -125,7 +125,7 @@ export default function VendorAdDashboard({ navigation }) {
                         </ImageBackground>
                         {/* Top-of-banner action row: Settings on the left,
                             Notification bell on the right. Mirrors the
-                            SearchHeader pattern used on Vendors / Events so
+                            SearchHeader pattern used on Vendors / Gigs so
                             navigation to those settings/inbox screens is
                             available from every tab. */}
                         <View style={styles.headerTopRow}>
@@ -257,7 +257,7 @@ export default function VendorAdDashboard({ navigation }) {
                         activeOpacity={0.7}
                     >
                         <Text style={activeTab === 'event' ? styles.activeTabText : [styles.inactiveTabText, { color: theme.colors.primary }]}>
-                            Event Ads
+                            Gig Ads
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -408,6 +408,8 @@ export default function VendorAdDashboard({ navigation }) {
                 visible={showPreSaved}
                 animationType="slide"
                 transparent={true}
+                statusBarTranslucent={true}
+                navigationBarTranslucent={true}
                 onRequestClose={() => setShowPreSaved(false)}
             >
                 <View style={styles.modalOverlay}>
@@ -437,6 +439,8 @@ export default function VendorAdDashboard({ navigation }) {
                     visible={showChangeProfile}
                     animationType="slide"
                     transparent={true}
+                    statusBarTranslucent={true}
+                    navigationBarTranslucent={true}
                     onRequestClose={() => setShowChangeProfile(false)}
                 >
                     <View style={styles.modalOverlay}>
@@ -457,15 +461,17 @@ export default function VendorAdDashboard({ navigation }) {
                     visible={showCreateAd}
                     animationType="slide"
                     transparent={true}
+                    statusBarTranslucent={true}
+                    navigationBarTranslucent={true}
                     onRequestClose={() => setShowCreateAd(false)}
                 >
-                    <TouchableOpacity 
-                        style={{flex: 1, justifyContent: 'flex-end', backgroundColor: 'transparent'}}
+                    <TouchableOpacity
+                        style={{flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)'}}
                         activeOpacity={1}
                         onPress={() => setShowCreateAd(false)}
                     >
-                        <TouchableOpacity 
-                            style={{backgroundColor: theme.colors.primary, padding: 22, borderTopLeftRadius: 24, borderTopRightRadius: 24}}
+                        <TouchableOpacity
+                            style={{backgroundColor: theme.colors.primary, paddingTop: 22, paddingHorizontal: 22, paddingBottom: 22 + insets.bottom, borderTopLeftRadius: 24, borderTopRightRadius: 24}}
                             activeOpacity={1}
                             onPress={() => {}}
                         >
@@ -490,7 +496,7 @@ export default function VendorAdDashboard({ navigation }) {
                                     setShowCreateAd(false);
                                 }}
                             >
-                                <Text style={{color: '#fff', textAlign: 'center', fontSize: 16, fontWeight: '700'}}>Event</Text>
+                                <Text style={{color: '#fff', textAlign: 'center', fontSize: 16, fontWeight: '700'}}>Gig</Text>
                             </TouchableOpacity>
                         </TouchableOpacity>
                     </TouchableOpacity>
@@ -501,15 +507,17 @@ export default function VendorAdDashboard({ navigation }) {
                     visible={showCreateAddForm}
                     animationType="slide"
                     transparent={true}
+                    statusBarTranslucent={true}
+                    navigationBarTranslucent={true}
                     onRequestClose={() => setShowCreateAddForm(false)}
                 >
                     <View style={styles.modalFullScreen}>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={styles.modalTopSpace}
                             activeOpacity={1}
                             onPress={() => setShowCreateAddForm(false)}
                         />
-                        <View style={[styles.modalBottomContent, { backgroundColor: theme.colors.primary }]}>
+                        <View style={[styles.modalBottomContent, { backgroundColor: theme.colors.primary, paddingBottom: 20 + insets.bottom }]}>
                             <CreateAddForm
                                 type={createAddFormType}
                                 onClose={() => {

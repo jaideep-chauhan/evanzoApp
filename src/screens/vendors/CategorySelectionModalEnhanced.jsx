@@ -25,11 +25,11 @@ export default function CategorySelectionModalEnhanced({
     filteredCategories = null, // Optional: if provided, use these instead of fetching
     showOnlySubcategories = false, // Optional: if true, treat filteredCategories as subcategories to show directly
     // Optional: when provided, render a tab bar at the top and let the user
-    // pick from more than one category set (e.g. Events filter by Event Type
+    // pick from more than one category set (e.g. Gigs filter by Gig Type
     // OR Vendor Type). Shape: [{ key, label, items: [{ category_id, name }] }].
     // Each tab is a flat multi-select list; Done returns the active tab's key
     // as the 3rd onCategorySelect arg so the caller knows which dimension was
-    // chosen. Used by the Events screen only; vendors leave it null.
+    // chosen. Used by the Gigs screen only; vendors leave it null.
     categoryTabs = null
 }) {
     const theme = useTheme();
@@ -41,7 +41,7 @@ export default function CategorySelectionModalEnhanced({
     const [selectedSubcategories, setSelectedSubcategories] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
-    // Active tab key when `categoryTabs` is in use (dual Event/Vendor type).
+    // Active tab key when `categoryTabs` is in use (dual Gig/Vendor type).
     const [activeTabKey, setActiveTabKey] = useState(null);
 
     // Fetch categories when modal becomes visible or use provided filteredCategories
@@ -66,7 +66,7 @@ export default function CategorySelectionModalEnhanced({
                 console.log('📋 Using filtered subcategories:', filteredCategories.length);
                 setCategories(filteredCategories);
                 setSelectionStep('subcategory');
-                setSelectedCategory({ name: 'Event Types' }); // Dummy parent for display
+                setSelectedCategory({ name: 'Gig Types' }); // Dummy parent for display
                 setIsLoading(false);
                 setError(null);
             } else if (filteredCategories) {
@@ -86,7 +86,7 @@ export default function CategorySelectionModalEnhanced({
         }
     }, [visible, screenType, filteredCategories, showOnlySubcategories, categoryTabs]);
 
-    // Switch between Event Type / Vendor Type tabs. Each tab is an independent
+    // Switch between Gig Type / Vendor Type tabs. Each tab is an independent
     // flat multi-select, so swapping tabs clears the current selection.
     const handleTabSwitch = (tab) => {
         if (tab.key === activeTabKey) return;
@@ -286,7 +286,7 @@ export default function CategorySelectionModalEnhanced({
                     </TouchableOpacity>
                 </View>
 
-                {/* Tab bar — Event Type / Vendor Type (events filter only) */}
+                {/* Tab bar — Gig Type / Vendor Type (events filter only) */}
                 {categoryTabs && categoryTabs.length > 1 && (
                     <View style={styles.tabBar}>
                         {categoryTabs.map((tab) => {

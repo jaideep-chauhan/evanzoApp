@@ -34,7 +34,7 @@ export default function EventCard({ event, onGiveQuote }) {
         try {
             const lines = [event.title, event.location, event.date].filter(Boolean);
             await Share.share({
-                title: event.title || 'Event',
+                title: event.title || 'Gig',
                 message: lines.join(' • ') + (event.description ? `\n\n${event.description}` : ''),
             });
         } catch (e) {

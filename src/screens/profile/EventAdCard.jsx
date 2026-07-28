@@ -23,7 +23,7 @@ import FastImage from 'react-native-fast-image';
 
 export default function EventAdCard({
     eventId,
-    title = 'Corporate Event',
+    title = 'Corporate Gig',
     location = 'Ontario, Canada',
     duration = '2 hours',
     date = 'October 30, 2023',
@@ -224,7 +224,7 @@ export default function EventAdCard({
                         numberOfLines={1}
                         ellipsizeMode="tail"
                     >
-                        {/* City only — same trimming as the public Events
+                        {/* City only — same trimming as the public Gigs
                             list. Splits the full address on commas and
                             takes the first segment. */}
                         {(typeof location === 'string'

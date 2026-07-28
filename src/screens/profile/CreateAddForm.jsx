@@ -48,7 +48,7 @@ const SERVICE_TO_CATEGORY_MAP = {
     'Catering': ['Catering', 'Food & Beverage'],
     'Music': ['DJ', 'Live Music', 'Sound System'],
     'Decoration': ['Decoration', 'Florist'],
-    'Venue': ['Venue', 'Event Space'],
+    'Venue': ['Venue', 'Gig Space'],
     'Transport': ['Transport', 'Car Rental'],
 };
 
@@ -65,7 +65,7 @@ const TAG_OPTIONS = [
 const EVENT_TYPE_TAG_OPTIONS = {
     'Wedding': ['Indian', 'Christian', 'Traditional', 'Modern', 'Destination'],
     'Birthday': ['Kids', 'Adult', 'Theme', 'Surprise'],
-    'Corporate Event': ['Conference', 'Product Launch', 'Team Building', 'Award Ceremony'],
+    'Corporate Gig': ['Conference', 'Product Launch', 'Team Building', 'Award Ceremony'],
     'Festival': ['Music', 'Cultural', 'Food', 'Holiday'],
 };
 
@@ -73,7 +73,7 @@ const CreateAddForm = ({ type, onClose }) => {
     const theme = useTheme();
     const scrollViewRef = useRef(null);
 
-    // Event Ad fields
+    // Gig Ad fields
     const [service, setService] = useState('');
     const [selectedEventType, setSelectedEventType] = useState(''); // Selected event type from dropdown
     const [customEventType, setCustomEventType] = useState(''); // Custom text when "Other" is selected
@@ -267,9 +267,9 @@ const CreateAddForm = ({ type, onClose }) => {
         'Photographer': 'Photography',
         'Videographer': 'Videography',
         'Caterer': 'Catering',
-        'Decorator': 'Event Decoration',
+        'Decorator': 'Gig Decoration',
         'DJ': 'DJ / Music',
-        'Event Planner': 'Event Planning',
+        'Gig Planner': 'Gig Planning',
         'Florist': 'Florist',
         'Makeup Artist': 'Makeup Artist',
         'Venue': 'Venue Rental',
@@ -327,7 +327,7 @@ const CreateAddForm = ({ type, onClose }) => {
         'Caterer',
         'Decorator',
         'DJ',
-        'Event Planner',
+        'Gig Planner',
         'Florist',
         'Makeup Artist',
         'Venue',
@@ -338,7 +338,7 @@ const CreateAddForm = ({ type, onClose }) => {
     const tagOptions = [
         'Birthday party',
         'Corporate',
-        'Event',
+        'Gig',
         'Candid',
         'Wedding',
         'Pre Wedding',
@@ -356,16 +356,16 @@ const CreateAddForm = ({ type, onClose }) => {
         : SERVICE_OPTIONS;
     const eventTypeOptions = EVENT_TYPE_OPTIONS;
 
-    // Event type tags
+    // Gig type tags
     const eventTypeTagOptions = [
         'Indoor',
         'Outdoor',
         'Formal',
         'Casual',
         'Small Gathering',
-        'Large Event',
-        'Day Event',
-        'Evening Event',
+        'Large Gig',
+        'Day Gig',
+        'Evening Gig',
         'Weekend',
         'Weekday',
     ];
@@ -544,10 +544,10 @@ const CreateAddForm = ({ type, onClose }) => {
                 };
 
                 console.log('=== EVENT AD CREATION PAYLOAD ===');
-                console.log('Complete Event Ad Payload:', JSON.stringify(eventPayload, null, 2));
+                console.log('Complete Gig Ad Payload:', JSON.stringify(eventPayload, null, 2));
                 console.log('Service Needed:', service);
-                console.log('Event Type:', finalEventType);
-                console.log('Event Tags:', eventTags);
+                console.log('Gig Type:', finalEventType);
+                console.log('Gig Tags:', eventTags);
                 console.log('Location:', location);
                 console.log('Date:', date.toISOString().split('T')[0]);
                 console.log('Duration:', duration || 'Not specified');
@@ -629,7 +629,7 @@ const CreateAddForm = ({ type, onClose }) => {
                 console.log('Success:', response.success);
                 console.log('Message:', response.message);
                 if (response.data) {
-                    console.log('Created Event Ad Data:', response.data);
+                    console.log('Created Gig Ad Data:', response.data);
                 }
                 console.log('==================================');
 
@@ -637,7 +637,7 @@ const CreateAddForm = ({ type, onClose }) => {
                     clearDraft();
                     setModalState({
                         visible: true,
-                        title: 'Event Ad Posted',
+                        title: 'Gig Ad Posted',
                         message: 'Your event ad is now live and visible to vendors.',
                         type: 'success'
                     });
@@ -813,7 +813,7 @@ const CreateAddForm = ({ type, onClose }) => {
     };
 
     const handleEventCategorySelect = (categoryIds, categoryData) => {
-        console.log('📋 Event category selected:', { categoryIds, categoryData });
+        console.log('📋 Gig category selected:', { categoryIds, categoryData });
         setEventType(categoryIds);
         setSelectedEventCategoryData(categoryData || []);
 
@@ -852,7 +852,7 @@ const CreateAddForm = ({ type, onClose }) => {
             {/* Header */}
             <View style={styles.headerPro}>
                 <Text style={styles.headerTitlePro}>
-                    {type === 'event' ? 'Create Event Ad' : 'Create Vendor Ad'}
+                    {type === 'event' ? 'Create Gig Ad' : 'Create Vendor Ad'}
                 </Text>
             </View>
             <ScrollView
@@ -878,7 +878,7 @@ const CreateAddForm = ({ type, onClose }) => {
                         </View>
 
                         <View style={styles.fieldGroupPro}>
-                            <Text style={styles.labelPro}>Event Type</Text>
+                            <Text style={styles.labelPro}>Gig Type</Text>
                             <TouchableOpacity
                                 style={[styles.inputPro, styles.dropdownButton]}
                                 onPress={() => setShowEventTypeDropdown(true)}
@@ -891,7 +891,7 @@ const CreateAddForm = ({ type, onClose }) => {
                                 <Icon name="chevron-down" size={20} color="#ffffff80" />
                             </TouchableOpacity>
 
-                            {/* Custom Event Type Input - shown when "Other" is selected */}
+                            {/* Custom Gig Type Input - shown when "Other" is selected */}
                             {selectedEventType === 'Other' && (
                                 <TextInput
                                     style={[styles.inputPro, { marginTop: 8 }]}
@@ -902,7 +902,7 @@ const CreateAddForm = ({ type, onClose }) => {
                                 />
                             )}
 
-                            {/* Event Type Tags */}
+                            {/* Gig Type Tags */}
                             {selectedEventType && (
                                 <View style={styles.tagsContainer}>
                                     {eventTypeTagOptions.map((tag) => (
@@ -1486,7 +1486,7 @@ const CreateAddForm = ({ type, onClose }) => {
                 </View>
             </Modal>
 
-            {/* Service Dropdown Modal for Events */}
+            {/* Service Dropdown Modal for Gigs */}
             <Modal
                 visible={showServiceDropdown}
                 transparent={true}
@@ -1532,7 +1532,16 @@ const CreateAddForm = ({ type, onClose }) => {
                                     <View style={styles.dropdownItemContent}>
                                         <View style={styles.dropdownItemLeft}>
                                             <View style={styles.dropdownItemIcon}>
-                                                <Icon name="construct" size={18} color={service === item ? '#2C3D5B' : '#666'} />
+                                                {/* Per-service branded icon (DJ, Catering, …);
+                                                    fall back to the generic tools icon. */}
+                                                {getCategoryIcon(item) ? (
+                                                    <Image
+                                                        source={getCategoryIcon(item)}
+                                                        style={{ width: 20, height: 20, resizeMode: 'contain' }}
+                                                    />
+                                                ) : (
+                                                    <Icon name="construct" size={18} color={service === item ? '#2C3D5B' : '#666'} />
+                                                )}
                                             </View>
                                             <Text style={[styles.dropdownItemText, service === item && styles.dropdownItemTextSelected]}>
                                                 {item}
@@ -1549,7 +1558,7 @@ const CreateAddForm = ({ type, onClose }) => {
                 </View>
             </Modal>
 
-            {/* Event Type Dropdown Modal */}
+            {/* Gig Type Dropdown Modal */}
             <Modal
                 visible={showEventTypeDropdown}
                 transparent={true}
@@ -1564,7 +1573,7 @@ const CreateAddForm = ({ type, onClose }) => {
                     />
                     <View style={styles.professionalDropdown}>
                         <View style={styles.dropdownHeader}>
-                            <Text style={styles.dropdownTitle}>Select Event Type</Text>
+                            <Text style={styles.dropdownTitle}>Select Gig Type</Text>
                             <TouchableOpacity
                                 onPress={() => setShowEventTypeDropdown(false)}
                                 style={styles.dropdownCloseBtn}
@@ -1614,7 +1623,7 @@ const CreateAddForm = ({ type, onClose }) => {
                 </View>
             </Modal>
 
-            {/* Event Category Selection Modal - Enhanced with Subcategories */}
+            {/* Gig Category Selection Modal - Enhanced with Subcategories */}
             <CategorySelectionModalEnhanced
                 visible={showEventCategoryModal}
                 onClose={() => setShowEventCategoryModal(false)}

@@ -141,7 +141,7 @@ export default function EventDetailViewEnhanced() {
 
     const eventData = {
         id: eventFromParams.id || eventFromParams.event_ad_id,
-        title: eventFromParams.title || eventFromParams.event_type || 'Corporate Event',
+        title: eventFromParams.title || eventFromParams.event_type || 'Corporate Gig',
         location: eventFromParams.location || 'Ontario, Canada',
         date: parseDate(eventFromParams.date),
         duration: parseDuration(eventFromParams.duration),
@@ -256,7 +256,7 @@ export default function EventDetailViewEnhanced() {
                             onPress: () => {
                                 navigation.navigate('ChatScreen', {
                                     chatId: chatId,
-                                    chatTitle: eventData.organizer.name || 'Event Organizer',
+                                    chatTitle: eventData.organizer.name || 'Gig Organizer',
                                 });
                             }
                         },
@@ -303,7 +303,12 @@ export default function EventDetailViewEnhanced() {
     return (
         <KeyboardAvoidingView
             style={styles.container}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            // Android: disable KAV and let native adjustResize handle it. The
+            // 'height' behavior shrinks the container on keyboard-open but
+            // doesn't reliably restore, leaving the quote bar floating above
+            // its resting position. Matches the chat screen's fix.
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            enabled={Platform.OS === 'ios'}
         >
             <View style={styles.container}>
                 <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
@@ -321,7 +326,7 @@ export default function EventDetailViewEnhanced() {
                     </View>
                 </ImageBackground>
 
-                {/* Event Card */}
+                {/* Gig Card */}
                 <View style={styles.eventCard}>
                     {/* Title and Actions */}
                     <View style={styles.titleRow}>
@@ -349,7 +354,7 @@ export default function EventDetailViewEnhanced() {
                         </View>
                     </View>
 
-                    {/* Event Details Row */}
+                    {/* Gig Details Row */}
                     <View style={styles.detailsRow}>
                         <View style={styles.detailBox}>
                             <Text style={styles.detailLabel}>Date</Text>
@@ -485,7 +490,7 @@ export default function EventDetailViewEnhanced() {
                     </View>
                 </View>
 
-                {/* Similar Events — title intentionally not rendered here.
+                {/* Similar Gigs — title intentionally not rendered here.
                     EventCardCarousel renders its own "You might also like"
                     header internally; duplicating it caused the empty
                     title block above the actual carousel. */}
@@ -769,13 +774,15 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#2C3D5B',
+        // Match the bottom tab-bar pill height (~56) and inset, so this
+        // detail-page bar lines up with the tab bar it replaces.
         paddingHorizontal: 14,
-        paddingVertical: 10,
+        paddingVertical: 12,
         borderRadius: 50,
     },
     quoteInput: {
         flex: 1,
-        height: 46,
+        height: 40,
         backgroundColor: 'transparent',
         borderColor: '#ccc',
         borderWidth: 1,

@@ -31,7 +31,7 @@ const PreSavedMessage = ({ onClose, visible }) => {
     const categories = [
         'Wedding',
         'Birthday Party',
-        'Corporate Event',
+        'Corporate Gig',
         'Conference',
         'Concert',
         'Festival',
@@ -252,11 +252,12 @@ const PreSavedMessage = ({ onClose, visible }) => {
         >
             <ScrollView
                 style={styles.scrollView}
+                contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
             >
                 <View style={styles.fieldGroup}>
-                    <Text style={[styles.label, { color: theme.colors.primary }]}>Event Name</Text>
+                    <Text style={[styles.label, { color: theme.colors.primary }]}>Gig Name</Text>
                     <TextInput
                         style={styles.input}
                         placeholder="Enter event name"
@@ -540,6 +541,13 @@ const styles = StyleSheet.create({
     },
     scrollView: {
         flex: 1,
+    },
+    // Padding lives on the content container (not the ScrollView style) so the
+    // last row (Clear/Update) can scroll fully into view instead of being
+    // clipped at the modal's fixed-height bottom edge.
+    scrollContent: {
+        // Uniform padding — no extra bottom space, so the scroll ends right at
+        // the Clear/Update row instead of leaving a white gap below it.
         padding: 20,
     },
     fieldGroup: {
