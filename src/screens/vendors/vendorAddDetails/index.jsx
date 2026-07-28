@@ -258,7 +258,10 @@ export default function VendorChat({ navigation }) {
                         onBackPress={() => navigation && navigation.goBack ? navigation.goBack() : null}
                         onBellPress={() => {
                             if (navigation && navigation.navigate) {
-                                navigation.navigate('Notifications');
+                                // NotificationInbox = the received-notifications
+                                // list. 'Notifications' is the settings-preferences
+                                // screen — the wrong target for a bell icon.
+                                navigation.navigate('NotificationInbox');
                             }
                         }}
                         navigation={navigation}

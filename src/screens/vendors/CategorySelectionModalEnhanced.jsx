@@ -265,7 +265,8 @@ export default function CategorySelectionModalEnhanced({
         <Modal
             visible={visible}
             animationType="slide"
-            presentationStyle="pageSheet"
+            statusBarTranslucent={true}
+            navigationBarTranslucent={true}
             onRequestClose={onClose}
         >
             <SafeAreaView style={[styles.container, styles.safeAreaPad]}>
