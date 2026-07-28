@@ -4,7 +4,7 @@
 
 What's new in Evnzo 2.0
 
-• Event chat is better than ever — cleaner reply & quoted messages
+• Gig chat is better than ever — cleaner reply & quoted messages
 • Faster, smarter search with improved suggestions
 • Manage your own vendor ads: mark as complete or delete
 • Smoother browsing — events & vendors now refresh quietly in the background
@@ -21,7 +21,7 @@ Thanks for using Evnzo! Got feedback? We'd love to hear it.
 
 ### Features & Improvements
 
-- **Event Chat:** enhanced quoted/reply message formatting for easier conversations
+- **Gig Chat:** enhanced quoted/reply message formatting for easier conversations
 - **Search:** optimized autocomplete and suggestion handling for faster results
 - **Vendor Ads:** owners can now mark ads complete or delete them
 - **Performance:** events & vendors update silently in the background — smoother, more responsive UI

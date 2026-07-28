@@ -249,9 +249,14 @@ export default function EditProfileModal({ visible, onClose, onUpdate }) {
             navigationBarTranslucent={true}
             onRequestClose={onClose}
         >
-            <KeyboardAvoidingView 
+            <KeyboardAvoidingView
                 style={styles.modalOverlay}
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                // Android: disable KAV (the 'height' behavior shrank the whole
+                // backdrop overlay on keyboard-open and didn't restore on close,
+                // breaking the dim + modal size). The inner ScrollView + native
+                // adjustResize handle the keyboard instead.
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                enabled={Platform.OS === 'ios'}
             >
                 <View style={styles.modalContent}>
                     {/* Header */}

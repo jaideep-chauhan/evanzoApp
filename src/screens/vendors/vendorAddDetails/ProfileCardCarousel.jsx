@@ -314,7 +314,10 @@ const ProfileCardCarousel = ({ vendorId }) => {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 keyExtractor={(item, index) => `${item.id}_${index}`}
-                contentContainerStyle={{ paddingHorizontal: 0 }}
+                // Vertical padding gives the card's drop shadow room to render
+                // instead of being clipped by the FlatList bounds — otherwise the
+                // white card's bottom edge blends into the near-white page bg.
+                contentContainerStyle={{ paddingHorizontal: 0, paddingVertical: 12 }}
                 ItemSeparatorComponent={() => <View style={{ width: 10 }} />}
                 renderItem={({ item }) => <ProfileCard item={item} />}
                 onMomentumScrollEnd={handleScrollEnd}

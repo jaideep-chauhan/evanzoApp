@@ -7,5 +7,21 @@
         <item name="colorPrimaryDark">#2C3D5B</item>
         <item name="colorAccent">#2C3D5B</item>
         <item name="android:colorControlActivated">#2C3D5B</item>
+        <!-- Native window background (shown behind the RN views, e.g. the
+             bottom nav-bar strip under edge-to-edge). Match the app's light
+             page bg so no white strip peeks through below content. -->
+        <item name="android:windowBackground">#FCFAFA</item>
+    </style>
+
+    <!-- Launch theme: navy window background matching the splash logo video, so
+         there's no white/light flash before the animated logo renders.
+         MainActivity switches to AppTheme in onCreate() once it starts. -->
+    <style name="SplashTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">#2C3D5B</item>
+        <!-- Android 12+ (API 31+) uses the Splash Screen API, which paints
+             windowSplashScreenBackground (defaults to white), NOT
+             windowBackground. Set it to navy so the system splash matches the
+             logo video and there's no white flash. Older APIs ignore it. -->
+        <item name="android:windowSplashScreenBackground">#2C3D5B</item>
     </style>
 </resources>

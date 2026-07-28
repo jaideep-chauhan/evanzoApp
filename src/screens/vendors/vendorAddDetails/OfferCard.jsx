@@ -9,7 +9,6 @@ import {
 
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import Entypo from 'react-native-vector-icons/Entypo';
-import percentage from '../../../assets/icons/percent.png'
 import { getCurrencySymbol } from '../../../utils/currency';
 
 const { width } = Dimensions.get('window');
@@ -37,7 +36,7 @@ const OfferCard = ({ amount = 0, percent = 0, currency = 'USD' }) => {
                     <Text style={styles.valueText}>{amount}</Text>
                 </View>
                 <View style={styles.valueBox}>
-                    <Image source={percentage} style={{ width: 12, height: 12, resizeMode: 'contain' }} />
+                    <FontAwesome name="percent" size={9} color="#2C3D5B" />
                     <Text style={styles.valueText}>{percent}%</Text>
                 </View>
             </View>
@@ -161,6 +160,12 @@ const styles = StyleSheet.create({
     },
     valueBox1: {
         paddingVertical: 5,
+        width: 40,
+    },
+    // Header's first (empty) column — same width as valueBox1 so the
+    // "Amount spent"/"Discount" titles sit directly above their values.
+    label: {
+        width: 40,
     },
     valueText: {
         fontSize: 10,

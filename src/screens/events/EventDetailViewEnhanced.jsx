@@ -15,6 +15,7 @@ import {
     StatusBar,
     ImageBackground,
     KeyboardAvoidingView,
+    Keyboard,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { icons } from '../../assets/icons';
@@ -38,6 +39,17 @@ export default function EventDetailViewEnhanced() {
     const { user } = useAuth();
 
     const [quoteText, setQuoteText] = useState('');
+    // Android: adjustResize doesn't lift the absolute-positioned quote bar
+    // under edge-to-edge + react-native-screens, so raise it by the keyboard
+    // height manually and drop back to 0 on hide (no residual gap).
+    const [kbHeight, setKbHeight] = useState(0);
+    const [quoteBarHeight, setQuoteBarHeight] = useState(130);
+    useEffect(() => {
+        if (Platform.OS !== 'android') return undefined;
+        const show = Keyboard.addListener('keyboardDidShow', (e) => setKbHeight(e.endCoordinates?.height || 0));
+        const hide = Keyboard.addListener('keyboardDidHide', () => setKbHeight(0));
+        return () => { show.remove(); hide.remove(); };
+    }, []);
 
     // Every Nth event-detail open triggers an interstitial.
     const tickInterstitial = useInterstitialAd();
@@ -313,7 +325,7 @@ export default function EventDetailViewEnhanced() {
             <View style={styles.container}>
                 <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-                <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                <ScrollView style={styles.scrollContent} contentContainerStyle={{ paddingBottom: quoteBarHeight + 20 }} showsVerticalScrollIndicator={false}>
                 {/* Blue Header Banner */}
                 <ImageBackground source={bg1} style={styles.banner} resizeMode="cover">
                     <View style={styles.headerIcons}>
@@ -507,7 +519,7 @@ export default function EventDetailViewEnhanced() {
             </ScrollView>
 
             {/* Quote Input - Sticky Bottom */}
-            <View style={styles.quoteSectionContainer}>
+            <View onLayout={(e) => setQuoteBarHeight(e.nativeEvent.layout.height)} style={[styles.quoteSectionContainer, Platform.OS === 'android' && kbHeight > 0 && { bottom: 10 + kbHeight }]}>
                 <View style={styles.quoteSection}>
                     <TextInput
                         style={styles.quoteInput}

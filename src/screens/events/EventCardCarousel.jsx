@@ -281,7 +281,7 @@ const EventCardCarousel = ({ eventId, eventCategory, eventLocation }) => {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 keyExtractor={(item, index) => `${item.id || item.event_ad_id}_${index}`}
-                contentContainerStyle={{ paddingHorizontal: 16 }}
+                contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12 }}
                 ItemSeparatorComponent={() => <View style={{ width: 15 }} />}
                 renderItem={({ item }) => <SimilarEventCard item={item} />}
                 onMomentumScrollEnd={handleScrollEnd}

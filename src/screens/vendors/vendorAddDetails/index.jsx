@@ -1,7 +1,7 @@
-import React, { useRef, useState } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import VendorProfileCard from './VendorProfileCard';
 // Removed SafeAreaView
-import { ScrollView, StyleSheet, View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
+import { ScrollView, StyleSheet, View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Keyboard, Platform, Alert, ActivityIndicator } from 'react-native';
 import img from '../../../assets/images/dummy.png';
 import VendorDetailsSection from './VendorDetailsSection';
 import { useRoute } from '@react-navigation/native';
@@ -41,6 +41,16 @@ export default function VendorChat({ navigation }) {
     const scrollViewRef = useRef(null);
     const offerSectionRef = useRef(null);
     const [quoteText, setQuoteText] = useState('');
+    // Android: lift the absolute quote bar by the keyboard height (adjustResize
+    // doesn't move it under edge-to-edge + react-native-screens); reset on hide.
+    const [kbHeight, setKbHeight] = useState(0);
+    const [quoteBarHeight, setQuoteBarHeight] = useState(130);
+    useEffect(() => {
+        if (Platform.OS !== 'android') return undefined;
+        const show = Keyboard.addListener('keyboardDidShow', (e) => setKbHeight(e.endCoordinates?.height || 0));
+        const hide = Keyboard.addListener('keyboardDidHide', () => setKbHeight(0));
+        return () => { show.remove(); hide.remove(); };
+    }, []);
     const [isSubmittingQuote, setIsSubmittingQuote] = useState(false);
     const [loadingQuickMessage, setLoadingQuickMessage] = useState(false);
 
@@ -228,7 +238,7 @@ export default function VendorChat({ navigation }) {
                     style={styles.scrollView}
                     showsVerticalScrollIndicator={false}
                     contentOffset={{ x: 0, y: initialScrollY }}
-                    contentContainerStyle={{ paddingBottom: 100 }}
+                    contentContainerStyle={{ paddingBottom: quoteBarHeight + 20 }}
                 >
                     <VendorProfileCard
                         // Avatar at the top of the detail page should be the
@@ -269,7 +279,7 @@ export default function VendorChat({ navigation }) {
                 </ScrollView>
 
                 {/* Quote Section — fixed at the bottom (white box removed). */}
-                <View style={styles.quoteSectionContainer}>
+                <View onLayout={(e) => setQuoteBarHeight(e.nativeEvent.layout.height)} style={[styles.quoteSectionContainer, Platform.OS === 'android' && kbHeight > 0 && { bottom: 10 + kbHeight }]}>
                     <View style={styles.quoteSection}>
                         {/* Input + Quick Message button share a rounded
                             wrapper so the flash icon sits flush against the
@@ -321,13 +331,15 @@ export default function VendorChat({ navigation }) {
 const styles = StyleSheet.create({
     safe: {
         flex: 1,
-        backgroundColor: '#fff'
+        backgroundColor: '#FCFAFA',
     },
     container: {
         flex: 1,
+        backgroundColor: '#FCFAFA',
     },
     scrollView: {
         flex: 1,
+        backgroundColor: '#FCFAFA',
     },
     quoteSectionContainer: {
         // Fixed at the bottom (sticky), but the white box that used to sit

@@ -256,7 +256,7 @@ const LocationSelector = ({
                     half the screen. */}
                 <KeyboardAvoidingView
                     style={styles.modalContainer}
-                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined} enabled={Platform.OS === 'ios'}
                 >
                     <TouchableOpacity
                         style={styles.modalBackdrop}
