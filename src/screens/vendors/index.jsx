@@ -566,9 +566,7 @@ export default function Vendor() {
                     <>
                         {/* Filter status */}
                         {(selectedLocation || selectedCategoryNames.length > 0 || searchQuery) && (
-                            <View style={[styles.filterIndicator, { backgroundColor: '#f0f4ff', borderColor: theme.colors.primary + '33' }]}>
-                                {(selectedLocation || selectedCategoryNames.length > 0 || searchQuery) && (
-                                    <View style={styles.activeFilters}>
+                            <View style={styles.activeFilters}>
                                         {searchQuery && (
                                             <View style={[styles.filterChip, { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary + '30' }]}>
                                                 <Text style={[styles.filterChipText, { color: theme.colors.primary }]}>Search: {searchQuery}</Text>
@@ -615,8 +613,6 @@ export default function Vendor() {
                                                 </TouchableOpacity>
                                             </View>
                                         )}
-                                    </View>
-                                )}
                             </View>
                         )}
 
@@ -894,6 +890,8 @@ export default function Vendor() {
                 visible={showPreSaveModal}
                 animationType="slide"
                 transparent={true}
+                statusBarTranslucent={true}
+                navigationBarTranslucent={true}
                 onRequestClose={() => setShowPreSaveModal(false)}
             >
                 <View style={styles.modalOverlay}>
@@ -940,42 +938,31 @@ const styles = StyleSheet.create({
     headerWrapper: {
         marginBottom: 8,
     },
-    filterIndicator: {
-        marginTop: 12,
-        marginBottom: 4,
-        padding: 12,
-        borderRadius: 8,
-        borderWidth: 1,
-        marginHorizontal: 0,
-        shadowColor: '#2C3D5B',
-        shadowOpacity: 0.06,
-        shadowOffset: { width: 0, height: 2 },
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    filterIndicatorText: {
-        fontSize: 14,
-        fontWeight: '600',
-        marginBottom: 2,
-    },
     activeFilters: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        marginTop: 8,
-        gap: 6,
+        alignItems: 'center',
+        marginTop: 12,
+        marginBottom: 4,
+        gap: 8,
     },
     filterChip: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingLeft: 8,
-        paddingRight: 4,
-        paddingVertical: 4,
-        borderRadius: 12,
+        paddingLeft: 12,
+        paddingRight: 6,
+        paddingVertical: 6,
+        borderRadius: 16,
         borderWidth: 1,
     },
     filterChipText: {
         fontSize: 12,
         fontWeight: '500',
+        lineHeight: 16,
+        // Kill Android's extra Text top-padding so the label is vertically
+        // centred with the ✕ icon in the chip.
+        includeFontPadding: false,
+        textAlignVertical: 'center',
     },
     filterChipClear: {
         marginLeft: 6,

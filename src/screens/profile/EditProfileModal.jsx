@@ -251,12 +251,12 @@ export default function EditProfileModal({ visible, onClose, onUpdate }) {
         >
             <KeyboardAvoidingView
                 style={styles.modalOverlay}
-                // Android: disable KAV (the 'height' behavior shrank the whole
-                // backdrop overlay on keyboard-open and didn't restore on close,
-                // breaking the dim + modal size). The inner ScrollView + native
-                // adjustResize handle the keyboard instead.
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                enabled={Platform.OS === 'ios'}
+                // 'padding' (both platforms): keeps the backdrop full-screen —
+                // the overlay stays flex:1 and its dim fills it, unlike 'height'
+                // which shrank the backdrop — while lifting the centred sheet so
+                // lower inputs (e.g. Bio) stay above the keyboard. The inner
+                // ScrollView absorbs any remaining overflow.
+                behavior="padding"
             >
                 <View style={styles.modalContent}>
                     {/* Header */}

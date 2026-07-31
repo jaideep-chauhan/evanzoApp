@@ -26,9 +26,10 @@ export default function UserProfile() {
 
     const { userId, userName, userAvatar } = route.params;
 
-    const [activeTab, setActiveTab] = useState('events'); // 'events' or 'services'
+    const [activeTab, setActiveTab] = useState('events'); // 'events' | 'services' | 'reviews'
     const [eventAds, setEventAds] = useState([]);
     const [vendorAds, setVendorAds] = useState([]);
+    const [reviews, setReviews] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [userInfo, setUserInfo] = useState({
@@ -94,6 +95,7 @@ export default function UserProfile() {
                         rating: Number(reviewsRes.data.averageRating) || 0,
                         reviewCount: reviewsRes.data.totalReviews || 0,
                     }));
+                    setReviews(Array.isArray(reviewsRes.data.reviews) ? reviewsRes.data.reviews : []);
                 }
             } catch (reviewsError) {
                 console.log('⚠️ Could not fetch user reviews:', reviewsError.message);
@@ -148,15 +150,6 @@ export default function UserProfile() {
         fetchUserData();
     };
 
-    const handleContactUser = () => {
-        navigation.navigate('ChatScreen', {
-            recipientId: userId,
-            chatName: userInfo.name,
-            avatar: userInfo.avatar,
-            isOnline: false
-        });
-    };
-
     const handleWriteReview = () => {
         // Reuse the shared Review screen, targeting this user directly
         // (revieweeUserId). Refresh the profile's rating/count on submit.
@@ -186,6 +179,56 @@ export default function UserProfile() {
             }}
         />
     );
+
+    // Human-readable "x days ago" style date for a review.
+    const formatReviewDate = (value) => {
+        if (!value) return '';
+        const d = new Date(value);
+        if (isNaN(d.getTime())) return '';
+        const diffMs = Date.now() - d.getTime();
+        const day = 24 * 60 * 60 * 1000;
+        const days = Math.floor(diffMs / day);
+        if (days <= 0) return 'Today';
+        if (days === 1) return 'Yesterday';
+        if (days < 30) return `${days} days ago`;
+        return d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+    };
+
+    const renderReview = ({ item }) => {
+        const reviewer = item.reviewer || {};
+        const reviewerName = reviewer.first_name || reviewer.last_name
+            ? `${reviewer.first_name || ''} ${reviewer.last_name || ''}`.trim()
+            : (reviewer.full_name || reviewer.name || 'Anonymous');
+        let reviewerAvatar = reviewer.profile_pic || reviewer.profile_picture || reviewer.avatar;
+        if (!reviewerAvatar || `${reviewerAvatar}`.trim() === '') {
+            reviewerAvatar = 'https://randomuser.me/api/portraits/lego/1.jpg';
+        }
+        const rating = Math.round(Number(item.rating) || 0);
+        return (
+            <View style={styles.reviewCard}>
+                <View style={styles.reviewHeader}>
+                    <Image source={{ uri: reviewerAvatar }} style={styles.reviewAvatar} />
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.reviewerName} numberOfLines={1}>{reviewerName}</Text>
+                        <View style={styles.reviewStars}>
+                            {[...Array(5)].map((_, i) => (
+                                <Icon
+                                    key={i}
+                                    name={i < rating ? 'star' : 'star-outline'}
+                                    size={13}
+                                    color="#FFB800"
+                                />
+                            ))}
+                            <Text style={styles.reviewDate}>{formatReviewDate(item.created_at)}</Text>
+                        </View>
+                    </View>
+                </View>
+                {!!item.review_text && (
+                    <Text style={styles.reviewText}>{item.review_text}</Text>
+                )}
+            </View>
+        );
+    };
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -253,10 +296,10 @@ export default function UserProfile() {
                     <View style={styles.actionRow}>
                         <TouchableOpacity
                             style={[styles.contactButton, { backgroundColor: theme.colors.primary }]}
-                            onPress={handleContactUser}
+                            onPress={() => setActiveTab('reviews')}
                         >
-                            <Icon name="chatbubble-ellipses-outline" size={18} color="#fff" />
-                            <Text style={styles.contactButtonText} numberOfLines={1}>Contact User</Text>
+                            <Icon name="star" size={18} color="#fff" />
+                            <Text style={styles.contactButtonText} numberOfLines={1}>Reviews ({userInfo.reviewCount || reviews.length})</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.reviewButton, { borderColor: theme.colors.primary }]}
@@ -339,6 +382,23 @@ export default function UserProfile() {
                                     <View style={styles.emptyContainer}>
                                         <Icon name="briefcase-outline" size={60} color="#ccc" />
                                         <Text style={styles.emptyText}>No service ads found</Text>
+                                    </View>
+                                )
+                            )}
+
+                            {activeTab === 'reviews' && (
+                                reviews.length > 0 ? (
+                                    <FlatList
+                                        data={reviews}
+                                        renderItem={renderReview}
+                                        keyExtractor={(item, index) => item.review_id?.toString() || item.id?.toString() || index.toString()}
+                                        scrollEnabled={false}
+                                        contentContainerStyle={styles.listContent}
+                                    />
+                                ) : (
+                                    <View style={styles.emptyContainer}>
+                                        <Icon name="star-outline" size={60} color="#ccc" />
+                                        <Text style={styles.emptyText}>No reviews yet</Text>
                                     </View>
                                 )
                             )}
@@ -523,5 +583,46 @@ const styles = StyleSheet.create({
     },
     listContent: {
         paddingBottom: 20,
+    },
+    reviewCard: {
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        padding: 16,
+        marginHorizontal: 12,
+        marginTop: 12,
+        borderWidth: 1,
+        borderColor: '#f0f0f0',
+    },
+    reviewHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    reviewAvatar: {
+        width: 42,
+        height: 42,
+        borderRadius: 21,
+        backgroundColor: '#f0f0f0',
+        marginRight: 12,
+    },
+    reviewerName: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: '#1E293B',
+        marginBottom: 3,
+    },
+    reviewStars: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    reviewDate: {
+        fontSize: 12,
+        color: '#94A3B8',
+        marginLeft: 8,
+    },
+    reviewText: {
+        fontSize: 14,
+        color: '#475569',
+        lineHeight: 20,
+        marginTop: 10,
     },
 });

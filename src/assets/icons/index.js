@@ -39,11 +39,53 @@ export const icons = {
   venues: require('./venues.png'),
   attire: require('./attire.png'),
   valetParking: require('./valet-parking.png'),
+
+  // New service categories (2026-07 batch).
+  photoBooth: require('./photo-booth.png'),
+  choreographer: require('./choreographer.png'),
+  performers: require('./performers.png'),
+  florist: require('./florist.png'),
+  lighting: require('./lighting.png'),
+  security: require('./security.png'),
+  mascot: require('./mascot.png'),
+  makeupArtist: require('./makeup-artist.png'),
+  cakeAndBakery: require('./cake-and-bakery.png'),
+  mobileBar: require('./mobile-bar.png'),
+  mehndi: require('./mehndi.png'),
+  magician: require('./magician.png'),
+  standUpComedy: require('./stand-up-comedy.png'),
+  fireShow: require('./fire-show.png'),
+  puppet: require('./puppet.png'),
+  hairStylist: require('./hair-stylist.png'),
+  nailPolish: require('./nail-polish.png'),
 };
 
 // Order matters — longer / more specific aliases first so "Live Music" wins
 // over "Music", and "Gig Planner" wins over "Gig".
 const CATEGORY_ALIASES = [
+  // --- New service categories (2026-07 batch). Specific patterns first so
+  //     they win over the generic aliases below (e.g. "Photo Booth" must not
+  //     fall into the photography alias, "Hair stylist" not beauty-styling). ---
+  [/photo\s*booth|photobooth/i, icons.photoBooth],
+  [/choreograph/i, icons.choreographer],
+  [/dancer/i, icons.performers],
+  [/kids?\s*entertain/i, icons.performers],
+  [/mascot/i, icons.mascot],
+  [/magician|magic\b/i, icons.magician],
+  [/puppet/i, icons.puppet],
+  [/fire\s*show|fire\b/i, icons.fireShow],
+  [/stand.?up|comedian|comedy/i, icons.standUpComedy],
+  [/mehendi|mehndi|henna/i, icons.mehndi],
+  [/nail/i, icons.nailPolish],
+  [/hair/i, icons.hairStylist],
+  [/make.?up/i, icons.makeupArtist],
+  [/florist/i, icons.florist],
+  // Lookahead so "Lighting Decoration" stays a decoration icon, "Lighting" alone → lighting.
+  [/lighting\b(?!\s*decor)/i, icons.lighting],
+  [/mobile\s*bar/i, icons.mobileBar],
+  [/cake\s*and\s*bakery/i, icons.cakeAndBakery],
+  [/security/i, icons.security],
+  // --- existing aliases ---
   [/photograph|photo|camera/i, icons.photography],
   [/videograph|video/i, icons.photography],
   [/live\s*music|band/i, icons.liveMusic],

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
     View,
     Text,
@@ -16,7 +16,6 @@ import Entypo from 'react-native-vector-icons/Entypo';
 import { useTheme } from '../../../ThemeContext';
 
 import bg1 from '../../../assets/images/smallHeader.jpg';
-import percent from '../../../assets/icons/percent.png';
 import { getCurrencySymbol } from '../../../utils/currency';
 
 const { width } = Dimensions.get('window');
@@ -83,12 +82,39 @@ const VendorCard = ({
     const rating = Number.isFinite(ratingNum) && ratingNum > 0 ? ratingNum.toFixed(1) : null;
     const reviewsCount = Number(vendor?.reviews_count) || 0;
     const description = vendor?.description || '';
+    // Description "See more/less" toggle. A hidden measurer lays out the full
+    // text once and hands us the per-line breakdown (descLines). If it spills
+    // past 4 lines we rebuild the collapsed text from the first 4 lines, trim
+    // the 4th to leave room, and append "… See more" INLINE on that line
+    // (rather than on a new 5th line).
+    const [descExpanded, setDescExpanded] = useState(false);
+    const [descLines, setDescLines] = useState(null);
+    const descTruncatable = Array.isArray(descLines) && descLines.length > 4;
+    const collapsedText = React.useMemo(() => {
+        if (!descTruncatable) return description;
+        const visible = descLines.slice(0, 4).map((l) => l.text);
+        let last = (visible[3] || '').replace(/\s+$/, '');
+        // Reserve room for the "… See more" suffix so it stays on line 4. Trim a
+        // generous number of chars, then back off to a word boundary so the
+        // suffix (which is wider than the trimmed lowercase text) always fits.
+        last = last.slice(0, Math.max(0, last.length - 12)).replace(/\s+\S*$/, '');
+        return visible.slice(0, 3).join('') + last.replace(/\s+$/, '');
+    }, [descTruncatable, descLines, description]);
 
     // Offers JSON: prefer the first offer's amount + percentage if present.
     const offersArr = parseMaybeJson(vendor?.offers);
     const firstOffer = Array.isArray(offersArr) ? offersArr[0] : null;
-    const offerAmount = firstOffer?.amount_spent ?? firstOffer?.amount ?? null;
-    const offerPercent = firstOffer?.percentage ?? firstOffer?.percent ?? null;
+    // Offers are stored as { amount, discount }. (The discount was previously
+    // read from `percentage`/`percent`, which the data never has — so the
+    // discount column always went missing.) Show the offer block whenever an
+    // offer exists; inside it, ALWAYS show the Discount column, defaulting to 0%
+    // when no discount was set rather than hiding it.
+    const isPresent = (v) => v != null && String(v).trim() !== '';
+    const rawAmount = firstOffer?.amount_spent ?? firstOffer?.amount;
+    const rawPercent = firstOffer?.discount ?? firstOffer?.percentage ?? firstOffer?.percent;
+    const hasOffer = firstOffer != null && (isPresent(rawAmount) || isPresent(rawPercent));
+    const offerAmount = isPresent(rawAmount) ? rawAmount : null;
+    const offerPercent = isPresent(rawPercent) ? rawPercent : 0;
     const currency = vendor?.currency || 'USD';
 
     return (
@@ -154,13 +180,47 @@ const VendorCard = ({
                     {/* Description — only render if real text exists, so we
                         don't lock a fake lorem-ipsum into the layout. */}
                     {description ? (
-                        <Text style={styles.description} numberOfLines={4}>
-                            {description}
-                        </Text>
+                        descLines == null ? (
+                            // First pass: render the full text (real, full-width element)
+                            // purely to capture the per-line breakdown via onTextLayout.
+                            // Swaps to the collapsed/expanded view on the next render.
+                            <Text
+                                style={styles.description}
+                                onTextLayout={(e) => setDescLines(e.nativeEvent.lines)}
+                            >
+                                {description}
+                            </Text>
+                        ) : descTruncatable && !descExpanded ? (
+                            // Collapsed: 4 lines with "… See more" appended INLINE to
+                            // the end of the 4th line.
+                            <Text style={styles.description}>
+                                {collapsedText}
+                                <Text
+                                    style={[styles.seeMore, { color: theme.colors.primary }]}
+                                    onPress={() => setDescExpanded(true)}
+                                >
+                                    {' … See more'}
+                                </Text>
+                            </Text>
+                        ) : (
+                            // Full text (not truncatable, or expanded). When expanded,
+                            // "See less" follows inline at the end.
+                            <Text style={styles.description}>
+                                {description}
+                                {descTruncatable && (
+                                    <Text
+                                        style={[styles.seeMore, { color: theme.colors.primary }]}
+                                        onPress={() => setDescExpanded(false)}
+                                    >
+                                        {'  See less'}
+                                    </Text>
+                                )}
+                            </Text>
+                        )
                     ) : null}
 
-                    {/* Offer Section — render only if at least one value present. */}
-                    {(offerAmount != null || offerPercent != null) && (
+                    {/* Offer Section — render whenever the vendor has an offer. */}
+                    {hasOffer && (
                         <View style={styles.offerSection}>
                             <View style={styles.offerRow}>
                                 <View style={styles.offerTextContainer}>
@@ -178,22 +238,16 @@ const VendorCard = ({
                                             </View>
                                         </View>
                                     )}
-                                    {offerPercent != null && (
-                                        <View style={styles.offerItem}>
-                                            <Text style={[styles.offerLabel, { color: theme.colors.textSecondary }]}>
-                                                Percentage
-                                            </Text>
-                                            <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
-                                                <View style={styles.iconBox}>
-                                                    <Image source={percent} style={{ width: 10, height: 10, resizeMode: 'contain' }} />
-                                                </View>
-                                                <Text style={styles.offerValue}>{`${offerPercent}%`}</Text>
-                                            </View>
+                                    {/* Always shown (defaults to 0%) so the Discount
+                                        column never disappears. */}
+                                    <View style={styles.offerItem}>
+                                        <Text style={[styles.offerLabel, { color: theme.colors.textSecondary }]}>
+                                            Discount
+                                        </Text>
+                                        <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
+                                            <Text style={styles.offerValue}>{`${offerPercent}%`}</Text>
                                         </View>
-                                    )}
-                                </View>
-                                <View style={styles.seeMoreBox}>
-                                    <Text style={[styles.seeMore, { color: theme.colors.primary }]}>SEE MORE</Text>
+                                    </View>
                                 </View>
                             </View>
                         </View>
@@ -307,6 +361,10 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         lineHeight: 18,
     },
+    seeMore: {
+        fontSize: 12,
+        fontWeight: '600',
+    },
     shareBtn: {
         position: 'absolute',
         top: 14,
@@ -387,23 +445,5 @@ const styles = StyleSheet.create({
         fontSize: 10,
         fontWeight: '500',
         color: '#2C3D5BF5',
-    },
-    iconBox: {
-        borderRadius: 8,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    seeMoreBox: {
-        height: 20,
-        width: 60,
-        borderRadius: 10,
-        alignSelf: 'center',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    seeMore: {
-        fontWeight: '500',
-        fontSize: 8,
-        textDecorationLine: 'underline',
     },
 });

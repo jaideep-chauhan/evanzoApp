@@ -4,10 +4,10 @@ import {
     Text,
     Image,
     ImageBackground,
-    StyleSheet,
-    TouchableOpacity,
     Animated,
     Easing,
+    StyleSheet,
+    TouchableOpacity,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -37,17 +37,47 @@ export default function SearchHeader({ onSearchChange, searchValue = '', searchT
         });
     };
 
+    // Rotating placeholder rendered as a smooth vertical ticker. Driven ONLY by
+    // refs + one Animated.Value (native driver) — no state updates during the
+    // animation, so React never re-renders mid-transition and it can't blink.
+    // The first item is duplicated at the end for a seamless wrap-around.
+    const PH_HEIGHT = 22;
     const placeholders = [
-        // Reflect the screen: events → "Search for events...", vendors → "...vendors..."
-        searchType === 'events' ? 'Search for events...' : 'Search for vendors...',
+        searchType === 'events' ? 'Search for gigs...' : 'Search for vendors...',
         'Search by location...',
         'Search by category...',
         'Type to search...',
     ];
-    const [placeholderIndex, setPlaceholderIndex] = useState(0);
-    const [nextIndex, setNextIndex] = useState(1);
-    const anim = useRef(new Animated.Value(0)).current;
-    const intervalRef = useRef();
+    const tickerItems = [...placeholders, placeholders[0]];
+    const tickerY = useRef(new Animated.Value(0)).current;
+    const stepRef = useRef(0);
+    useEffect(() => {
+        let running = true;
+        let timer;
+        stepRef.current = 0;
+        tickerY.setValue(0);
+        const tick = () => {
+            if (!running) return;
+            stepRef.current += 1;
+            Animated.timing(tickerY, {
+                toValue: -stepRef.current * PH_HEIGHT,
+                duration: 450,
+                easing: Easing.inOut(Easing.cubic),
+                useNativeDriver: true,
+            }).start(({ finished }) => {
+                if (!running || !finished) return;
+                // Landed on the duplicated first item → snap to the real first
+                // item (identical text, so the reset is invisible).
+                if (stepRef.current >= placeholders.length) {
+                    stepRef.current = 0;
+                    tickerY.setValue(0);
+                }
+                timer = setTimeout(tick, 2000);
+            });
+        };
+        timer = setTimeout(tick, 2000);
+        return () => { running = false; clearTimeout(timer); };
+    }, [searchType]);
 
     // Unread badge on the bell. Refetched each time the header gains focus
     // (returning from inbox flips the count back to 0) and once on mount.
@@ -66,32 +96,6 @@ export default function SearchHeader({ onSearchChange, searchValue = '', searchT
         }, []),
     );
 
-    useEffect(() => {
-        let running = true;
-        const loop = () => {
-            Animated.timing(anim, {
-                toValue: 1,
-                duration: 400,
-                easing: Easing.out(Easing.cubic),
-                useNativeDriver: true,
-            }).start(() => {
-                if (!running) return;
-                // Use requestAnimationFrame to defer state updates
-                requestAnimationFrame(() => {
-                    if (!running) return;
-                    setPlaceholderIndex(nextIndex);
-                    setNextIndex((nextIndex + 1) % placeholders.length);
-                    anim.setValue(0);
-                    intervalRef.current = setTimeout(loop, 1800);
-                });
-            });
-        };
-        intervalRef.current = setTimeout(loop, 1800);
-        return () => {
-            running = false;
-            if (intervalRef.current) clearTimeout(intervalRef.current);
-        };
-    }, [nextIndex, placeholders.length]);
 
     return (
         <ImageBackground source={bg} style={styles.container} imageStyle={styles.bgImage}>
@@ -133,54 +137,19 @@ export default function SearchHeader({ onSearchChange, searchValue = '', searchT
                             <Icon name="search-outline" size={20} color="#fff" style={styles.searchIcon} />
                             <View style={{ flex: 1, height: 40, justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
                                 {!searchValue && (
-                                    <>
-                                        <Animated.Text
-                                            style={[
-                                                styles.animatedPlaceholder,
-                                                {
-                                                    position: 'absolute',
-                                                    left: 0,
-                                                    right: 0,
-                                                    opacity: anim.interpolate({
-                                                        inputRange: [0, 1],
-                                                        outputRange: [1, 0],
-                                                    }),
-                                                    transform: [{
-                                                        translateY: anim.interpolate({
-                                                            inputRange: [0, 1],
-                                                            outputRange: [0, -24],
-                                                        }),
-                                                    }],
-                                                }
-                                            ]}
-                                            numberOfLines={1}
-                                        >
-                                            {placeholders[placeholderIndex]}
-                                        </Animated.Text>
-                                        <Animated.Text
-                                            style={[
-                                                styles.animatedPlaceholder,
-                                                {
-                                                    position: 'absolute',
-                                                    left: 0,
-                                                    right: 0,
-                                                    opacity: anim.interpolate({
-                                                        inputRange: [0, 1],
-                                                        outputRange: [0, 1],
-                                                    }),
-                                                    transform: [{
-                                                        translateY: anim.interpolate({
-                                                            inputRange: [0, 1],
-                                                            outputRange: [24, 0],
-                                                        }),
-                                                    }],
-                                                }
-                                            ]}
-                                            numberOfLines={1}
-                                        >
-                                            {placeholders[nextIndex]}
-                                        </Animated.Text>
-                                    </>
+                                    <View style={{ height: PH_HEIGHT, overflow: 'hidden' }}>
+                                        <Animated.View style={{ transform: [{ translateY: tickerY }] }}>
+                                            {tickerItems.map((t, i) => (
+                                                <Text
+                                                    key={i}
+                                                    style={[styles.animatedPlaceholder, { height: PH_HEIGHT, lineHeight: PH_HEIGHT }]}
+                                                    numberOfLines={1}
+                                                >
+                                                    {t}
+                                                </Text>
+                                            ))}
+                                        </Animated.View>
+                                    </View>
                                 )}
                                 {/* Read-only label showing the active keyword. The
                                     bar is no longer editable in-place — tapping

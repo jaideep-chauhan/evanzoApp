@@ -368,6 +368,8 @@ const PreSavedMessage = ({ onClose, visible }) => {
                 <Modal
                     visible={showDatePicker}
                     transparent={true}
+                    statusBarTranslucent={true}
+                    navigationBarTranslucent={true}
                     animationType="slide"
                     onRequestClose={() => setShowDatePicker(false)}
                 >
@@ -419,6 +421,8 @@ const PreSavedMessage = ({ onClose, visible }) => {
                 <Modal
                     visible={showCategoryDropdown}
                     transparent={true}
+                    statusBarTranslucent={true}
+                    navigationBarTranslucent={true}
                     animationType="slide"
                     onRequestClose={() => setShowCategoryDropdown(false)}
                 >
@@ -470,6 +474,8 @@ const PreSavedMessage = ({ onClose, visible }) => {
                 <Modal
                     visible={showDurationDropdown}
                     transparent={true}
+                    statusBarTranslucent={true}
+                    navigationBarTranslucent={true}
                     animationType="slide"
                     onRequestClose={() => setShowDurationDropdown(false)}
                 >

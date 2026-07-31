@@ -577,6 +577,11 @@ export default function Gigs() {
             key !== 'page' && key !== 'limit' && newFilters[key]
         );
 
+        // Eager ref sync — location is picked in the Search overlay; its goBack
+        // return-focus refresh would otherwise clobber this filter (see
+        // handleCategorySelect for the full rationale).
+        currentFiltersRef.current = newFilters;
+
         fetchEvents(newFilters, true, !hasAnyFilter);
     };
 
@@ -605,6 +610,10 @@ export default function Gigs() {
         const hasAnyFilter = Object.keys(newFilters).some(key =>
             key !== 'page' && key !== 'limit' && newFilters[key]
         );
+
+        // Keep the ref in step with the applied filters so a subsequent
+        // focus-refresh doesn't clobber the date filter.
+        currentFiltersRef.current = newFilters;
 
         fetchEvents(newFilters, true, !hasAnyFilter);
     };
@@ -662,6 +671,12 @@ export default function Gigs() {
         const hasAnyFilter = Object.keys(newFilters).some(key =>
             key !== 'page' && key !== 'limit' && newFilters[key]
         );
+
+        // Eager ref sync: this handler is invoked from the Search overlay right
+        // before it navigation.goBack()s, and that return-focus fires a refresh
+        // that reads currentFiltersRef. Without syncing here the refresh refetches
+        // the UNFILTERED list and the category filter appears to do nothing.
+        currentFiltersRef.current = newFilters;
 
         fetchEvents(newFilters, true, !hasAnyFilter);
     };
@@ -856,15 +871,32 @@ export default function Gigs() {
                         searchType="events"
                         onSearchChange={(text) => {
                             setSearchQuery(text);
+                            // Commit the keyword to the filters ref IMMEDIATELY. The
+                            // Search overlay calls onQuery THEN navigation.goBack(),
+                            // and the resulting focus-refresh reads currentFiltersRef.
+                            // Without this eager sync it refetches the unfiltered list
+                            // (and flips isFetchingEvents on), which then skips/clobbers
+                            // the debounced keyword fetch — so search appeared dead.
+                            const nextFilters = { ...currentFiltersRef.current };
+                            if (text) {
+                                nextFilters.keyword = text;
+                            } else {
+                                delete nextFilters.keyword;
+                            }
+                            currentFiltersRef.current = nextFilters;
                             filterService.debouncedSearch(
                                 (filters) => fetchEvents(filters, true),
-                                { ...currentFilters, keyword: text },
+                                nextFilters,
                                 500,
                                 'event-header-search'
                             );
                         }}
                         onCategorySelect={(cat) => {
-                            handleCategorySelect([cat.category_id || cat.id], [cat]);
+                            // Search suggestions/grid for gigs return SERVICE (vendor)
+                            // categories, which gigs store in service_needed — so filter
+                            // on that dimension, not event_type (which never matches a
+                            // service name and made category search return everything).
+                            handleCategorySelect([cat.category_id || cat.id], [cat], 'vendor');
                         }}
                         onLocationSelect={(loc) => handleLocationSelect(loc)}
                     />
@@ -885,9 +917,7 @@ export default function Gigs() {
                     <>
                 {/* Filter status */}
                 {(selectedLocation || selectedCategoryNames.length > 0 || selectedDateRange || searchQuery) && (
-                    <View style={[styles.filterIndicator, { backgroundColor: '#f0f4ff', borderColor: theme.colors.primary + '33' }]}>
-                        {(selectedLocation || selectedCategoryNames.length > 0 || selectedDateRange || searchQuery) && (
-                            <View style={styles.activeFilters}>
+                    <View style={styles.activeFilters}>
                                 {searchQuery && (
                                     <View style={[styles.filterChip, { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary + '30' }]}>
                                         <Text style={[styles.filterChipText, { color: theme.colors.primary }]}>Search: {searchQuery}</Text>
@@ -958,8 +988,6 @@ export default function Gigs() {
                                         </TouchableOpacity>
                                     </View>
                                 )}
-                            </View>
-                        )}
                     </View>
                 )}
 
@@ -1060,13 +1088,22 @@ export default function Gigs() {
                                 setSearchHandler({
                                     onQuery: (q) => {
                                         setSearchQuery(q);
-                                        const filters = { ...currentFilters, keyword: q };
-                                        if (!q?.trim()) delete filters.keyword;
+                                        const filters = { ...currentFiltersRef.current };
+                                        if (q?.trim()) {
+                                            filters.keyword = q;
+                                        } else {
+                                            delete filters.keyword;
+                                        }
+                                        // Eager ref sync so the return-focus refresh
+                                        // carries the keyword instead of clobbering it.
+                                        currentFiltersRef.current = filters;
                                         fetchEvents(filters, true);
                                     },
                                     onCategory: (cat) => {
                                         if (cat?.category_id || cat?.id) {
-                                            handleCategorySelect([cat.category_id || cat.id], [cat]);
+                                            // Gig search categories are SERVICE categories
+                                            // → filter by service_needed (see header above).
+                                            handleCategorySelect([cat.category_id || cat.id], [cat], 'vendor');
                                         }
                                     },
                                 });
@@ -1188,42 +1225,33 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#666',
     },
-    filterIndicator: {
-        marginTop: 12,
-        marginBottom: 4,
-        padding: 12,
-        borderRadius: 8,
-        borderWidth: 1,
-        marginHorizontal: 16,
-        shadowColor: '#2C3D5B',
-        shadowOpacity: 0.06,
-        shadowOffset: { width: 0, height: 2 },
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    filterIndicatorText: {
-        fontSize: 14,
-        fontWeight: '600',
-        marginBottom: 2,
-    },
     activeFilters: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        marginTop: 8,
-        gap: 6,
+        alignItems: 'center',
+        marginHorizontal: 16,
+        marginTop: 12,
+        marginBottom: 4,
+        gap: 8,
     },
     filterChip: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingLeft: 8,
-        paddingRight: 4,
-        paddingVertical: 4,
-        borderRadius: 12,
+        paddingLeft: 12,
+        paddingRight: 6,
+        paddingVertical: 6,
+        borderRadius: 16,
         borderWidth: 1,
     },
     filterChipText: {
         fontSize: 12,
         fontWeight: '500',
+        lineHeight: 16,
+        // Android adds extra top padding to Text, which pushes the label below
+        // the chip's vertical centre relative to the ✕ icon. Kill it so the
+        // text and icon sit on the same centre line.
+        includeFontPadding: false,
+        textAlignVertical: 'center',
     },
     filterChipClear: {
         marginLeft: 6,

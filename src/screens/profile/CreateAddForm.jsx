@@ -14,6 +14,7 @@ import {
     Platform,
     PermissionsAndroid,
     KeyboardAvoidingView,
+    Keyboard,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -72,6 +73,24 @@ const EVENT_TYPE_TAG_OPTIONS = {
 const CreateAddForm = ({ type, onClose }) => {
     const theme = useTheme();
     const scrollViewRef = useRef(null);
+    // Y-offset of the vendor Description field within the scroll content, captured
+    // via onLayout, so focusing it can scroll it above the keyboard.
+    const vendorDescY = useRef(0);
+
+    // The form lives inside a Modal, where adjustResize / KeyboardAvoidingView
+    // don't reliably shrink the viewport. Track the keyboard height and add it
+    // as bottom padding so any focused field has room to scroll above the
+    // keyboard (paired with the onFocus scrollTo handlers below).
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
+    useEffect(() => {
+        const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+        const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+        const onShow = (e) => setKeyboardHeight(e.endCoordinates?.height || 0);
+        const onHide = () => setKeyboardHeight(0);
+        const s = Keyboard.addListener(showEvt, onShow);
+        const h = Keyboard.addListener(hideEvt, onHide);
+        return () => { s.remove(); h.remove(); };
+    }, []);
 
     // Gig Ad fields
     const [service, setService] = useState('');
@@ -858,7 +877,7 @@ const CreateAddForm = ({ type, onClose }) => {
             <ScrollView
                 ref={scrollViewRef}
                 style={styles.scrollViewPro}
-                contentContainerStyle={styles.containerPro}
+                contentContainerStyle={[styles.containerPro, { paddingBottom: 20 + keyboardHeight }]}
                 showsVerticalScrollIndicator={false}
                 nestedScrollEnabled={true}
                 keyboardShouldPersistTaps="handled"
@@ -1134,7 +1153,10 @@ const CreateAddForm = ({ type, onClose }) => {
                                 <Icon name="chevron-down" size={20} color="#ffffff80" />
                             </TouchableOpacity>
                         </View>
-                        <View style={styles.fieldGroupPro}>
+                        <View
+                            style={styles.fieldGroupPro}
+                            onLayout={(e) => { vendorDescY.current = e.nativeEvent.layout.y; }}
+                        >
                             <Text style={styles.labelPro}>Description</Text>
                             <TextInput
                                 style={[styles.inputPro, styles.textAreaPro, { backgroundColor: theme.colors.primary }]}
@@ -1143,6 +1165,16 @@ const CreateAddForm = ({ type, onClose }) => {
                                 placeholder="Describe your services in detail (minimum 30 words)..."
                                 placeholderTextColor="#ffffff80"
                                 multiline
+                                onFocus={() => {
+                                    // Scroll the Description above the keyboard. Small delay
+                                    // lets the keyboard finish animating up first.
+                                    setTimeout(() => {
+                                        scrollViewRef.current?.scrollTo({
+                                            y: Math.max(0, vendorDescY.current - 20),
+                                            animated: true,
+                                        });
+                                    }, Platform.OS === 'ios' ? 250 : 100);
+                                }}
                             />
                             {vendorDescription && (
                                 <Text style={styles.wordCount}>
