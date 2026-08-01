@@ -1,8 +1,12 @@
 import ImagePicker from 'react-native-image-crop-picker';
+import { launchImageLibrary } from 'react-native-image-picker';
 
 /**
- * Opens image picker WITHOUT automatic cropping
- * Returns selected images as-is, allowing manual cropping later
+ * Opens the SYSTEM photo picker (Android Photo Picker on API 33+, PHPicker on
+ * iOS) WITHOUT automatic cropping. Uses react-native-image-picker rather than
+ * react-native-image-crop-picker's openPicker, because the system picker
+ * requires NO broad storage permission (READ_MEDIA_IMAGES / READ_MEDIA_VIDEO)
+ * — which Google Play now rejects. Cropping still happens later via cropImage().
  *
  * @param {Object} options - Picker options
  * @param {boolean} options.multiple - Allow multiple selection (default: false)
@@ -22,40 +26,39 @@ export const openImagePickerWithCropper = async (options = {}) => {
     } = options;
 
     try {
-        // Let user select images without cropping
-        const pickerOptions = {
-            multiple,
-            maxFiles: multiple ? maxFiles : undefined,
+        const response = await launchImageLibrary({
             mediaType: 'photo',
+            selectionLimit: multiple ? maxFiles : 1,
             includeBase64: false,
-            includeExif: false,
-            forceJpg: true, // ensure compressed JPEG, not the original HEIC
-            cropping: false, // No automatic cropping
-            compressImageQuality,
-            compressImageMaxWidth,
-            compressImageMaxHeight,
-        };
+            includeExtra: false,
+            // Resize/compress on the way out (mirrors the old crop-picker caps).
+            quality: compressImageQuality,
+            maxWidth: compressImageMaxWidth,
+            maxHeight: compressImageMaxHeight,
+        });
 
-        const result = await ImagePicker.openPicker(pickerOptions);
-
-        // Handle both single and multiple selection
-        const selectedImages = Array.isArray(result) ? result : [result];
-
-        // Return images with original path and mark as not cropped
-        return selectedImages.map(image => ({
-            uri: image.path,
-            originalUri: image.path, // Keep original path for cropping
-            width: image.width,
-            height: image.height,
-            mime: image.mime,
-            size: image.size,
-            cropped: false, // Mark as not cropped yet
-        }));
-    } catch (error) {
-        if (error.code === 'E_PICKER_CANCELLED') {
+        if (response?.didCancel) {
             console.log('User cancelled image picker');
             return null;
         }
+        if (response?.errorCode) {
+            console.error('Image picker error:', response.errorCode, response.errorMessage);
+            throw new Error(response.errorMessage || response.errorCode);
+        }
+
+        const assets = response?.assets || [];
+        if (assets.length === 0) return null;
+
+        return assets.map(asset => ({
+            uri: asset.uri,
+            originalUri: asset.uri, // Keep original for later cropping
+            width: asset.width,
+            height: asset.height,
+            mime: asset.type || 'image/jpeg',
+            size: asset.fileSize,
+            cropped: false, // Mark as not cropped yet
+        }));
+    } catch (error) {
         console.error('Image picker error:', error);
         throw error;
     }
