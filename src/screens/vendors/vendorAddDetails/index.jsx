@@ -10,31 +10,6 @@ import { useAuth } from '../../../context/AuthContext';
 import preSavedMessageService from '../../../services/preSavedMessageService';
 import Icon from 'react-native-vector-icons/Ionicons';
 
-const dummyReviews = [
-    {
-        id: 1,
-        user: 'Alice',
-        rating: 5,
-        comment: 'Amazing service and beautiful photos!',
-        date: '2024-07-01',
-    },
-    {
-        id: 2,
-        user: 'Bob',
-        rating: 4,
-        comment: 'Very professional and friendly.',
-        date: '2024-06-28',
-    },
-    {
-        id: 3,
-        user: 'Charlie',
-        rating: 5,
-        comment: 'Highly recommended for any event.',
-        date: '2024-06-15',
-    },
-];
-
-
 export default function VendorChat({ navigation }) {
     const route = useRoute();
     const { user } = useAuth();
@@ -126,8 +101,9 @@ export default function VendorChat({ navigation }) {
             console.log('Formatted images:', formatted);
             return formatted;
         } else {
-            console.log('No images provided, using fallback images');
-            return [img, img, img, img, img];
+            // No real photos — return an empty array so the carousel can show a
+            // single neutral empty state instead of fabricating dummy images.
+            return [];
         }
     })();
 
@@ -252,9 +228,9 @@ export default function VendorChat({ navigation }) {
                             formattedImages[0] ||
                             img
                         }
-                        name={vendor?.name || "4x90 Studio"}
-                        category={vendor?.type || "Photography"}
-                        location={vendor?.location || "Ontario, Canada"}
+                        name={vendor?.name || ''}
+                        category={vendor?.type || ''}
+                        location={vendor?.location || ''}
                         onBackPress={() => navigation && navigation.goBack ? navigation.goBack() : null}
                         onBellPress={() => {
                             if (navigation && navigation.navigate) {
@@ -270,9 +246,8 @@ export default function VendorChat({ navigation }) {
                     <View style={{ marginTop: 130 }} ref={offerSectionRef}>
                         <VendorDetailsSection
                             photos={formattedImages}
-                            description={vendor?.description || "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do"}
+                            description={vendor?.description || ''}
                             onSend={() => console.log('Send button pressed')}
-                            reviews={dummyReviews}
                             hideMessageSection={true}
                             offers={vendor?.offers || []}
                             currency={vendor?.currency || vendor?._original?.currency || 'USD'}

@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
-import VendorCard from '../VendorCard';
 import vendorDetailsService from '../../../services/vendorDetailsService';
 import { useRoute, useFocusEffect } from '@react-navigation/native';
 import { getImageSource } from '../../../utils/imageUtils';
@@ -49,89 +48,6 @@ const dummyReviews = [
         avatar: 'https://i.pravatar.cc/100?img=7',
         rating: 5,
         comments: 6,
-    },
-];
-
-const vendors = [
-    {
-        initials: '4S',
-        name: '4x90 Studio',
-        type: 'Photography',
-        rating: 5,
-        description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do',
-        images: [img, img, img],
-        extraCount: 10,
-        location: 'Toronto, ON',
-    },
-    {
-        initials: 'AB',
-        name: 'Alpha Bakers',
-        type: 'Bakery',
-        rating: 4.5,
-        description: 'Freshly baked goods for every occasion.',
-        images: [img, img, img],
-        extraCount: 5,
-        location: 'Vancouver, BC',
-    },
-    {
-        initials: 'DJ',
-        name: 'DJ Max',
-        type: 'Music',
-        rating: 4.8,
-        description: 'Professional DJ services for weddings and parties.',
-        images: [img, img, img],
-        extraCount: 7,
-        location: 'Toronto, ON',
-    },
-    {
-        initials: 'FL',
-        name: 'Floral Lane',
-        type: 'Florist',
-        rating: 4.7,
-        description: 'Beautiful flower arrangements and bouquets.',
-        images: [img, img, img],
-        extraCount: 3,
-        location: 'Montreal, QC',
-    },
-    {
-        initials: 'CT',
-        name: 'Catering Time',
-        type: 'Catering',
-        rating: 4.9,
-        description: 'Delicious food and excellent service for your events.',
-        images: [img, img, img],
-        extraCount: 8,
-        location: 'Calgary, AB',
-    },
-    {
-        initials: 'EV',
-        name: 'Eventify',
-        type: 'Gig Planner',
-        rating: 5,
-        description: 'Making your events memorable and stress-free.',
-        images: [img, img, img],
-        extraCount: 12,
-        location: 'Toronto, ON',
-    },
-    {
-        initials: 'PH',
-        name: 'PhotoHub',
-        type: 'Photography',
-        rating: 4.6,
-        description: 'Capturing moments that last a lifetime.',
-        images: [img, img, img],
-        extraCount: 6,
-        location: 'Vancouver, BC',
-    },
-    {
-        initials: 'DS',
-        name: 'Decor Studio',
-        type: 'Decor',
-        rating: 4.4,
-        description: 'Creative decor solutions for all occasions.',
-        images: [img, img, img],
-        extraCount: 4,
-        location: 'Ottawa, ON',
     },
 ];
 
@@ -289,30 +205,6 @@ export default function ReviewList({ navigation }) {
 
     const renderTabContent = () => {
         switch (activeTab) {
-            case 'ADS':
-                return (
-                    <View style={styles.adsContainer}>
-                        {vendors.map((vendor, idx) => (
-                            <VendorCard
-                                key={idx}
-                                initials={vendor.initials}
-                                name={vendor.name}
-                                type={vendor.type}
-                                rating={vendor.rating}
-                                description={vendor.description}
-                                images={vendor.images}
-                                extraCount={vendor.extraCount}
-                                location={vendor.location}
-                                onChatPress={() => navigation.navigate('ChatScreen', {
-                                    chatId: `vendor_${idx}`,
-                                    chatName: vendor.name,
-                                    avatar: 'https://randomuser.me/api/portraits/men/1.jpg',
-                                    isOnline: Math.random() > 0.5,
-                                })}
-                            />
-                        ))}
-                    </View>
-                );
             case 'REVIEWS':
                 return (
                     <FlatList
@@ -499,12 +391,6 @@ export default function ReviewList({ navigation }) {
                         )}
                     />
                 );
-            case 'CHAT':
-                return (
-                    <View style={styles.chatContainer}>
-                        <Text style={styles.placeholderText}>Chat functionality coming soon...</Text>
-                    </View>
-                );
             default:
                 return null;
         }
@@ -512,26 +398,12 @@ export default function ReviewList({ navigation }) {
 
     return (
         <View style={styles.container}>
-            {/* Tabs */}
-            <View style={[styles.tabs, { flex: 1, gap: 8 }]}>
-                <TouchableOpacity
-                    style={[styles.tab, { flex: 2 }, activeTab === 'ADS' && styles.activeTab]}
-                    onPress={() => setActiveTab('ADS')}
-                >
-                    <Text style={[styles.tabText, activeTab === 'ADS' && styles.activeText]}>ADS</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.tab, { flex: 2 }, activeTab === 'REVIEWS' && styles.activeTab]}
-                    onPress={() => setActiveTab('REVIEWS')}
-                >
-                    <Text style={[styles.tabText, activeTab === 'REVIEWS' && styles.activeText]}>REVIEWS</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.tab, { flex: 0.7 }, activeTab === 'CHAT' && styles.activeTab]}
-                    onPress={() => setActiveTab('CHAT')}
-                >
-                    <Text style={[styles.tabText, activeTab === 'CHAT' && styles.activeText]}>💬</Text>
-                </TouchableOpacity>
+            {/* Reviews header — the old ADS tab showed fabricated vendors and the
+                CHAT tab was a non-functional placeholder; both removed. */}
+            <View style={[styles.tabs, { flex: 1 }]}>
+                <View style={[styles.tab, styles.activeTab, { flex: 1 }]}>
+                    <Text style={[styles.tabText, styles.activeText]}>REVIEWS</Text>
+                </View>
             </View>
 
             {/* Tab Content */}

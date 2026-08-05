@@ -97,7 +97,40 @@ export default function Gigs() {
     const [currentFilters, setCurrentFilters] = useState({});
     const [pagination, setPagination] = useState({ page: 1, limit: 10, totalPages: 1, totalResults: 0 });
     const [isFetchingEvents, setIsFetchingEvents] = useState(false);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [networkError, setNetworkError] = useState(false);
+
+    // Refs mirror pagination + in-flight state so the onScroll load-more handler
+    // reads fresh values and rapid scroll frames can't fire duplicate fetches.
+    const paginationRef = useRef(pagination);
+    useEffect(() => { paginationRef.current = pagination; }, [pagination]);
+    const isFetchingRef = useRef(false);
+    // Synchronous page tracking + hasMore flag (backend echoes the requested
+    // page and returns [] past the end, so totalPages alone isn't reliable).
+    const loadedPageRef = useRef(1);
+    const hasMoreRef = useRef(true);
+
+    // Load the next page and APPEND it. Only for the unfiltered list — filtered
+    // results run client-side over the current page set, so there's no server
+    // "next page" to fetch there.
+    const loadMoreEvents = () => {
+        if (isFetchingRef.current || !hasMoreRef.current) return;
+        const hasActiveFilters = !!(selectedLocation || selectedCategoryNames.length > 0 || selectedDateRange || searchQuery);
+        if (hasActiveFilters) return;
+        const total = Number(paginationRef.current?.totalPages) || 1;
+        const next = Number(loadedPageRef.current) + 1;
+        if (next > total) { hasMoreRef.current = false; return; }
+        loadedPageRef.current = next; // reserve synchronously → no duplicate/climbing
+        setIsLoadingMore(true);
+        fetchEvents({ page: next }, false);
+    };
+
+    const handleScrollNearBottom = (e) => {
+        const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent || {};
+        if (!contentSize || !layoutMeasurement) return;
+        const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
+        if (distanceFromBottom < 700) loadMoreEvents();
+    };
 
     // Fetch events using new filtering service
     // IMPORTANT: Only approved event ads should be visible in the public events tab
@@ -105,10 +138,13 @@ export default function Gigs() {
     // - Frontend adds an additional safety layer to ensure only approved ads are shown
     // - User's own ads (in Profile -> My Ads) can show all statuses (pending, approved, rejected)
     const fetchEvents = async (filters = {}, resetResults = false, clearAllFilters = false, silent = false) => {
-        if (isFetchingEvents) {
+        // Ref guard (not just state) so rapid scroll frames can't launch
+        // duplicate page fetches before setIsFetchingEvents commits.
+        if (isFetchingRef.current) {
             console.log('Already fetching events, skipping...');
             return;
         }
+        isFetchingRef.current = true;
 
         try {
             setIsFetchingEvents(true);
@@ -150,7 +186,7 @@ export default function Gigs() {
             
             if (!hasFilters) {
                 console.log('📋 No filters applied, fetching all events');
-                response = await eventService.getPublicEventAds();
+                response = await eventService.getPublicEventAds(searchFilters.page, searchFilters.limit);
                 if (response.success && response.data) {
                     // Filter to only show approved event ads
                     const approvedEvents = response.data.filter(event =>
@@ -161,10 +197,17 @@ export default function Gigs() {
                     const formattedEvents = approvedEvents.map(event =>
                         eventService.formatEventForDisplay(event)
                     );
+                    // Use the REAL pagination so the list keeps loading pages on
+                    // scroll (was hardcoded totalPages:1, capping it at page 1).
                     response = {
                         success: true,
                         data: formattedEvents,
-                        pagination: { page: 1, limit: 10, totalPages: 1, totalResults: formattedEvents.length }
+                        pagination: response.pagination || {
+                            page: searchFilters.page || 1,
+                            limit: searchFilters.limit || 10,
+                            totalPages: 1,
+                            totalResults: formattedEvents.length,
+                        },
                     };
                 }
             } else {
@@ -268,6 +311,9 @@ export default function Gigs() {
                 if (resetResults) {
                     const fresh = response.data || [];
                     setEvents(fresh);
+                    // Reset the pager.
+                    loadedPageRef.current = response.pagination?.page || 1;
+                    hasMoreRef.current = (response.pagination?.totalPages || 1) > loadedPageRef.current;
                     // Persist only the unfiltered public list — filtered or
                     // paginated results aren't worth caching across launches.
                     const hasUserFilters = Object.keys(filters || {}).some(
@@ -282,14 +328,20 @@ export default function Gigs() {
                         const newData = response.data || [];
                         const existingIds = new Set(prev.map(e => e._original?.event_ad_id || e.id));
                         const uniqueNewData = newData.filter(e => !existingIds.has(e._original?.event_ad_id || e.id));
+                        if (uniqueNewData.length === 0) hasMoreRef.current = false;
                         return [...prev, ...uniqueNewData];
                     });
+                    if ((response.pagination?.page || loadedPageRef.current) >= (response.pagination?.totalPages || 1)) {
+                        hasMoreRef.current = false;
+                    }
                 }
                 setPagination(response.pagination || { page: 1, limit: 10, totalPages: 1, totalResults: 0 });
                 setCurrentFilters(searchFilters);
             } else {
                 if (resetResults) {
                     setEvents([]);
+                } else {
+                    loadedPageRef.current = Math.max(1, loadedPageRef.current - 1);
                 }
                 setNetworkError(true);
             }
@@ -298,10 +350,14 @@ export default function Gigs() {
             setNetworkError(true);
             if (resetResults) {
                 setEvents([]);
+            } else {
+                loadedPageRef.current = Math.max(1, loadedPageRef.current - 1);
             }
         } finally {
             setIsLoading(false);
             setIsFetchingEvents(false);
+            setIsLoadingMore(false);
+            isFetchingRef.current = false;
         }
     };
 
@@ -846,17 +902,16 @@ export default function Gigs() {
                 onScroll={Animated.event(
                     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
                     {
-                        // Native driver + no JS listener. The sticky overlay
-                        // is always rendered and uses native interpolation
-                        // for opacity/translate, so we don't need to flip
-                        // `isScrolled` state on every scroll frame. Calling
-                        // setState here on every frame in addition to the
-                        // animated interpolation triggered a Hermes
-                        // "Error.stack invalid receiver" crash inside React's
-                        // lane scheduler.
+                        // Native driver for the sticky overlay animation. The JS
+                        // listener ONLY checks for near-bottom to trigger
+                        // load-more (guarded by refs, no per-frame setState), so
+                        // it doesn't reintroduce the Hermes crash the old
+                        // setState-per-frame listener caused.
                         useNativeDriver: true,
+                        listener: handleScrollNearBottom,
                     }
                 )}
+                onMomentumScrollEnd={handleScrollNearBottom}
             >
                 {/* Header is wrapped in an Animated.View that counter-
                     translates the ScrollView's downward movement during
@@ -1047,6 +1102,11 @@ export default function Gigs() {
                     ))
                 )}
                     </>
+                )}
+                {isLoadingMore && (
+                    <View style={{ paddingVertical: 20 }}>
+                        <ActivityIndicator size="small" color={theme.colors.primary} />
+                    </View>
                 )}
             </Animated.ScrollView>
             

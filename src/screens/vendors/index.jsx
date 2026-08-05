@@ -60,8 +60,42 @@ export default function Vendor() {
     const [searchQuery, setSearchQuery] = useState('');
     const [currentFilters, setCurrentFilters] = useState({});
     const [pagination, setPagination] = useState({ page: 1, limit: 10, totalPages: 1, totalResults: 0 });
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [checkingChat, setCheckingChat] = useState(null); // Track which vendor's chat is being checked
     const chatCacheRef = useRef(new Map()); // Cache existing chat lookups
+
+    // Refs mirror pagination + in-flight state so the onScroll load-more handler
+    // reads fresh values without recreating itself (and so rapid scroll frames
+    // can't fire duplicate page fetches before setState commits).
+    const paginationRef = useRef(pagination);
+    useEffect(() => { paginationRef.current = pagination; }, [pagination]);
+    const isFetchingRef = useRef(false);
+    // Synchronous page tracking so rapid scroll frames can't race the (async)
+    // pagination state: `loadedPageRef` is the highest page requested, bumped
+    // BEFORE the fetch. `hasMoreRef` stops paging once a page yields nothing
+    // new (the backend echoes the requested page and returns [] past the end,
+    // so we can't trust totalPages alone).
+    const loadedPageRef = useRef(1);
+    const hasMoreRef = useRef(true);
+
+    // Load the next page and APPEND it (resetResults = false).
+    const loadMoreVendors = () => {
+        if (isFetchingRef.current || !hasMoreRef.current) return;
+        const total = Number(paginationRef.current?.totalPages) || 1;
+        const next = Number(loadedPageRef.current) + 1;
+        if (next > total) { hasMoreRef.current = false; return; }
+        loadedPageRef.current = next; // reserve synchronously → no duplicate/climbing
+        setIsLoadingMore(true);
+        fetchVendors({ page: next }, false);
+    };
+
+    // Fires from onScroll / onMomentumScrollEnd — load more near the bottom.
+    const handleScrollNearBottom = (e) => {
+        const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent || {};
+        if (!contentSize || !layoutMeasurement) return;
+        const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
+        if (distanceFromBottom < 700) loadMoreVendors();
+    };
 
     // Fetch vendors using new filtering service
     // IMPORTANT: Only approved vendor ads should be visible in the public vendors tab
@@ -69,10 +103,13 @@ export default function Vendor() {
     // - Frontend adds an additional safety layer to ensure only approved ads are shown
     // - User's own ads (in Profile -> My Ads) can show all statuses (pending, approved, rejected)
     const fetchVendors = async (filters = {}, resetResults = false, clearAllFilters = false, silent = false) => {
-        if (isFetchingVendors) {
+        // Ref guard (not just state) so rapid scroll frames can't launch
+        // duplicate page fetches before setIsFetchingVendors commits.
+        if (isFetchingRef.current) {
             console.log('Already fetching vendors, skipping...');
             return;
         }
+        isFetchingRef.current = true;
 
         if (fetchTimeoutRef.current) {
             clearTimeout(fetchTimeoutRef.current);
@@ -131,12 +168,7 @@ export default function Vendor() {
 
             if (!hasFilters) {
                 console.log('📋 No filters applied, fetching all vendors');
-                response = await vendorService.getPublicVendorAds();
-                console.log('📋 getPublicVendorAds response:', {
-                    success: response?.success,
-                    dataLength: response?.data?.length,
-                    firstItem: response?.data?.[0]
-                });
+                response = await vendorService.getPublicVendorAds(searchFilters.page, searchFilters.limit);
 
                 if (response.success && response.data) {
                     // Filter to only show approved vendor ads
@@ -148,10 +180,18 @@ export default function Vendor() {
                     const formattedVendors = approvedVendors.map(vendor =>
                         vendorService.formatVendorForDisplay(vendor)
                     );
+                    // Use the REAL pagination from the endpoint so the list keeps
+                    // loading more pages on scroll (was hardcoded to totalPages:1,
+                    // which capped the list at the first page).
                     response = {
                         success: true,
                         data: formattedVendors,
-                        pagination: { page: 1, limit: 10, totalPages: 1, totalResults: formattedVendors.length }
+                        pagination: response.pagination || {
+                            page: searchFilters.page || 1,
+                            limit: searchFilters.limit || 10,
+                            totalPages: 1,
+                            totalResults: formattedVendors.length,
+                        },
                     };
                 }
             } else {
@@ -187,6 +227,10 @@ export default function Vendor() {
                     console.log('✨ Setting vendors state to:', response.data?.length, 'items');
                     const fresh = response.data || [];
                     setVendors(fresh);
+                    // Reset the pager: page 1 is loaded, more exists if the
+                    // endpoint reported additional pages.
+                    loadedPageRef.current = response.pagination?.page || 1;
+                    hasMoreRef.current = (response.pagination?.totalPages || 1) > loadedPageRef.current;
                     // Cache only the unfiltered public list so the next launch
                     // can render instantly. Filtered results vary too widely
                     // to be worth persisting.
@@ -202,6 +246,9 @@ export default function Vendor() {
                         const newData = response.data || [];
                         const existingIds = new Set(prev.map(v => v._original?.vendor_ad_id || v.id));
                         const uniqueNewData = newData.filter(v => !existingIds.has(v._original?.vendor_ad_id || v.id));
+                        // A page that adds nothing new means we've reached the end
+                        // (or the backend returned an out-of-range/echoed page).
+                        if (uniqueNewData.length === 0) hasMoreRef.current = false;
                         console.log('📝 Appending vendors:', {
                             previousCount: prev.length,
                             newCount: uniqueNewData.length,
@@ -209,6 +256,10 @@ export default function Vendor() {
                         });
                         return [...prev, ...uniqueNewData];
                     });
+                    // Also stop if the endpoint says this was the last page.
+                    if ((response.pagination?.page || loadedPageRef.current) >= (response.pagination?.totalPages || 1)) {
+                        hasMoreRef.current = false;
+                    }
                 }
                 setPagination(response.pagination || { page: 1, limit: 10, totalPages: 1, totalResults: 0 });
                 setCurrentFilters(searchFilters);
@@ -222,6 +273,9 @@ export default function Vendor() {
                 console.log('❌ Response not successful, setting network error');
                 if (resetResults) {
                     setVendors([]);
+                } else {
+                    // Load-more failed — roll the reserved page back so it retries.
+                    loadedPageRef.current = Math.max(1, loadedPageRef.current - 1);
                 }
                 setNetworkError(true);
             }
@@ -230,10 +284,14 @@ export default function Vendor() {
             setNetworkError(true);
             if (resetResults) {
                 setVendors([]);
+            } else {
+                loadedPageRef.current = Math.max(1, loadedPageRef.current - 1);
             }
         } finally {
             setIsLoading(false);
             setIsFetchingVendors(false);
+            setIsLoadingMore(false);
+            isFetchingRef.current = false;
         }
     };
 
@@ -493,18 +551,19 @@ export default function Vendor() {
                         progressBackgroundColor="#fff"
                     />
                 }
+                scrollEventThrottle={16}
                 onScroll={Animated.event(
                     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
                     {
-                        // Native driver + NO JS listener — same as the events list.
-                        // The old listener called setFocusedCardIndex on every
-                        // scroll frame (~60/s), re-rendering the whole heavy card
-                        // list and flipping each card's auto-carousel timer, which
-                        // was the vendor-list scroll jank. Dropping it makes the
-                        // vendor list scroll as smoothly as the events list.
+                        // Native driver for the header animation; the JS listener
+                        // ONLY checks for near-bottom to trigger load-more. It does
+                        // no setState per frame (guarded by refs), so it keeps the
+                        // smooth-scroll behavior while enabling infinite scroll.
                         useNativeDriver: true,
+                        listener: handleScrollNearBottom,
                     }
                 )}
+                onMomentumScrollEnd={handleScrollNearBottom}
             >
                 <Animated.View
                     style={[styles.headerWrapper, { transform: [{ translateY: refreshPinTranslate }] }]}
@@ -805,6 +864,11 @@ export default function Vendor() {
                             ))
                         )}
                     </>
+                )}
+                {isLoadingMore && (
+                    <View style={{ paddingVertical: 20 }}>
+                        <ActivityIndicator size="small" color={theme.colors.primary} />
+                    </View>
                 )}
             </Animated.ScrollView>
 

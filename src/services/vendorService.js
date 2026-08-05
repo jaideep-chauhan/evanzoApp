@@ -129,18 +129,32 @@ class VendorService {
   }
 
   // Get public vendor ads (for vendors tab - excludes current user)
-  async getPublicVendorAds() {
+  async getPublicVendorAds(page = 1, limit = 10) {
     return this.debounceRequest(async () => {
       return this.retryWithBackoff(async () => {
         try {
-          const response = await api.get('/vendor_ad/all');
+          // /vendor_ad/all is paginated (results + page/totalPages). Pass the
+          // page/limit and surface the pagination so the list can load more on
+          // scroll instead of stopping after the first page.
+          const response = await api.get('/vendor_ad/all', { params: { page, limit } });
 
           // Handle different response structures
           let vendorAds = [];
+          let pagination = null;
 
           // Check if response has the paginated structure
           if (response.data?.data?.results) {
             vendorAds = response.data.data.results;
+            const d = response.data.data;
+            // Coerce to Number — the API returns BIGINT columns (page/totalPages)
+            // as STRINGS, and string "1" + 1 would concatenate to "11", breaking
+            // the load-more page math.
+            pagination = {
+              page: Number(d.page) || page,
+              limit: Number(d.limit) || limit,
+              totalPages: Number(d.totalPages) || 1,
+              totalResults: Number(d.totalResults ?? vendorAds.length),
+            };
           }
           // Check if data is directly an array (non-paginated)
           else if (Array.isArray(response.data?.data)) {
@@ -154,6 +168,7 @@ class VendorService {
           return {
             success: true,
             data: vendorAds,
+            pagination,
           };
         } catch (error) {
           // Check if it's a network error
@@ -499,7 +514,7 @@ class VendorService {
         : 0,
       reviews_count: Number(vendor.reviews_count) || 0,
       description: vendor.description || '',
-      images: photos.length > 0 ? photos : [dummyImage, dummyImage, dummyImage], // Use dummy images as fallback
+      images: photos, // Real uploaded photos only — never fabricate dummy images.
       extraCount: photos.length > 3 ? photos.length - 3 : 0,
       // Prefer the structured city column (populated by newer ads).
       // Legacy ads only have the full `location` string — fall back to

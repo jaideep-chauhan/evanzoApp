@@ -86,8 +86,11 @@ function VendorCard({
     // source references each time the card re-rendered during list scroll,
     // forcing it to re-decode and flash. Keying off `images` keeps the
     // references stable until the underlying data actually changes.
+    const hasImages = !!(images && images.length > 0);
     const formattedImages = useMemo(() => {
-        const safeImages = images && images.length > 0 ? images : [img, img, img];
+        // Single neutral placeholder if no real photos (grid is hidden anyway
+        // via `hasImages` below) — never fabricate a wall of dummy images.
+        const safeImages = images && images.length > 0 ? images : [img];
         return safeImages.map(image => {
             // Handle null or undefined
             if (!image) {
@@ -423,7 +426,12 @@ function VendorCard({
                     </View>
                 )}
 
-                {/* Images Grid */}
+                {/* Images Grid — only when the vendor has real photos. */}
+                {!hasImages ? (
+                    <View style={[styles.imageGrid, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#eef1f5', borderRadius: 12, paddingVertical: 24 }]}>
+                        <Text style={{ color: '#9aa3b2', fontSize: 12 }}>No photos available</Text>
+                    </View>
+                ) : (
                 <View style={styles.imageGrid}>
                     {/* Carousel for large image */}
                     <View style={styles.carouselWrapper}>
@@ -479,6 +487,7 @@ function VendorCard({
                         </View>
                     </View>
                 </View>
+                )}
 
                 {/* Description and Chat Button in a row */}
                 <View style={styles.rowContent}>

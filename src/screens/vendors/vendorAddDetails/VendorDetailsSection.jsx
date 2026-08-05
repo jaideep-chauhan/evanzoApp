@@ -47,7 +47,7 @@ import { getImageSource } from '../../../utils/imageUtils';
 export default function VendorDetailsSection({
     photos = [],
     onSend,
-    description = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do ds ds ds d sdsjhhs hdsi dsiucds ud hdsic dsiguc cudicgdsuc sguicds csbui chduicgdsuicds gcudis cdusicgdisucgdsug cdsgchddchd",
+    description = "",
     reviews = [],
     hideMessageSection = false,
     offers = [],
@@ -110,21 +110,11 @@ export default function VendorDetailsSection({
                                 );
                             })
                         :
-                            // Always show at least one image
-                            [0, 1, 2].map((idx) => (
-                                <View key={idx} style={styles.photoWrapper}>
-                                    <Image
-                                        source={defaultImg}
-                                        style={styles.photo}
-                                        resizeMode="contain"
-                                    />
-                                    {idx === 1 && (
-                                        <View style={styles.noImageOverlay}>
-                                            <Text style={styles.noImageText}>Sample Images</Text>
-                                        </View>
-                                    )}
-                                </View>
-                            ))
+                            // No real photos — single neutral empty state, no
+                            // fabricated "Sample Images".
+                            <View style={[styles.photoWrapper, styles.noImageOverlay]}>
+                                <Text style={styles.noImageText}>No photos available</Text>
+                            </View>
                         }
                     </ScrollView>
                     {/* Description below images */}

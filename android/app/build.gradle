@@ -48,8 +48,8 @@ android {
         applicationId "com.x4x90studio.evnzo"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 43
-        versionName "2.1.1"
+        versionCode 44
+        versionName "2.1.2"
 
         // RN apps with lots of native modules routinely cross Android's
         // 65K methods limit. Multidex splits the dex output into multiple

@@ -140,43 +140,62 @@ class EventService {
   }
 
   // Get public event ads (for events tab - excludes current user)
-  async getPublicEventAds() {
-    try {
-      const response = await api.get('/event_ad');
-      console.log('🌐 Public event ads response received');
-      console.log('📦 Response success:', response.data?.success);
-      console.log(
-        '📦 Results count:',
-        response.data?.data?.results?.length || 0,
-      );
+  async getPublicEventAds(page = 1, limit = 10) {
+    // Retry transient network errors (up to 3 attempts, short backoff) so a
+    // single flaky-connection blip doesn't drop the user to "Unable to load
+    // events". Mirrors the resilience vendorService already has.
+    let lastError;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        // /event_ad is paginated (results + page/totalPages). Pass page/limit and
+        // return the pagination so the gigs list can load more on scroll.
+        const response = await api.get('/event_ad', { params: { page, limit } });
 
-      // Check if response.data exists and has the expected structure
-      if (!response.data || !response.data.data) {
-        console.error('❌ Unexpected Gig API response structure');
-        console.error('Response data:', response.data);
+        // Check if response.data exists and has the expected structure
+        if (!response.data || !response.data.data) {
+          console.error('❌ Unexpected Gig API response structure');
+          return {
+            success: false,
+            message: 'Invalid API response structure',
+            data: [],
+          };
+        }
+
+        // Extract the results array from the paginated response
+        const d = response.data.data;
+        const eventAds = d?.results || [];
+        console.log(`✅ Found ${eventAds.length} public event ads (page ${page})`);
+
         return {
-          success: false,
-          message: 'Invalid API response structure',
-          data: [],
+          success: true,
+          data: eventAds, // Return the array directly
+          // Coerce to Number — API returns BIGINT page/totalPages as STRINGS,
+          // and "1" + 1 would concatenate to "11", breaking load-more math.
+          pagination: {
+            page: Number(d?.page) || page,
+            limit: Number(d?.limit) || limit,
+            totalPages: Number(d?.totalPages) || 1,
+            totalResults: Number(d?.totalResults ?? eventAds.length),
+          },
         };
+      } catch (error) {
+        lastError = error;
+        // Only retry connection-level failures (no HTTP response); a 4xx/5xx is
+        // a real answer, don't hammer it.
+        const isNetwork = !error.response;
+        if (isNetwork && attempt < 3) {
+          await new Promise(r => setTimeout(r, attempt * 800));
+          continue;
+        }
+        break;
       }
-
-      // Extract the results array from the paginated response
-      const eventAds = response.data.data?.results || [];
-      console.log(`✅ Found ${eventAds.length} public event ads`);
-
-      return {
-        success: true,
-        data: eventAds, // Return the array directly
-      };
-    } catch (error) {
-      console.error('❌ Get public event ads error:', error);
-      return {
-        success: false,
-        message: error.response?.data?.message || 'Failed to fetch event ads',
-        data: [],
-      };
     }
+    console.error('❌ Get public event ads error:', lastError);
+    return {
+      success: false,
+      message: lastError?.response?.data?.message || 'Failed to fetch event ads',
+      data: [],
+    };
   }
 
   // Deprecated: Keep for backward compatibility, redirects to getPublicEventAds
