@@ -76,6 +76,26 @@ const CreateAddForm = ({ type, onClose }) => {
     // Y-offset of the vendor Description field within the scroll content, captured
     // via onLayout, so focusing it can scroll it above the keyboard.
     const vendorDescY = useRef(0);
+    // True while the Gig Description (the last text field before Attachments)
+    // is focused — drives the exact scroll below so those last fields sit
+    // snug above the keyboard.
+    const gigDescFocusedRef = useRef(false);
+    // Measured (via onLayout) bottom Y of the Attachments block in content
+    // coordinates, and the ScrollView frame height. Used to compute the exact
+    // scroll offset that pins Attachments just above the keyboard — deterministic,
+    // unlike scrollToEnd which depends on a possibly-stale content size.
+    const gigAttachEndRef = useRef(0);
+    const scrollFrameHRef = useRef(0);
+    const pinGigLastFieldsAboveKeyboard = () => {
+        if (!gigDescFocusedRef.current) return;
+        const end = gigAttachEndRef.current;
+        const frameH = scrollFrameHRef.current;
+        if (end > 0 && frameH > 0) {
+            // Land Attachments' bottom ~16px above the keyboard (frame bottom).
+            const target = Math.max(0, end - frameH + 16);
+            scrollViewRef.current?.scrollTo({ y: target, animated: true });
+        }
+    };
 
     // The form lives inside a Modal, where adjustResize / KeyboardAvoidingView
     // don't reliably shrink the viewport. Track the keyboard height and add it
@@ -91,6 +111,16 @@ const CreateAddForm = ({ type, onClose }) => {
         const h = Keyboard.addListener(hideEvt, onHide);
         return () => { s.remove(); h.remove(); };
     }, []);
+
+    // Backup trigger: after the keyboard height changes (and the frame resizes),
+    // re-pin the last fields. The ScrollView onLayout is the primary trigger;
+    // this covers cases where the frame height doesn't change enough to re-fire it.
+    useEffect(() => {
+        if (keyboardHeight > 0 && gigDescFocusedRef.current) {
+            const t = setTimeout(pinGigLastFieldsAboveKeyboard, 120);
+            return () => clearTimeout(t);
+        }
+    }, [keyboardHeight]);
 
     // Gig Ad fields
     const [service, setService] = useState('');
@@ -876,12 +906,25 @@ const CreateAddForm = ({ type, onClose }) => {
             </View>
             <ScrollView
                 ref={scrollViewRef}
-                style={styles.scrollViewPro}
-                contentContainerStyle={[styles.containerPro, { paddingBottom: 20 + keyboardHeight }]}
+                // The Modal doesn't shrink for the keyboard, so instead of
+                // padding the content by keyboardHeight (which showed up as a
+                // dead gap), shrink the SCROLL AREA itself to end exactly at the
+                // keyboard top: marginBottom = keyboardHeight. Now the content
+                // simply scrolls within the visible area above the keyboard —
+                // no padding, so no gap. (Default 90 reserves the Cancel/Post
+                // row when the keyboard is closed.)
+                style={[styles.scrollViewPro, keyboardHeight > 0 && { marginBottom: keyboardHeight }]}
+                contentContainerStyle={[styles.containerPro, { paddingBottom: 20 }]}
                 showsVerticalScrollIndicator={false}
                 nestedScrollEnabled={true}
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="on-drag"
+                onLayout={(e) => {
+                    // Frame height changes when the keyboard opens (marginBottom
+                    // becomes keyboardHeight). Re-pin the last fields then.
+                    scrollFrameHRef.current = e.nativeEvent.layout.height;
+                    pinGigLastFieldsAboveKeyboard();
+                }}
             >
                 {type === 'event' ? (
                     <>
@@ -1081,9 +1124,12 @@ const CreateAddForm = ({ type, onClose }) => {
                                 placeholderTextColor="#ffffff80"
                                 multiline
                                 onFocus={() => {
-                                    setTimeout(() => {
-                                        scrollViewRef.current?.scrollTo({ y: 600, animated: true });
-                                    }, 300);
+                                    gigDescFocusedRef.current = true;
+                                    // Backup for the keyboard-already-open case.
+                                    setTimeout(pinGigLastFieldsAboveKeyboard, 200);
+                                }}
+                                onBlur={() => {
+                                    gigDescFocusedRef.current = false;
                                 }}
                             />
                             {description && (
@@ -1093,7 +1139,16 @@ const CreateAddForm = ({ type, onClose }) => {
                             )}
                         </View>
 
-                        <View style={styles.fieldGroupPro}>
+                        <View
+                            style={styles.fieldGroupPro}
+                            onLayout={(e) => {
+                                // Bottom Y of the Attachments block in content
+                                // coords — used to pin it just above the keyboard.
+                                gigAttachEndRef.current =
+                                    e.nativeEvent.layout.y + e.nativeEvent.layout.height;
+                                pinGigLastFieldsAboveKeyboard();
+                            }}
+                        >
                             <Text style={styles.labelPro}>📎 Attachments</Text>
                             <View style={styles.attachmentRowPro}>
                                 {photos.length > 0 && (

@@ -33,23 +33,6 @@ const parseMaybeJson = (val) => {
     }
 };
 
-const firstPhotoUrl = (vendor) => {
-    if (!vendor) return null;
-    const photos = parseMaybeJson(vendor.photos);
-    if (Array.isArray(photos) && photos.length > 0) {
-        const first = photos[0];
-        const raw = first?.url || (typeof first === 'string' ? first : null);
-        if (raw) return raw.startsWith('http') ? raw : `https://api.evnzo.com${raw}`;
-    }
-    if (Array.isArray(vendor.images) && vendor.images.length > 0) {
-        const first = vendor.images[0];
-        if (typeof first === 'string') return first;
-        if (first?.uri) return first.uri;
-    }
-    if (typeof vendor.image === 'string') return vendor.image;
-    return null;
-};
-
 const VendorCard = ({
     vendor,
     onBackPress,
@@ -60,15 +43,38 @@ const VendorCard = ({
 
     // Pull out the bits the header actually shows. Every field has a clear
     // fallback so the screen never blows up if backend is sparse.
-    // Prefer the OWNER's profile picture for the avatar circle (this header
-    // is supposed to identify the human, not the ad). Fall through to the
-    // first ad photo only if the owner hasn't uploaded a profile pic.
+    // Avatar circle uses ONLY the owner's profile picture (this header
+    // identifies the vendor, not the ad). No ad-photo fallback — if there's
+    // no profile pic we render name-initials below instead.
     const logoUri =
         vendor?.owner_profile_pic ||
         vendor?._original?.user?.profile_pic ||
         vendor?._original?.User?.profile_pic ||
-        firstPhotoUrl(vendor);
-    const name = vendor?.name || vendor?.company_name || vendor?.title || 'Vendor';
+        null;
+    // Show the VENDOR's name (the owner/person), not the ad title. Falls back
+    // to the business/ad name only when there's no owner name.
+    const name =
+        vendor?.owner_name ||
+        vendor?._original?.user?.full_name ||
+        vendor?._original?.User?.full_name ||
+        [vendor?._original?.user?.first_name, vendor?._original?.user?.last_name]
+            .filter(Boolean)
+            .join(' ')
+            .trim() ||
+        vendor?.name ||
+        vendor?.company_name ||
+        vendor?.title ||
+        'Vendor';
+    // Initials for the avatar when the vendor has no profile pic.
+    const initials =
+        (name || '')
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((w) => w[0])
+            .join('')
+            .toUpperCase() || '?';
     const category = vendor?.type || vendor?.category?.name || vendor?.vendor_type || '';
     const location =
         vendor?.city ||
@@ -139,16 +145,15 @@ const VendorCard = ({
                         <Entypo name="share" size={18} color="#334462" />
                     </TouchableOpacity>
 
-                    {/* Avatar */}
+                    {/* Avatar — owner profile pic, or name-initials if none. */}
                     <View style={styles.avatarWrapper}>
-                        <Image
-                            source={
-                                logoUri
-                                    ? { uri: logoUri }
-                                    : require('../../../assets/images/dummy.png')
-                            }
-                            style={styles.avatar}
-                        />
+                        {logoUri ? (
+                            <Image source={{ uri: logoUri }} style={styles.avatar} />
+                        ) : (
+                            <View style={[styles.avatar, styles.avatarInitials]}>
+                                <Text style={styles.avatarInitialsText}>{initials}</Text>
+                            </View>
+                        )}
                     </View>
 
                     {/* Name & Meta */}
@@ -311,6 +316,17 @@ const styles = StyleSheet.create({
         backgroundColor: '#ddd',
         borderWidth: 3,
         borderColor: '#fff',
+    },
+    avatarInitials: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#334462',
+    },
+    avatarInitialsText: {
+        color: '#fff',
+        fontSize: 34,
+        fontWeight: '700',
+        letterSpacing: 1,
     },
     name: {
         fontSize: 24,

@@ -218,17 +218,34 @@ export default function VendorChat({ navigation }) {
                 >
                     <VendorProfileCard
                         // Avatar at the top of the detail page should be the
-                        // OWNER'S profile picture, not a thumbnail of the ad's
-                        // photos. Fall through to the first ad photo only if
-                        // the owner hasn't uploaded a profile pic.
+                        // OWNER'S profile picture only — NOT a thumbnail of the
+                        // ad's photos. If the owner hasn't uploaded a profile
+                        // pic, pass null so the card renders a name-initials
+                        // avatar instead of an ad photo.
                         logo={
                             vendor?.owner_profile_pic ||
                             vendor?._original?.user?.profile_pic ||
                             vendor?._original?.User?.profile_pic ||
-                            formattedImages[0] ||
-                            img
+                            null
                         }
-                        name={vendor?.name || ''}
+                        // Show the VENDOR's name (the owner/person behind the
+                        // ad) — NOT the ad title. `name` from the formatter is
+                        // company_name/title (the ad's business title); the
+                        // vendor's actual name is the joined user's full_name.
+                        // Falls back to the ad title only if there's no owner
+                        // name at all. The avatar's initials derive from this
+                        // same name, so a pic-less vendor shows their initials.
+                        name={
+                            vendor?.owner_name ||
+                            vendor?._original?.user?.full_name ||
+                            vendor?._original?.User?.full_name ||
+                            [vendor?._original?.user?.first_name, vendor?._original?.user?.last_name]
+                                .filter(Boolean)
+                                .join(' ')
+                                .trim() ||
+                            vendor?.name ||
+                            ''
+                        }
                         category={vendor?.type || ''}
                         location={vendor?.location || ''}
                         onBackPress={() => navigation && navigation.goBack ? navigation.goBack() : null}

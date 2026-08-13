@@ -128,6 +128,50 @@ class VendorService {
     });
   }
 
+  // Get the PUBLIC vendor ads that belong to one specific vendor/user.
+  // Backend: GET /vendor_ad/user/:userId (public, no auth) → { data: [ads] }.
+  // Used by a vendor's profile page to list only THAT vendor's ads.
+  async getUserVendorAds(userId) {
+    return this.debounceRequest(async () => {
+      return this.retryWithBackoff(async () => {
+        try {
+          const response = await api.get(`/vendor_ad/user/${userId}`);
+          // Backend returns a simple array under data.
+          const vendorAds = Array.isArray(response.data?.data)
+            ? response.data.data
+            : [];
+          return {
+            success: true,
+            data: vendorAds,
+          };
+        } catch (error) {
+          if (
+            error.code === 'ECONNABORTED' ||
+            error.message === 'Network Error' ||
+            !error.response
+          ) {
+            console.error('Network error detected:', error.message);
+            throw error; // Will trigger retry
+          }
+
+          console.error('Get user vendor ads error:', error);
+
+          if (error.response?.status >= 400 && error.response?.status < 500) {
+            return {
+              success: false,
+              message:
+                error.response?.data?.message ||
+                'Failed to fetch vendor ads',
+              data: [],
+            };
+          }
+
+          throw error; // Will trigger retry for 5xx errors
+        }
+      });
+    });
+  }
+
   // Get public vendor ads (for vendors tab - excludes current user)
   async getPublicVendorAds(page = 1, limit = 10) {
     return this.debounceRequest(async () => {

@@ -10,46 +10,16 @@ import {
     RefreshControl,
     Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import vendorDetailsService from '../../../services/vendorDetailsService';
+import vendorService from '../../../services/vendorService';
+import chatService from '../../../services/chatService';
+import VendorAdCard from '../VendorCard';
 import { useRoute, useFocusEffect } from '@react-navigation/native';
 import { getImageSource } from '../../../utils/imageUtils';
 import img from '../../../assets/images/dummy.png';
-
-
-const dummyReviews = [
-    {
-        id: 1,
-        title: 'Meeting with customer',
-        description:
-            'First, a disclaimer – the entire process writing a blog post often takes a couple of hours if you can type',
-        name: 'Raya James',
-        avatar: 'https://i.pravatar.cc/100?img=5',
-        rating: 2,
-        comments: 6,
-    },
-    {
-        id: 2,
-        title: 'Meeting with customer',
-        description:
-            'First, a disclaimer – the entire process writing a blog post often takes a couple of hours if you can type',
-        name: 'Raya James',
-        avatar: 'https://i.pravatar.cc/100?img=6',
-        rating: 4,
-        comments: 6,
-    },
-    {
-        id: 3,
-        title: 'Meeting with customer',
-        description:
-            'First, a disclaimer – the entire process writing a blog post often takes a couple of hours if you can type',
-        name: 'Raya James',
-        avatar: 'https://i.pravatar.cc/100?img=7',
-        rating: 5,
-        comments: 6,
-    },
-];
 
 // Review media on the DB lives in a TEXT column holding a JSON-stringified
 // array of `{file_url, ...}` objects (or sometimes plain URL strings). Parse
@@ -101,7 +71,7 @@ const normalizeReviewMedia = (raw) => {
 
 export default function ReviewList({ navigation }) {
     const route = useRoute();
-    const [activeTab, setActiveTab] = useState('REVIEWS');
+    const [activeTab, setActiveTab] = useState('ADS');
     const [reviews, setReviews] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
@@ -109,6 +79,11 @@ export default function ReviewList({ navigation }) {
         totalReviews: 0,
         averageRating: 0
     });
+    // Real vendor ads for the ADS tab. Populated from the public vendor-ad
+    // endpoint (same source as the home Vendors list) — NOT the old hardcoded
+    // "Raya James / Lorem ipsum" placeholder list.
+    const [ads, setAds] = useState([]);
+    const [adsLoading, setAdsLoading] = useState(false);
     
     // Get vendor ID from route params
     const vendorId = route.params?.vendorId;
@@ -122,6 +97,120 @@ export default function ReviewList({ navigation }) {
             fetchReviews();
         }
     }, [vendorId]);
+
+    // Fetch real vendor ads once for the ADS tab.
+    useEffect(() => {
+        fetchAds();
+    }, []);
+
+    const fetchAds = async () => {
+        // This is THIS vendor's profile page, so the ADS tab must show only
+        // this vendor's own ads — not every vendor's ads. Scope by the owner's
+        // user_id via GET /vendor_ad/user/:userId.
+        const vendorObj = route.params?.vendor || null;
+        const ownerUserId =
+            vendorObj?._original?.user_id ||
+            vendorObj?.user_id ||
+            vendorObj?._original?.user?.user_id ||
+            vendorObj?._original?.User?.user_id;
+
+        if (!ownerUserId) {
+            // No owner id → don't fall back to showing everyone's ads.
+            setAds([]);
+            return;
+        }
+
+        try {
+            setAdsLoading(true);
+            const res = await vendorService.getUserVendorAds(ownerUserId);
+            if (res.success && Array.isArray(res.data)) {
+                // Only approved ads, formatted for display (same as home list).
+                const formatted = res.data
+                    .filter((v) => v.approval_status === 'approved')
+                    .map((v) => vendorService.formatVendorForDisplay(v));
+                setAds(formatted);
+            } else {
+                setAds([]);
+            }
+        } catch (error) {
+            console.error('Error fetching ads:', error);
+            setAds([]);
+        } finally {
+            setAdsLoading(false);
+        }
+    };
+
+    // Tapping the 💬 tab opens a direct chat with THIS vendor (the one whose
+    // page we're on). Mirrors the home Vendors list chat flow: reuse an
+    // existing direct chat if one exists, otherwise open ChatScreen with the
+    // recipientId so a new one is created.
+    const startChatWithVendor = async () => {
+        const vendorObj = route.params?.vendor || null;
+        const vendorUserId =
+            vendorObj?._original?.user_id ||
+            vendorObj?.user_id ||
+            vendorObj?._original?.user?.user_id ||
+            vendorObj?._original?.User?.user_id;
+
+        if (!vendorUserId) {
+            Alert.alert('Chat Unavailable', 'Could not find this vendor to start a chat.');
+            return;
+        }
+
+        // Prevent starting a chat with your own listing.
+        try {
+            const currentUserData = await AsyncStorage.getItem('userData');
+            const currentUser = currentUserData ? JSON.parse(currentUserData) : null;
+            const currentUserId = currentUser?.user_id || currentUser?.id;
+            if (String(vendorUserId) === String(currentUserId)) {
+                Alert.alert('Cannot Start Chat', 'You cannot start a chat with your own vendor listing.');
+                return;
+            }
+        } catch (_) {
+            // userData missing/corrupt — fall through and let the chat flow handle auth.
+        }
+
+        const chatName =
+            vendorObj?.owner_name ||
+            vendorObj?._original?.user?.full_name ||
+            vendorObj?._original?.User?.full_name ||
+            vendorObj?.company_name ||
+            vendorObj?.name ||
+            vendorName;
+        const avatar =
+            vendorObj?.owner_profile_pic ||
+            vendorObj?._original?.user?.profile_pic ||
+            vendorObj?._original?.User?.profile_pic ||
+            null;
+
+        try {
+            const existing = await chatService.findDirectChat(vendorUserId);
+            if (existing?.exists) {
+                navigation.navigate('ChatScreen', {
+                    chatId: existing.chatId,
+                    chatName,
+                    avatar,
+                    isOnline: false,
+                });
+            } else {
+                navigation.navigate('ChatScreen', {
+                    recipientId: vendorUserId,
+                    chatName,
+                    avatar,
+                    isOnline: false,
+                });
+            }
+        } catch (error) {
+            console.error('Error starting chat with vendor:', error);
+            // Fallback: open ChatScreen directly with the recipientId.
+            navigation.navigate('ChatScreen', {
+                recipientId: vendorUserId,
+                chatName,
+                avatar,
+                isOnline: false,
+            });
+        }
+    };
 
     // Refetch on every focus, so coming back from the Write-a-Review screen
     // (or from any push that mutated reviews) shows fresh data without a
@@ -205,6 +294,44 @@ export default function ReviewList({ navigation }) {
 
     const renderTabContent = () => {
         switch (activeTab) {
+            case 'ADS':
+                return (
+                    <View style={styles.adsContainer}>
+                        {adsLoading && ads.length === 0 ? (
+                            <View style={styles.loadingContainer}>
+                                <ActivityIndicator size="large" color="#2C3D5B" />
+                                <Text style={styles.loadingText}>Loading ads...</Text>
+                            </View>
+                        ) : ads.length === 0 ? (
+                            <View style={styles.emptyContainer}>
+                                <Icon name="briefcase" size={48} color="#ccc" />
+                                <Text style={styles.emptyTitle}>No Ads Yet</Text>
+                            </View>
+                        ) : (
+                            ads.map((vendor, idx) => (
+                                <VendorAdCard
+                                    key={`ad-${vendor._original?.vendor_ad_id || vendor.id}-${idx}`}
+                                    vendorId={vendor._original?.vendor_ad_id || vendor.id}
+                                    fullVendorData={vendor}
+                                    initials={vendor.initials}
+                                    ownerProfilePic={vendor.owner_profile_pic}
+                                    name={vendor.name}
+                                    type={vendor.type}
+                                    rating={vendor.rating}
+                                    description={vendor.description}
+                                    images={vendor.images}
+                                    extraCount={vendor.extraCount}
+                                    location={vendor.location}
+                                    offers={vendor.offers || []}
+                                    currency={vendor.currency}
+                                    onChatPress={() =>
+                                        navigation.navigate('VendorAddDetail', { vendor })
+                                    }
+                                />
+                            ))
+                        )}
+                    </View>
+                );
             case 'REVIEWS':
                 return (
                     <FlatList
@@ -398,57 +525,32 @@ export default function ReviewList({ navigation }) {
 
     return (
         <View style={styles.container}>
-            {/* Reviews header — the old ADS tab showed fabricated vendors and the
-                CHAT tab was a non-functional placeholder; both removed. */}
-            <View style={[styles.tabs, { flex: 1 }]}>
-                <View style={[styles.tab, styles.activeTab, { flex: 1 }]}>
-                    <Text style={[styles.tabText, styles.activeText]}>REVIEWS</Text>
-                </View>
+            {/* Tabs: ADS (real vendor ads) | REVIEWS | 💬 chat */}
+            <View style={[styles.tabs, { flex: 1, gap: 8 }]}>
+                <TouchableOpacity
+                    style={[styles.tab, { flex: 2 }, activeTab === 'ADS' && styles.activeTab]}
+                    onPress={() => setActiveTab('ADS')}
+                >
+                    <Text style={[styles.tabText, activeTab === 'ADS' && styles.activeText]}>ADS</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={[styles.tab, { flex: 2 }, activeTab === 'REVIEWS' && styles.activeTab]}
+                    onPress={() => setActiveTab('REVIEWS')}
+                >
+                    <Text style={[styles.tabText, activeTab === 'REVIEWS' && styles.activeText]}>REVIEWS</Text>
+                </TouchableOpacity>
+                {/* 💬 is an action, not a content tab — tapping it opens a
+                    direct chat with this vendor. */}
+                <TouchableOpacity
+                    style={[styles.tab, { flex: 0.7 }]}
+                    onPress={startChatWithVendor}
+                >
+                    <Text style={styles.tabText}>💬</Text>
+                </TouchableOpacity>
             </View>
 
             {/* Tab Content */}
             {renderTabContent()}
-            {/* Write Review */}
-            {/* <TouchableOpacity
-                onPress={() => navigation.navigate('Review')}
-                style={styles.writeReview}
-            >
-                <Text style={styles.writeText}>Write a review</Text>
-                <Icon name="chevron-right" size={16} color="#000" />
-            </TouchableOpacity> */}
-
-            {/* Review List */}
-            {/* {dummyReviews.map((review) => (
-                <View key={review.id} style={styles.card}>
-                    <View style={styles.top}>
-                        <Text style={styles.title}>{review.title}</Text>
-                        <View style={styles.stars}>
-                            {[...Array(5)].map((_, index) => (
-                                <FontAwesome
-                                    key={index}
-                                    name={index < review.rating ? 'star' : 'star-o'}
-                                    size={12}
-                                    color="#2C3D5B"
-                                    style={{ marginRight: 2 }}
-                                />
-                            ))}
-                        </View>
-                    </View>
-
-                    <Text style={styles.description}>{review.description}</Text>
-
-                    <View style={styles.footer}>
-                        <View style={styles.userInfo}>
-                            <Image source={{ uri: review.avatar }} style={styles.avatar} />
-                            <Text style={styles.userName}>{review.name}</Text>
-                        </View>
-                        <View style={styles.commentInfo}>
-                            <Icon name="message-circle" size={14} color='rgba(28, 28, 28, 0.4)' />
-                            <Text style={styles.commentCount}>{review.comments}</Text>
-                        </View>
-                    </View>
-                </View>
-            ))} */}
         </View>
     );
 }
@@ -577,19 +679,6 @@ const styles = StyleSheet.create({
     adsContainer: {
         flex: 1,
         marginTop: 10,
-
-
-    },
-    chatContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginTop: 50,
-    },
-    placeholderText: {
-        fontSize: 16,
-        color: '#666',
-        fontStyle: 'italic',
     },
     statsContainer: {
         flexDirection: 'row',

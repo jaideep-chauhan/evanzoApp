@@ -268,6 +268,26 @@ export default function VendorProfileCard({
     navigation,
     vendor, // Pass the full vendor object
 }) {
+    // Tapping the avatar or the name opens the vendor's reviews/ads page — the
+    // same destination the old "See All" link used (now removed).
+    const openReviews = () => {
+        const vendorId = vendor?._original?.vendor_ad_id || vendor?.vendor_ad_id || vendor?.id || vendor?._id;
+        navigation?.navigate('AllReviews', { vendorId, vendorName: name, vendor });
+    };
+
+    // Only treat `logo` as a real profile picture when it's actually present.
+    // When there's no profile pic we render a name-initials avatar instead of
+    // falling back to one of the ad's photos.
+    const hasProfilePic = typeof logo === 'string' ? logo.trim().length > 0 : !!logo;
+    const initials =
+        (name || '')
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((w) => w[0])
+            .join('')
+            .toUpperCase() || '?';
     return (
         <View style={{ flex: 1, backgroundColor: '#fff' }}>
             {/* Header Background */}
@@ -285,30 +305,19 @@ export default function VendorProfileCard({
             {/* White Info Card */}
             <View style={[styles.infoCardWrapper, { flex: 1 }]}>
                 <View style={[styles.infoCard, { flexGrow: 1 }]}>
-                    <TouchableOpacity 
-                        style={styles.seeAllBtn} 
-                        onPress={() => {
-                            const vendorId = vendor?._original?.vendor_ad_id || 
-                                            vendor?.vendor_ad_id || 
-                                            vendor?.id ||
-                                            vendor?._id;
-                            navigation?.navigate('AllReviews', {
-                                vendorId: vendorId,
-                                vendorName: name,
-                                vendor: vendor,
-                            });
-                        }} 
-                        activeOpacity={0.7}
-                    >
-                        <Text style={styles.seeAllText}>See All</Text>
+                    <TouchableOpacity style={styles.avatarWrapper} activeOpacity={0.8} onPress={openReviews}>
+                        {hasProfilePic ? (
+                            <Image
+                                source={typeof logo === 'string' ? { uri: logo } : logo}
+                                style={styles.avatar}
+                            />
+                        ) : (
+                            <View style={[styles.avatar, styles.avatarInitials]}>
+                                <Text style={styles.avatarInitialsText}>{initials}</Text>
+                            </View>
+                        )}
                     </TouchableOpacity>
-                    <View style={styles.avatarWrapper}>
-                        <Image
-                            source={typeof logo === 'string' ? { uri: logo } : logo}
-                            style={styles.avatar}
-                        />
-                    </View>
-                    <Text style={styles.name}>{name}</Text>
+                    <Text style={styles.name} onPress={openReviews}>{name}</Text>
                     <Text style={styles.category}>{category}</Text>
                     <Text style={styles.location}>{location}</Text>
                     <ActionIcons vendor={vendor} navigation={navigation} />
@@ -383,6 +392,17 @@ const styles = StyleSheet.create({
         borderColor: '#FCFAFA',
         backgroundColor: '#eee',
     },
+    avatarInitials: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#334462',
+    },
+    avatarInitialsText: {
+        color: '#fff',
+        fontSize: 34,
+        fontWeight: '700',
+        letterSpacing: 1,
+    },
     name: {
         fontSize: 22,
         fontWeight: '600',
@@ -399,20 +419,6 @@ const styles = StyleSheet.create({
         color: '#1D1B20',
         marginTop: 4,
         fontWeight: '400',
-    },
-    seeAllBtn: {
-        position: 'absolute',
-        top: 16,
-        right: 18,
-        zIndex: 10,
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-    },
-    seeAllText: {
-        color: '#003A9B',
-        fontWeight: '600',
-        fontSize: 12,
-        letterSpacing: 0.2,
     },
 });
 
