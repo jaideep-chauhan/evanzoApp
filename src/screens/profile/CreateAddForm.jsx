@@ -20,6 +20,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { openImagePickerWithCropper, IMAGE_DIMENSIONS } from '../../utils/imageCropperUtils';
 import { requestGalleryPermission } from '../../utils/galleryPermission';
+import { logBreadcrumb, recordError } from '../../services/crashReporting';
 import { compressImagesChunked, COMPRESSION_PRESETS } from '../../utils/imageCompressionUtil';
 import { UploadProgressOverlay } from '../../components/UploadProgressBar';
 import { useTheme } from '../../ThemeContext';
@@ -466,12 +467,14 @@ const CreateAddForm = ({ type, onClose }) => {
 
         try {
             console.log('📸 Opening image picker...');
+            logBreadcrumb(`CreateAd(${type}): opening photo picker`);
             // Open image picker - select multiple images
             const selectedImages = await openImagePickerWithCropper({
                 multiple: true,
                 maxFiles: type === 'vendor' ? 20 : 10,
                 compressImageQuality: 0.8,
             });
+            logBreadcrumb(`CreateAd(${type}): picker returned ${selectedImages?.length || 0} images`);
 
             console.log('📸 Selected images:', selectedImages?.length || 0);
 
@@ -498,6 +501,7 @@ const CreateAddForm = ({ type, onClose }) => {
             }
         } catch (error) {
             console.error('📸 Image picker error:', error);
+            recordError(error, { context: 'selectImage', adType: type });
             setToastState({
                 visible: true,
                 message: 'Failed to select images',
@@ -788,12 +792,20 @@ const CreateAddForm = ({ type, onClose }) => {
                 });
 
                 console.log('Uploading vendor ad with', compressedPhotos.length, 'photos');
+                logBreadcrumb(`CreateAd(vendor): uploading ${compressedPhotos.length} photos`);
 
                 setUploadStage('uploading');
                 setUploadProgress(0);
                 const response = await vendorService.createVendorAd(formData, (percent) => {
                     setUploadProgress(percent);
                 });
+
+                if (!response.success) {
+                    recordError(new Error(response.message || 'Vendor ad create failed'), {
+                        context: 'createVendorAd',
+                        photos: compressedPhotos.length,
+                    });
+                }
 
                 if (response.success) {
                     clearDraft();
@@ -809,6 +821,7 @@ const CreateAddForm = ({ type, onClose }) => {
             }
         } catch (error) {
             console.error('Error posting ad:', error);
+            recordError(error, { context: 'submitAd', adType: type });
             setToastState({ visible: true, message: 'An unexpected error occurred. Please try again.', type: 'error' });
         } finally {
             setIsLoading(false);

@@ -5,6 +5,7 @@ import { setAuthLogout } from '../services/navigationService';
 import socialAuthService from '../services/socialAuthService';
 import socketService from '../services/socketService';
 import { secureStorage, migrateFromAsyncStorage } from '../utils/secureStorage';
+import { setCrashUser } from '../services/crashReporting';
 
 const AuthContext = createContext({});
 
@@ -27,6 +28,12 @@ export const AuthProvider = ({ children }) => {
         // Register logout function with navigation service
         setAuthLogout(logout);
     }, []);
+
+    // Tag Crashlytics reports with the signed-in user so we can see which
+    // accounts hit "can't post ad" / chat failures on real devices.
+    useEffect(() => {
+        setCrashUser(user?.user_id || user?.id || null);
+    }, [user]);
 
     const checkAuthState = async () => {
         try {

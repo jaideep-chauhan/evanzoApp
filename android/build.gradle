@@ -19,6 +19,10 @@ buildscript {
         // injects the FCM / Crashlytics keys at build time. Required by
         // @react-native-firebase/app + /messaging modules in package.json.
         classpath("com.google.gms:google-services:4.4.2")
+        // Crashlytics Gradle plugin — uploads mapping files so release stack
+        // traces are de-obfuscated in the Firebase console. Pairs with the
+        // @react-native-firebase/crashlytics module (see package.json).
+        classpath("com.google.firebase:firebase-crashlytics-gradle:3.0.2")
     }
 }
 

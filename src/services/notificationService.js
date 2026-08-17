@@ -174,10 +174,17 @@ class NotificationService {
       await this.displayNotification(remoteMessage);
     });
 
-    // Background/Quit message handler
-    messaging().setBackgroundMessageHandler(async remoteMessage => {
-      console.log('📬 Background notification received:', remoteMessage);
-      await this.displayNotification(remoteMessage);
+    // NOTE: the background/quit FCM handler is registered at MODULE scope in
+    // index.js — the only place React Native runs it in headless/killed state.
+    // Do NOT register it here too: a second registration inside a component
+    // overrides index.js's and won't run when the app is killed.
+
+    // When the app returns to the foreground, consume any notification tap that
+    // was stashed while it was backgrounded/killed (see index.js onBackgroundEvent).
+    this.appStateSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        this.consumePendingNotificationNav();
+      }
     });
 
     // Notification interaction handler (when user taps notification)
@@ -286,66 +293,164 @@ class NotificationService {
     this.handleNotificationNavigation(data);
   }
 
-  // Handle navigation based on notification data
+  // Resolve a notification into a navigation target { name, params }.
+  //
+  // Works for BOTH a raw FCM `data` payload (system-tray tap) and an in-app
+  // notification DB row, because the routing fields can live in different
+  // places depending on the source:
+  //   - key:  `action_type` (e.g. "open_chat") preferred, else `type`.
+  //   - ids:  spread at the top level (push) AND/OR inside a JSON-stringified
+  //           `action_data`/`data` (in-app row) — so we parse+merge all of them.
+  // Always returns a target so a tap NEVER dead-ends (the old code sent
+  // unknown types to a non-existent 'Home' route, so they did nothing).
+  getNotificationRoute(notification = {}) {
+    const parseMaybe = (v) => {
+      if (!v) return {};
+      if (typeof v === 'string') {
+        try { return JSON.parse(v); } catch (_) { return {}; }
+      }
+      return v;
+    };
+    const merged = {
+      ...parseMaybe(notification.action_data),
+      ...parseMaybe(notification.data),
+      ...notification,
+    };
+    const key =
+      notification.action_type || merged.action_type ||
+      notification.type || merged.type;
+
+    // Accept snake_case (backend) and camelCase, wherever the id landed.
+    const chatId = merged.chat_id || merged.chatId;
+    const eventAdId = merged.event_ad_id || merged.eventId || merged.event_id;
+    const vendorAdId = merged.vendor_ad_id || merged.vendorId || merged.vendor_id;
+    const chatName =
+      merged.sender_name ||
+      (notification.title || '').replace(/^New message from\s*/i, '') ||
+      'Chat';
+
+    switch (key) {
+      // ---- Chat (two backend payloads: message/open_chat and chat_message) ----
+      case 'open_chat':
+      case 'message':
+      case 'chat_message':
+        return chatId
+          ? { name: 'ChatScreen', params: { chatId, chatName } }
+          : { name: 'Main', params: { screen: 'Messages' } };
+
+      // ---- Gig/event ad response + new-gig reminder ----
+      case 'view_event_ad':
+      case 'event_reminder':
+      case 'view_response':
+      case 'ad_response':
+        if (eventAdId) return { name: 'EventDetailView', params: { eventId: eventAdId } };
+        if (vendorAdId) return { name: 'VendorAddDetail', params: { vendorId: vendorAdId } };
+        return { name: 'Main', params: { screen: 'Profile' } };
+
+      // ---- Vendor inquiry / quote ----
+      case 'view_inquiry':
+      case 'vendor_quote':
+        return vendorAdId
+          ? { name: 'VendorAddDetail', params: { vendorId: vendorAdId } }
+          : { name: 'Main', params: { screen: 'Profile' } };
+
+      // ---- New review on your vendor ad (payload only has review_id) ----
+      case 'view_review':
+      case 'review':
+        return vendorAdId
+          ? { name: 'VendorAddDetail', params: { vendorId: vendorAdId } }
+          : { name: 'Main', params: { screen: 'Profile' } };
+
+      // ---- Account / security ----
+      case 'login_alert':
+        return { name: 'LoginHistory' };
+      case 'new_support_ticket':
+        return { name: 'HelpSupport' };
+
+      // ---- Money / bookings + legacy admin ad-approval ----
+      case 'view_booking':
+      case 'booking_confirmation':
+      case 'view_payment':
+      case 'payment':
+      case 'earning':
+      case 'admin_notification':
+      case 'ad_approved':
+      case 'ad_rejected':
+        return { name: 'Main', params: { screen: 'Profile' } };
+
+      // ---- Informational (system/promotion/test) + anything unknown ----
+      default:
+        return { name: 'NotificationInbox' };
+    }
+  }
+
+  // Handle navigation for a tapped system-tray push (raw FCM `data` payload).
   handleNotificationNavigation(data) {
-    if (!navigationRef.current) {
-      console.log('Navigation ref not ready');
+    this.navigateWhenReady(data);
+  }
+
+  // Navigate as soon as the navigation container is mounted. On a cold start
+  // from a KILLED-state tap the navigator isn't ready immediately, so retry
+  // briefly (~6s) instead of the old fixed 500ms — which silently no-op'd when
+  // the navigator hadn't come up yet (a big reason kill-state taps did nothing).
+  navigateWhenReady(data, attempt = 0) {
+    const route = this.getNotificationRoute(data);
+    if (!route) return;
+    if (navigationRef.current) {
+      navigationRef.current.navigate(route.name, route.params);
       return;
     }
+    if (attempt < 40) {
+      setTimeout(() => this.navigateWhenReady(data, attempt + 1), 150);
+    } else {
+      console.log('Navigation container never became ready; dropped notification nav');
+    }
+  }
 
-    setTimeout(() => {
-      switch (data.type) {
-        case 'chat_message':
-          // Navigate to chat screen
-          if (data.chat_id) {
-            navigationRef.current?.navigate('ChatScreen', {
-              chatId: data.chat_id,
-              chatName: data.sender_name || 'Chat',
-            });
-          }
-          break;
-
-        case 'admin_notification':
-          // Navigate based on admin action
-          if (data.action === 'ad_approved' || data.action === 'ad_rejected') {
-            // Navigate to My Ads section in profile
-            navigationRef.current?.navigate('Profile');
-          }
-          break;
-
-        case 'vendor_message':
-          // Navigate to vendor details
-          if (data.vendor_id) {
-            navigationRef.current?.navigate('VendorAddDetail', {
-              vendorId: data.vendor_id,
-            });
-          }
-          break;
-
-        case 'event_response':
-          // Navigate to event details
-          if (data.event_id) {
-            navigationRef.current?.navigate('EventDetailView', {
-              eventId: data.event_id,
-            });
-          }
-          break;
-
-        default:
-          // Navigate to home or notifications screen
-          navigationRef.current?.navigate('Home');
-          break;
-      }
-    }, 500);
+  // Consume a notification tap that was stashed (index.js onBackgroundEvent)
+  // while the app was backgrounded/killed — used on return-to-foreground.
+  async consumePendingNotificationNav() {
+    try {
+      const raw = await AsyncStorage.getItem('pendingNotificationNav');
+      if (!raw) return;
+      await AsyncStorage.removeItem('pendingNotificationNav');
+      this.navigateWhenReady(JSON.parse(raw));
+    } catch (_) {
+      // ignore malformed/absent payloads
+    }
   }
 
   // Check for initial notification (app opened from quit state)
   async checkInitialNotification() {
     try {
-      const initialNotification = await messaging().getInitialNotification();
-      if (initialNotification) {
-        console.log('🚀 App opened from notification:', initialNotification);
-        this.handleNotificationNavigation(initialNotification.data);
+      // App opened from a KILLED state by tapping a notification. Notifications
+      // are displayed via notifee, so we must check BOTH FCM's and notifee's
+      // initial notification (previously only FCM was checked, so taps on
+      // notifee-displayed notifications from a killed state did nothing). Also
+      // fall back to any tap stashed by the notifee background handler.
+      const [fcmInitial, notifeeInitial] = await Promise.all([
+        messaging().getInitialNotification().catch(() => null),
+        notifee.getInitialNotification().catch(() => null),
+      ]);
+
+      let pending = null;
+      try {
+        const raw = await AsyncStorage.getItem('pendingNotificationNav');
+        if (raw) {
+          pending = JSON.parse(raw);
+          await AsyncStorage.removeItem('pendingNotificationNav');
+        }
+      } catch (_) {}
+
+      const data =
+        fcmInitial?.data ||
+        notifeeInitial?.notification?.data ||
+        pending ||
+        null;
+
+      if (data) {
+        console.log('🚀 App opened from notification (killed state):', data);
+        this.navigateWhenReady(data);
       }
     } catch (error) {
       console.error('Error checking initial notification:', error);

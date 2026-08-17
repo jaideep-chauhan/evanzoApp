@@ -24,6 +24,7 @@
     "@react-native-community/progress-bar-android": "^1.0.5",
     "@react-native-community/slider": "^4.5.7",
     "@react-native-firebase/app": "^23.7.0",
+    "@react-native-firebase/crashlytics": "23.8.8",
     "@react-native-firebase/messaging": "^23.7.0",
     "@react-native-google-signin/google-signin": "^16.0.0",
     "@react-native-picker/picker": "^2.11.0",

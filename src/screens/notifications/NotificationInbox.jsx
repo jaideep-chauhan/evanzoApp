@@ -186,56 +186,14 @@ export default function NotificationInbox() {
             }
         }
 
-        // Drill into the relevant screen based on type / action. The target id
-        // lives in `data` and/or `action_data`, and either may arrive as a JSON
-        // string depending on the source — normalise both and merge so we find
-        // the id wherever it was stored (older message notifications kept
-        // chat_id only in action_data, which is why tapping did nothing).
-        const parseMaybe = (v) => {
-            if (!v) return {};
-            if (typeof v === 'string') {
-                try { return JSON.parse(v); } catch { return {}; }
-            }
-            return v;
-        };
-        const data = { ...parseMaybe(notification.action_data), ...parseMaybe(notification.data) };
-        switch (notification.action_type || notification.type) {
-            case 'open_chat':
-            case 'message':
-                if (data.chat_id) {
-                    navigation.navigate('ChatScreen', {
-                        chatId: data.chat_id,
-                        chatName: data.sender_name
-                            || notification.title?.replace(/^New message from\s*/i, '')
-                            || 'Chat',
-                    });
-                }
-                break;
-            case 'view_event_ad':
-            case 'event_reminder':
-                if (data.event_ad_id) {
-                    navigation.navigate('EventDetailView', { eventId: data.event_ad_id });
-                }
-                break;
-            case 'view_response':
-            case 'ad_response':
-                // No deep target — just return to the profile.
-                navigation.goBack();
-                break;
-            case 'view_inquiry':
-            case 'vendor_quote':
-                if (data.vendor_ad_id) {
-                    navigation.navigate('Main', {
-                        screen: 'Vendors',
-                        params: {
-                            screen: 'VendorAddDetail',
-                            params: { vendorId: data.vendor_ad_id },
-                        },
-                    });
-                }
-                break;
-            default:
-                break;
+        // Route to the right screen using the shared resolver, which covers
+        // EVERY notification type (chat, gig/vendor ad, review, inquiry, etc.)
+        // and never dead-ends. Same mapping the system-tray push taps use, so
+        // the two can't drift. (Previously only ~4 types navigated; the rest
+        // hit `default` and did nothing.)
+        const route = notificationService.getNotificationRoute(notification);
+        if (route) {
+            navigation.navigate(route.name, route.params);
         }
     };
 

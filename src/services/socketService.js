@@ -4,6 +4,7 @@ import {secureStorage} from '../utils/secureStorage';
 import {API_BASE_URL} from './api';
 import notificationService from './notificationService';
 import {AppState} from 'react-native';
+import {recordError} from './crashReporting';
 
 class SocketService {
   constructor() {
@@ -209,6 +210,12 @@ class SocketService {
             this.reconnectAttempts === 0 ||
             this.reconnectAttempts % 3 === 0
           ) {
+            // Surface chat-connect failures to Crashlytics (first attempt only
+            // per cycle, so reconnect storms don't spam the console).
+            recordError(new Error(`Socket connect_error: ${error?.message || 'unknown'}`), {
+              context: 'socket.connect_error',
+              attempt: this.reconnectAttempts + 1,
+            });
             console.error(
               '❌ Socket connection error:',
               error?.message || 'Unknown error',
