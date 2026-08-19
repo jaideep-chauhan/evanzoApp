@@ -346,9 +346,11 @@ const CreateAddForm = ({ type, onClose }) => {
             return;
         }
 
-        // Find the matching category
+        // Find the matching category. Guard cat.name — a category/subcategory
+        // arriving from the API without a `name` crashed the whole Create-Ad
+        // form on real devices ("Cannot read property 'toLowerCase' of undefined").
         const matchingCategory = eventCategories.find(
-            cat => cat.name.toLowerCase() === categoryName.toLowerCase()
+            cat => (cat?.name || '').toLowerCase() === categoryName.toLowerCase()
         );
 
         if (matchingCategory) {
@@ -1488,7 +1490,9 @@ const CreateAddForm = ({ type, onClose }) => {
                         </View>
                         <FlatList
                             data={vendorCategories.filter(cat =>
-                                cat.name.toLowerCase().includes(categorySearchQuery.toLowerCase())
+                                (cat?.name || '')
+                                    .toLowerCase()
+                                    .includes((categorySearchQuery || '').toLowerCase())
                             )}
                             keyExtractor={(item) => item.category_id?.toString() || item.id?.toString()}
                             contentContainerStyle={styles.dropdownList}

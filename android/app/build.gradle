@@ -51,8 +51,8 @@ android {
         applicationId "com.x4x90studio.evnzo"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 46
-        versionName "2.1.4"
+        versionCode 50
+        versionName "2.1.8"
 
         // RN apps with lots of native modules routinely cross Android's
         // 65K methods limit. Multidex splits the dex output into multiple
@@ -104,6 +104,13 @@ android {
         }
         release {
             signingConfig signingConfigs.release
+            // Upload native (C++/Hermes/RN) symbols to Crashlytics so native
+            // SIGABRT crashes come back as real function names instead of raw
+            // libc.so/libhermes.so hex addresses. Uses the SYMBOL_TABLE debug
+            // symbols generated below.
+            firebaseCrashlytics {
+                nativeSymbolUploadEnabled true
+            }
             shrinkResources false
             minifyEnabled false
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
