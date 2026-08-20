@@ -10,4 +10,4 @@
 // 1.9 < latest and prompted to update forever (an infinite update loop).
 // TODO: make this dynamic via react-native-device-info's getVersion() so it
 // can never go stale again.
-export const APP_VERSION = '2.1.8';
+export const APP_VERSION = '2.1.9';

@@ -51,8 +51,8 @@ android {
         applicationId "com.x4x90studio.evnzo"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 50
-        versionName "2.1.8"
+        versionCode 51
+        versionName "2.1.9"
 
         // RN apps with lots of native modules routinely cross Android's
         // 65K methods limit. Multidex splits the dex output into multiple
@@ -130,6 +130,22 @@ android {
             // mutates a shared list and leaks the x86_64 exclude into the debug
             // variant too, which strips libappmodules.so + libimagepipeline.so
             // etc. from the emulator build and crashes the app at launch.
+        }
+    }
+
+    // 16 KB fix: libandroidlame.so is a prebuilt LAME MP3 encoder pulled in
+    // transitively by react-native-compressor's AUDIO compressor, which this
+    // app NEVER uses (only Image compression — see
+    // src/utils/imageCompressionUtil.js; video is commented out, audio unused).
+    // That prebuilt .so is built with an old NDK and is NOT 16 KB-page aligned,
+    // so Play flags it as a 16 KB-device crash risk. Nothing ever loads it, so
+    // dropping it from every variant is safe and clears the warning (also
+    // shrinks the AAB). This is an android-level exclude of ONE specific,
+    // unused lib — NOT a buildType-scoped ABI strip, so it can't leak/remove a
+    // needed lib the way the x86_64 case described above would.
+    packaging {
+        jniLibs {
+            excludes += ["**/libandroidlame.so"]
         }
     }
 }

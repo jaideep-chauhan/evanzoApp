@@ -885,7 +885,7 @@ export default function Gigs() {
             <Animated.ScrollView
                 ref={scrollViewRef}
                 style={{ flex: 1, backgroundColor: '#fff' }}
-                contentContainerStyle={{ paddingBottom: 24 }}
+                contentContainerStyle={{ paddingBottom: 120 }}
                 showsVerticalScrollIndicator={false}
                 scrollEventThrottle={16}
                 keyboardShouldPersistTaps="handled"

@@ -9,6 +9,8 @@ import chatService from '../../../services/chatService';
 import { useAuth } from '../../../context/AuthContext';
 import preSavedMessageService from '../../../services/preSavedMessageService';
 import Icon from 'react-native-vector-icons/Ionicons';
+import vendorService from '../../../services/vendorService';
+import vendorDetailsService from '../../../services/vendorDetailsService';
 
 export default function VendorChat({ navigation }) {
     const route = useRoute();
@@ -54,12 +56,36 @@ export default function VendorChat({ navigation }) {
     };
 
     const scrollToOffer = route.params?.scrollToOffer;
-    // Accept a full vendor object (in-app) or just an id (deep link
-    // "vendor/:vendorId") — the id form builds a minimal stub.
-    const vendor = route.params?.vendor
-        || (route.params?.vendorId
-            ? { id: route.params.vendorId, vendor_ad_id: route.params.vendorId }
-            : undefined);
+    // Accept a full vendor object (in-app navigation) or just an id (deep link
+    // "vendor/:vendorId"). For the id-only case we fetch the full ad so a
+    // shared link opens with real photos + details instead of an empty stub.
+    const [vendor, setVendor] = useState(route.params?.vendor || null);
+    const [vendorLoading, setVendorLoading] = useState(
+        !route.params?.vendor && !!route.params?.vendorId,
+    );
+
+    useEffect(() => {
+        if (route.params?.vendor || !route.params?.vendorId) return undefined;
+        let alive = true;
+        (async () => {
+            try {
+                setVendorLoading(true);
+                const res = await vendorDetailsService.getVendorDetails(
+                    route.params.vendorId,
+                );
+                if (alive && res?.success && res.data) {
+                    setVendor(vendorService.formatVendorForDisplay(res.data));
+                }
+            } catch (e) {
+                console.warn('Deep-link vendor fetch failed:', e?.message);
+            } finally {
+                if (alive) setVendorLoading(false);
+            }
+        })();
+        return () => {
+            alive = false;
+        };
+    }, [route.params?.vendor, route.params?.vendorId]);
 
 
     // Format images to ensure they're in the correct format
@@ -198,6 +224,17 @@ export default function VendorChat({ navigation }) {
 
     // Set initial scroll position based on scrollToOffer flag
     const initialScrollY = scrollToOffer ? 350 : 0;
+
+    // Deep link opened with only an id: show a spinner while the full ad loads
+    // instead of the empty "no photos / no data" stub.
+    if (vendorLoading && !vendor) {
+        return (
+            <View style={[styles.safe, { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }]}>
+                <ActivityIndicator size="large" color="#2C3D5B" />
+                <Text style={{ marginTop: 12, color: '#2C3D5B' }}>Loading…</Text>
+            </View>
+        );
+    }
 
     return (
         <KeyboardAvoidingView

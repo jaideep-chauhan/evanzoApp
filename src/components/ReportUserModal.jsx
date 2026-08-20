@@ -9,10 +9,15 @@ import {
     ScrollView,
     ActivityIndicator,
     Platform,
+    Image,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../ThemeContext';
 import api from '../services/api';
+import settingsService from '../services/settingsService';
+import { openImagePickerWithCropper } from '../utils/imageCropperUtils';
+
+const MAX_PROOF = 4;
 
 const REPORT_REASONS = [
     { id: 'spam', label: 'Spam or scam', icon: 'mail-unread-outline' },
@@ -38,18 +43,45 @@ const ReportUserModal = ({
     const theme = useTheme();
     const [selectedReason, setSelectedReason] = useState(null);
     const [additionalDetails, setAdditionalDetails] = useState('');
+    const [proofImages, setProofImages] = useState([]); // [{ uri, mime, name }]
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
+
+    const pickProof = async () => {
+        if (proofImages.length >= MAX_PROOF) return;
+        try {
+            const picked = await openImagePickerWithCropper({
+                multiple: true,
+                maxFiles: MAX_PROOF - proofImages.length,
+            });
+            if (picked && picked.length) {
+                setProofImages((prev) => [...prev, ...picked].slice(0, MAX_PROOF));
+            }
+        } catch (_) {}
+    };
+
+    const removeProof = (index) => {
+        setProofImages((prev) => prev.filter((_, i) => i !== index));
+    };
 
     const handleSubmit = async () => {
         if (!selectedReason) return;
 
         setIsSubmitting(true);
         try {
+            // Upload proof images first → URLs the report can carry.
+            let screenshotUrls = [];
+            if (proofImages.length > 0) {
+                screenshotUrls = await Promise.all(
+                    proofImages.map((f) => settingsService.uploadReportImage(f)),
+                );
+            }
+
             const reportData = {
                 reported_user_id: reportedUserId,
                 reason: selectedReason,
                 details: additionalDetails,
+                screenshots: screenshotUrls,
                 report_type: reportType,
                 chat_id: chatId,
                 message_id: messageId,
@@ -82,6 +114,7 @@ const ReportUserModal = ({
     const handleClose = () => {
         setSelectedReason(null);
         setAdditionalDetails('');
+        setProofImages([]);
         setShowSuccess(false);
         onClose();
     };
@@ -221,6 +254,35 @@ const ReportUserModal = ({
                             {additionalDetails.length}/500
                         </Text>
 
+                        {/* Proof / evidence images */}
+                        <Text style={[styles.sectionTitle, { color: theme.colors.text, marginTop: 12 }]}>
+                            Attach proof (optional)
+                        </Text>
+                        <View style={styles.proofRow}>
+                            {proofImages.map((a, i) => (
+                                <View key={i} style={styles.proofWrap}>
+                                    <Image source={{ uri: a.uri }} style={styles.proofThumb} />
+                                    <TouchableOpacity
+                                        style={styles.proofRemove}
+                                        onPress={() => removeProof(i)}
+                                        disabled={isSubmitting}
+                                    >
+                                        <Icon name="close-circle" size={20} color="#FF5A5A" />
+                                    </TouchableOpacity>
+                                </View>
+                            ))}
+                            {proofImages.length < MAX_PROOF && (
+                                <TouchableOpacity
+                                    style={[styles.proofAdd, { borderColor: theme.colors.border }]}
+                                    onPress={pickProof}
+                                    disabled={isSubmitting}
+                                >
+                                    <Icon name="camera-outline" size={22} color={theme.colors.textSecondary} />
+                                    <Text style={[styles.proofAddText, { color: theme.colors.textSecondary }]}>Add</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+
                         {/* Policy Notice */}
                         <View style={[styles.policyBox, { backgroundColor: theme.colors.background }]}>
                             <Text style={[styles.policyText, { color: theme.colors.textSecondary }]}>
@@ -339,6 +401,40 @@ const styles = StyleSheet.create({
         padding: 14,
         fontSize: 15,
         minHeight: 100,
+    },
+    proofRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        marginTop: 8,
+    },
+    proofWrap: {
+        width: 64,
+        height: 64,
+        marginRight: 10,
+        marginBottom: 10,
+    },
+    proofThumb: {
+        width: 64,
+        height: 64,
+        borderRadius: 8,
+    },
+    proofRemove: {
+        position: 'absolute',
+        top: -6,
+        right: -6,
+    },
+    proofAdd: {
+        width: 64,
+        height: 64,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderStyle: 'dashed',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    proofAddText: {
+        fontSize: 11,
+        marginTop: 2,
     },
     charCount: {
         textAlign: 'right',

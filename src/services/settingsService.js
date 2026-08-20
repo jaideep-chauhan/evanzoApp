@@ -1,5 +1,7 @@
 import api from './api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { authUpload } from './authFetch';
+import { API_BASE_URL } from './api';
 
 /**
  * Settings Service
@@ -600,6 +602,25 @@ class SettingsService {
    * @param {object} problemData - Problem data {type, description, attachments}
    * @returns {Promise<{success: boolean, message?: string}>}
    */
+  /**
+   * Upload one image (screenshot / proof) for a report and return its URL.
+   * Backend: POST /upload/image (multipart, field "image") → { data: { url } }.
+   * Reused by ReportProblem + ReportUserModal so proof images become URLs the
+   * `screenshots[]` payloads can carry.
+   */
+  async uploadReportImage(file) {
+    const fd = new FormData();
+    fd.append('image', {
+      uri: file.uri,
+      type: file.type || file.mime || 'image/jpeg',
+      name: file.name || `report_${Date.now()}.jpg`,
+    });
+    const res = await authUpload(`${API_BASE_URL}/upload/image`, fd, {});
+    const url = res?.json?.data?.url || res?.json?.url;
+    if (res?.ok && url) return url;
+    throw new Error(res?.json?.message || 'Image upload failed');
+  }
+
   async reportProblem(problemData) {
     try {
       const response = await api.post('/settings/report-problem', {

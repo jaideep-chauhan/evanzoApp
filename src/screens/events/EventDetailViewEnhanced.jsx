@@ -24,6 +24,7 @@ import img from '../../assets/images/dummy.png';
 import bg1 from '../../assets/images/smallHeader.jpg';
 import eventDetailsService from '../../services/eventDetailsService';
 import vendorDetailsService from '../../services/vendorDetailsService';
+import eventService from '../../services/eventService';
 import EventCardCarousel from './EventCardCarousel';
 import { MEDIA_BASE_URL } from '../../services/api';
 import { getCurrencySymbol } from '../../utils/currency';
@@ -67,10 +68,42 @@ export default function EventDetailViewEnhanced() {
     // Accept either a full event object (in-app navigation) or just an id
     // (deep link "event/:eventId" / notification tap) — the latter builds a
     // minimal stub so the screen still resolves the ad by id.
-    const eventFromParams = route.params?.event
+    const [eventFromParams, setEventFromParams] = useState(
+        route.params?.event
         || (route.params?.eventId
             ? { id: route.params.eventId, event_ad_id: route.params.eventId }
-            : {});
+            : {}),
+    );
+    // Deep link "event/:eventId" carries only the id → fetch the full gig so the
+    // screen shows real data + photos instead of a placeholder stub.
+    const [eventLoading, setEventLoading] = useState(
+        !route.params?.event && !!route.params?.eventId,
+    );
+
+    useEffect(() => {
+        if (route.params?.event || !route.params?.eventId) return undefined;
+        let alive = true;
+        (async () => {
+            try {
+                setEventLoading(true);
+                const res = await eventDetailsService.getEventDetails(
+                    route.params.eventId,
+                );
+                if (alive && res?.success && res.data) {
+                    setEventFromParams(
+                        eventService.formatEventForDisplay(res.data),
+                    );
+                }
+            } catch (e) {
+                console.warn('Deep-link event fetch failed:', e?.message);
+            } finally {
+                if (alive) setEventLoading(false);
+            }
+        })();
+        return () => {
+            alive = false;
+        };
+    }, [route.params?.event, route.params?.eventId]);
 
     // Helper functions
     const parseDuration = (duration) => {
@@ -311,6 +344,17 @@ export default function EventDetailViewEnhanced() {
         }
         return stars;
     };
+
+    // Deep link opened with only an id: show a spinner while the full gig loads
+    // instead of the placeholder stub.
+    if (eventLoading) {
+        return (
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
+                <ActivityIndicator size="large" color="#2C3D5B" />
+                <Text style={{ marginTop: 12, color: '#2C3D5B' }}>Loading…</Text>
+            </View>
+        );
+    }
 
     return (
         <KeyboardAvoidingView

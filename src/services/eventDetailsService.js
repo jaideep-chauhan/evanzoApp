@@ -4,6 +4,24 @@ import savedEventsStorage from './savedEventsStorage';
 import {createAdLink} from './deepLinkService';
 
 class EventDetailsService {
+  // Fetch a full gig/event by id (public endpoint) — used when the screen is
+  // opened from a shared deep link that only carries the id, so it renders
+  // real data instead of a placeholder stub.
+  async getEventDetails(eventId) {
+    try {
+      const response = await api.get(`/events/${eventId}`);
+      return { success: true, data: response.data.data };
+    } catch (error) {
+      console.error('Get event details error:', error);
+      return {
+        success: false,
+        message:
+          error.response?.data?.message || 'Failed to fetch event details',
+        data: null,
+      };
+    }
+  }
+
   // Check if event is saved by current user
   async isEventSaved(eventId) {
     try {

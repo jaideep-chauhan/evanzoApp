@@ -997,7 +997,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
     },
     contentContainer: {
-        paddingBottom: 100, // Increased padding to ensure last card is fully visible
+        paddingBottom: 120, // Clear the floating tab bar so the last card isn't hidden behind it
     },
     headerWrapper: {
         marginBottom: 8,
