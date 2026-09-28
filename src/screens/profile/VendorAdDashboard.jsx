@@ -190,7 +190,7 @@ export default function VendorAdDashboard({ navigation }) {
                             </View>
                             <View style={styles.locationRow}>
                                 <Image source={icons.location} style={styles.locationPin} />
-                                <Text style={[styles.location, { color: theme.colors.primary }]}>{user?.location || 'Add Location'}</Text>
+                                <Text style={[styles.location, { color: theme.colors.primary }]}>{user?.location || 'Add City'}</Text>
                             </View>
                         </View>
                     </View>
@@ -257,7 +257,7 @@ export default function VendorAdDashboard({ navigation }) {
                         activeOpacity={0.7}
                     >
                         <Text style={activeTab === 'event' ? styles.activeTabText : [styles.inactiveTabText, { color: theme.colors.primary }]}>
-                            Gig Ads
+                            Event Ads
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -496,7 +496,7 @@ export default function VendorAdDashboard({ navigation }) {
                                     setShowCreateAd(false);
                                 }}
                             >
-                                <Text style={{color: '#fff', textAlign: 'center', fontSize: 16, fontWeight: '700'}}>Gig</Text>
+                                <Text style={{color: '#fff', textAlign: 'center', fontSize: 16, fontWeight: '700'}}>Event</Text>
                             </TouchableOpacity>
                         </TouchableOpacity>
                     </TouchableOpacity>

@@ -2,7 +2,7 @@ import api, {API_BASE_URL} from './api';
 import {Share, Platform} from 'react-native';
 import authFetch from './authFetch';
 import savedVendorsStorage from './savedVendorsStorage';
-import {createAdLink} from './deepLinkService';
+import {buildAdShareContent} from './deepLinkService';
 
 class VendorDetailsService {
   // Get vendor details by ID
@@ -280,28 +280,18 @@ class VendorDetailsService {
   // Share vendor
   async shareVendor(vendor) {
     try {
-      // Shareable deep link to THIS vendor ad.
-      const link = await createAdLink({
+      // Shareable deep link to THIS vendor ad (link placement per platform).
+      const shareOptions = buildAdShareContent({
         type: 'vendor',
         id: vendor.vendor_ad_id || vendor.id,
-        title: vendor.name,
-        description: vendor.description,
-        imageUrl: vendor.images?.[0]?.uri || vendor.images?.[0] || '',
-      });
-
-      const shareOptions = {
         title: `Check out ${vendor.name}`,
-        message: `
-🌟 ${vendor.name} - ${vendor.type}
-📍 ${vendor.location}
-⭐ Rating: ${vendor.rating || 'N/A'}
-
-${vendor.description}
-
-👉 Open it on Evnzo: ${link}
-                `.trim(),
-        url: link,
-      };
+        text: [
+          `🌟 ${vendor.name}${vendor.type ? ` - ${vendor.type}` : ''}`,
+          vendor.location ? `📍 ${vendor.location}` : null,
+          `⭐ Rating: ${vendor.rating || 'N/A'}`,
+          vendor.description ? `\n${vendor.description}` : null,
+        ].filter(Boolean).join('\n'),
+      });
 
       const result = await Share.share(shareOptions);
       return {

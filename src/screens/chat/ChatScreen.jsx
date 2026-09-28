@@ -50,10 +50,14 @@ import MessageReactions from '../../components/MessageReactions';
 import ImagePreview from '../../components/ImagePreview';
 import preSavedMessageService from '../../services/preSavedMessageService';
 import { getCached, setCached } from '../../services/listCacheService';
+import { adMetadata, getMessageAd, adRoute } from '../../utils/chatAdContext';
 
 // Cache key per chat — same prefix as other lists, so it shows up in the
 // regular cache namespace and gets pruned on log-out cache wipes.
 const chatCacheKey = (chatId) => `chat:msgs:${chatId}`;
+
+// Photos/videos the user can pick in one go from the gallery.
+const MAX_MEDIA_PER_PICK = 10;
 
 export default function ChatScreen({ route, navigation }) {
     const insets = useSafeAreaInsets();
@@ -69,7 +73,13 @@ export default function ChatScreen({ route, navigation }) {
         const hideSub = Keyboard.addListener(hideEvt, () => setKeyboardVisible(false));
         return () => { showSub.remove(); hideSub.remove(); };
     }, []);
-    const { chatId: initialChatId, chatName, avatar, isOnline: initialOnline, recipientId } = route.params;
+    const { chatId: initialChatId, chatName, avatar, isOnline: initialOnline, recipientId, adContext } = route.params;
+    // Opened from an ad card → the next message says which ad it's about.
+    const [pendingAd, setPendingAd] = useState(adContext || null);
+    // Same screen re-opened from a different ad → show that ad.
+    useEffect(() => {
+        if (adContext) setPendingAd(adContext);
+    }, [adContext?.type, adContext?.id]); // eslint-disable-line react-hooks/exhaustive-deps
     console.log('🔍 ChatScreen route params:', {
         initialChatId,
         chatName,
@@ -104,6 +114,7 @@ export default function ChatScreen({ route, navigation }) {
     // preview banner and the next send carries reply_to_message_id.
     const [replyingToMessage, setReplyingToMessage] = useState(null);
     const [showImagePreview, setShowImagePreview] = useState(false);
+    const [playingVideoUrl, setPlayingVideoUrl] = useState(null);
     const [previewImageUrl, setPreviewImageUrl] = useState(null);
     const [previewImageName, setPreviewImageName] = useState(null);
     const [showContactPicker, setShowContactPicker] = useState(false);
@@ -503,7 +514,8 @@ export default function ChatScreen({ route, navigation }) {
             // Mark chat as read, then refresh the app-icon badge so it clears
             // once the message notifications for this chat are marked read.
             await chatService.markChatAsRead(actualChatId);
-            notificationService.updateBadgeCount().catch(() => {});
+            notificationService.clearChatNotifications(actualChatId);
+            notificationService.syncBadge();
 
         } catch (error) {
             console.error('Failed to initialize chat:', error);
@@ -590,6 +602,7 @@ export default function ChatScreen({ route, navigation }) {
                         sender: msg.sender,
                         senderId: msg.sender_id,
                         reactions: msg.reactions || [],
+                        ad: getMessageAd(msg),
                         createdAt: msg.created_at, // Keep original timestamp for sorting
                         duration: duration, // Add duration for audio messages
                         contactData: contactData // Add parsed contact data for contact messages
@@ -699,6 +712,7 @@ export default function ChatScreen({ route, navigation }) {
                 createdAt: data.message.created_at,
                 duration: duration, // Add duration for audio messages
                 reactions: data.message.reactions || [],
+                ad: getMessageAd(data.message),
                 contactData: contactData // Add parsed contact data for contact messages
             };
             
@@ -840,6 +854,7 @@ export default function ChatScreen({ route, navigation }) {
         // for optimistic-message replies.
         const replyTarget = replyingToMessage;
         const replyToMessageId = replyTarget?.message_id || replyTarget?.id || null;
+        const messageAd = pendingAd;
         
         console.log('🚀 ===== STARTING MESSAGE SEND =====');
         console.log('📝 Message send initiated with:', {
@@ -875,6 +890,7 @@ export default function ChatScreen({ route, navigation }) {
             // server round-trip.
             reply_to_message_id: replyToMessageId,
             repliedMessage: replyTarget,
+            ad: messageAd,
         };
 
         console.log('📤 Creating optimistic message:', optimisticMessage);
@@ -912,7 +928,10 @@ export default function ChatScreen({ route, navigation }) {
             // backend can persist the reply linkage. sendMessageWithRetry
             // transparently retries on timeout (up to 2 retries, 1s/2s
             // backoff). Non-timeout failures bubble straight through.
-            const result = await sendMessageWithRetry(chatId, messageText, replyToMessageId);
+            const result = await sendMessageWithRetry(chatId, messageText, replyToMessageId, 0, adMetadata(messageAd));
+            if (result.success && messageAd) {
+                setPendingAd(null); // tagged once — the first message about this ad
+            }
             
             console.log('📤 ===== API RESPONSE RECEIVED =====');
             console.log('📤 Full API result:', JSON.stringify(result, null, 2));
@@ -1047,15 +1066,15 @@ export default function ChatScreen({ route, navigation }) {
     // failures (ECONNABORTED / "timeout" in message). Exponential backoff:
     // 1s before retry 1, 2s before retry 2. Other errors bubble up
     // immediately so callers can mark the bubble as failed.
-    const sendMessageWithRetry = async (chatId, messageText, replyToMessageId = null, retryCount = 0) => {
+    const sendMessageWithRetry = async (chatId, messageText, replyToMessageId = null, retryCount = 0, metadata = null) => {
         try {
-            return await chatService.sendMessage(chatId, messageText, 'text', null, replyToMessageId);
+            return await chatService.sendMessage(chatId, messageText, 'text', null, replyToMessageId, metadata);
         } catch (error) {
             const isTimeout = error.code === 'ECONNABORTED' || (error.message || '').includes('timeout');
             if (isTimeout && retryCount < 2) {
                 const delay = (retryCount + 1) * 1000;
                 await new Promise((resolve) => setTimeout(resolve, delay));
-                return sendMessageWithRetry(chatId, messageText, replyToMessageId, retryCount + 1);
+                return sendMessageWithRetry(chatId, messageText, replyToMessageId, retryCount + 1, metadata);
             }
             throw error;
         }
@@ -1151,6 +1170,7 @@ export default function ChatScreen({ route, navigation }) {
                     sender: msg.sender,
                     senderId: msg.sender_id,
                     reactions: msg.reactions || [],
+                    ad: getMessageAd(msg),
                     createdAt: msg.created_at,
                     duration:
                         (msg.message_type === 'audio' && (msg.metadata?.duration || msg.attachments?.[0]?.metadata?.duration)) || 0,
@@ -1197,22 +1217,25 @@ export default function ChatScreen({ route, navigation }) {
             maxWidth: 2000,
             quality: 0.8,
             videoQuality: 'medium',
+            // Without this the picker defaults to 1 and closes after the first tap.
+            selectionLimit: MAX_MEDIA_PER_PICK,
         };
 
-        launchImageLibrary(options, (response) => {
+        launchImageLibrary(options, async (response) => {
             if (response.didCancel) {
                 console.log('User cancelled media picker');
             } else if (response.errorMessage) {
                 console.log('MediaPicker Error: ', response.errorMessage);
                 Alert.alert('Error', 'Failed to select media');
-            } else if (response.assets && response.assets[0]) {
-                const asset = response.assets[0];
-                // Determine if it's a video or image based on the type
-                const isVideo = asset.type?.startsWith('video/');
-                const messageType = isVideo ? 'video' : 'image';
-                console.log('Selected media:', { type: asset.type, messageType });
-                // Pass the complete asset object with all properties
-                sendMediaMessage(asset, messageType);
+            } else if (response.assets?.length) {
+                // WhatsApp-style: one message per photo/video, sent in the
+                // order they were picked. Sequential so they arrive in order
+                // and don't all upload at once.
+                for (const asset of response.assets) {
+                    const messageType = asset.type?.startsWith('video/') ? 'video' : 'image';
+                    console.log('Selected media:', { type: asset.type, messageType });
+                    await sendMediaMessage(asset, messageType);
+                }
             }
         });
     };
@@ -2374,6 +2397,21 @@ export default function ChatScreen({ route, navigation }) {
                         `repliedMessage` snapshot when present (set on the
                         sending side); falls back to a generic 'Message'
                         label if only the FK survived a round-trip. */}
+                    {item.ad && (
+                        <TouchableOpacity
+                            style={styles.adTag}
+                            onPress={() => {
+                                const target = adRoute(item.ad);
+                                navigation.navigate(target.name, target.params);
+                            }}
+                            onLongPress={(event) => handleMessageLongPress(item, event)}
+                        >
+                            <Icon name="megaphone-outline" size={13} color="#2C3D5B" />
+                            <Text style={styles.adTagText} numberOfLines={1}>
+                                About: {item.ad.title}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
                     {(item.reply_to_message_id || item.repliedMessage) && (
                         <View style={styles.repliedMessageContainer}>
                             <View style={styles.repliedMessageBar} />
@@ -2390,7 +2428,13 @@ export default function ChatScreen({ route, navigation }) {
                         </View>
                     )}
                     {item.messageType === 'image' && item.attachments?.[0] ? (
-                        <TouchableOpacity onPress={() => handleImagePreview(item.attachments[0])}>
+                        // Inner touchable swallows the bubble's long press, so forward it:
+                        // long press → message options (delete, reply, …).
+                        <TouchableOpacity
+                            onPress={() => handleImagePreview(item.attachments[0])}
+                            onLongPress={(event) => handleMessageLongPress(item, event)}
+                            delayLongPress={500}
+                        >
                             <Image
                                 source={{ uri: item.attachments[0].uri || item.attachments[0].url }}
                                 style={styles.messageImage}
@@ -2411,26 +2455,43 @@ export default function ChatScreen({ route, navigation }) {
                             isMe={isMe}
                         />
                     ) : item.messageType === 'video' && item.attachments?.[0] ? (
-                        <View style={styles.videoContainer}>
-                            <Video
-                                source={{ uri: item.attachments[0].uri || item.attachments[0].url }}
-                                style={styles.messageVideo}
-                                controls={true}
-                                resizeMode="contain"
-                                paused={true}
-                                onError={(error) => {
-                                    console.error('Video load error:', error);
-                                    console.log('Failed to load video from:', item.attachments[0]);
-                                }}
-                                onLoad={() => {
-                                    console.log('Video loaded successfully from:', item.attachments[0].uri || item.attachments[0].url);
-                                }}
-                            />
-                        </View>
+                        // Paused still frame + play button (the player's own controls
+                        // would swallow the long press). Tap → full-screen player.
+                        <TouchableOpacity
+                            style={styles.videoContainer}
+                            activeOpacity={0.85}
+                            onPress={() => setPlayingVideoUrl(item.attachments[0].uri || item.attachments[0].url)}
+                            onLongPress={(event) => handleMessageLongPress(item, event)}
+                            delayLongPress={500}
+                        >
+                            {/* Touches go to the TouchableOpacity, not the native video view */}
+                            <View style={styles.messageVideo} pointerEvents="none">
+                                <Video
+                                    source={{ uri: item.attachments[0].uri || item.attachments[0].url }}
+                                    style={styles.messageVideo}
+                                    controls={false}
+                                    resizeMode="cover"
+                                    paused={true}
+                                    muted={true}
+                                    onError={(error) => {
+                                        console.error('Video load error:', error);
+                                        console.log('Failed to load video from:', item.attachments[0]);
+                                    }}
+                                    onLoad={() => {
+                                        console.log('Video loaded successfully from:', item.attachments[0].uri || item.attachments[0].url);
+                                    }}
+                                />
+                            </View>
+                            <View style={styles.videoPlayOverlay} pointerEvents="none">
+                                <Icon name="play" size={28} color="#fff" />
+                            </View>
+                        </TouchableOpacity>
                     ) : (item.messageType === 'document' || item.messageType === 'file') && item.attachments?.[0] ? (
                         <TouchableOpacity
                             style={styles.documentContainer}
                             onPress={() => handleFileOpen(item.attachments[0])}
+                            onLongPress={(event) => handleMessageLongPress(item, event)}
+                            delayLongPress={500}
                         >
                             {(() => {
                                 const fileIcon = getFileIcon(item.attachments[0].name, item.attachments[0].type);
@@ -2729,6 +2790,29 @@ export default function ChatScreen({ route, navigation }) {
                 />
             </ImageBackground>
 
+            {/* "About this ad" bar — chat opened from an ad; the next message
+                is tagged with it. X sends it untagged instead. */}
+            {pendingAd && (
+                <View style={styles.replyPreview}>
+                    <View style={styles.replyPreviewBar} />
+                    <View style={styles.replyPreviewBody}>
+                        <Text style={styles.replyPreviewLabel}>
+                            About this {pendingAd.type === 'event' ? 'gig' : 'service'}
+                        </Text>
+                        <Text style={styles.replyPreviewText} numberOfLines={1}>
+                            {pendingAd.title}
+                        </Text>
+                    </View>
+                    <TouchableOpacity
+                        onPress={() => setPendingAd(null)}
+                        style={styles.replyPreviewClose}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                        <Icon name="close" size={20} color="#888" />
+                    </TouchableOpacity>
+                </View>
+            )}
+
             {/* Sticky reply preview — shows the quoted message just above
                 the input bar while replyingToMessage is non-null. Tap the
                 X to cancel before sending. */}
@@ -2941,6 +3025,34 @@ export default function ChatScreen({ route, navigation }) {
             />
 
             {/* Image Preview Modal */}
+            {/* Full-screen video player (opened by tapping a video bubble) */}
+            <Modal
+                visible={!!playingVideoUrl}
+                animationType="fade"
+                statusBarTranslucent
+                onRequestClose={() => setPlayingVideoUrl(null)}
+            >
+                <View style={styles.videoPlayerBackdrop}>
+                    {playingVideoUrl && (
+                        <Video
+                            source={{ uri: playingVideoUrl }}
+                            style={styles.videoPlayer}
+                            controls={true}
+                            resizeMode="contain"
+                            paused={false}
+                            onError={(error) => console.error('Video playback error:', error)}
+                        />
+                    )}
+                    <TouchableOpacity
+                        style={styles.videoPlayerClose}
+                        onPress={() => setPlayingVideoUrl(null)}
+                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    >
+                        <Icon name="close" size={28} color="#fff" />
+                    </TouchableOpacity>
+                </View>
+            </Modal>
+
             <ImagePreview
                 visible={showImagePreview}
                 imageUrl={previewImageUrl}
@@ -3133,6 +3245,26 @@ export default function ChatScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
+    // "About: <ad>" tag at the top of a message sent from an ad
+    adTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-start',
+        gap: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        marginBottom: 6,
+        borderRadius: 10,
+        backgroundColor: 'rgba(44, 61, 91, 0.12)',
+        maxWidth: 240,
+    },
+    adTagText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#2C3D5B',
+        flexShrink: 1,
+    },
+
     container: {
         flex: 1,
         backgroundColor: '#f6f8fa',
@@ -3480,6 +3612,36 @@ const styles = StyleSheet.create({
     messageVideo: {
         width: '100%',
         height: '100%',
+    },
+    videoPlayOverlay: {
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        width: 56,
+        height: 56,
+        marginTop: -28,
+        marginLeft: -28,
+        borderRadius: 28,
+        backgroundColor: 'rgba(0,0,0,0.55)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    videoPlayerBackdrop: {
+        flex: 1,
+        backgroundColor: '#000',
+        justifyContent: 'center',
+    },
+    videoPlayer: {
+        width: '100%',
+        height: '100%',
+    },
+    videoPlayerClose: {
+        position: 'absolute',
+        top: 48,
+        right: 20,
+        padding: 6,
+        borderRadius: 20,
+        backgroundColor: 'rgba(0,0,0,0.5)',
     },
     documentContainer: {
         flexDirection: 'row',

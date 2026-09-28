@@ -399,7 +399,9 @@ function VendorCard({
                             <View style={styles.offerHeaderRow}>
                                 <Text style={styles.offerHeaderEmpty}></Text>
                                 <Text style={[styles.offerHeaderText, { color: theme.colors.textSecondary }]}>Amount spent</Text>
-                                <Text style={[styles.offerHeaderText, { color: theme.colors.textSecondary }]}>Discount</Text>
+                                {Number(offers[0].discount) > 0 && (
+                                    <Text style={[styles.offerHeaderText, { color: theme.colors.textSecondary }]}>Discount</Text>
+                                )}
                             </View>
                             {/* Values Row - Show first offer or default values */}
                             <View style={styles.offerValueRow}>
@@ -412,12 +414,12 @@ function VendorCard({
                                         {offers[0].amount || '0'}
                                     </Text>
                                 </View>
-                                <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
-                                    <TagIcon size={12} color={theme.colors.primary} />
-                                    <Text style={styles.offerValue}>
-                                        {offers[0].discount ? `${offers[0].discount}%` : '0%'}
-                                    </Text>
-                                </View>
+                                {Number(offers[0].discount) > 0 && (
+                                    <View style={[styles.offerValueContainer, { backgroundColor: theme.colors.background }]}>
+                                        <TagIcon size={12} color={theme.colors.primary} />
+                                        <Text style={styles.offerValue}>{`${Number(offers[0].discount)}%`}</Text>
+                                    </View>
+                                )}
                             </View>
                         </View>
                         <TouchableOpacity style={styles.seeMoreBox} onPress={handleSeeMorePress}>

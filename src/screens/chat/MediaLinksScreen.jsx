@@ -19,16 +19,12 @@ import { useTheme } from '../../ThemeContext';
 import ImagePreview from '../../components/ImagePreview';
 import { fixLocalUrl } from '../../services/api';
 import chatService from '../../services/chatService';
+import { classifyAttachment, getAttachmentUrl } from '../../utils/chatAttachments';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_COLUMNS = 3;
 const GRID_SPACING = 2;
 const ITEM_SIZE = (SCREEN_WIDTH - GRID_SPACING * (GRID_COLUMNS + 1)) / GRID_COLUMNS;
-
-// File type constants
-const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
-const VIDEO_EXTENSIONS = ['mp4', 'mov', 'avi', 'mkv', 'webm'];
-const DOC_EXTENSIONS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv', 'rtf'];
 
 // URL regex for extracting links from messages
 const URL_REGEX = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
@@ -102,17 +98,15 @@ const MediaLinksScreen = ({ route, navigation }) => {
         messages.forEach((msg) => {
             if (!msg.attachments || msg.attachments.length === 0) return;
 
-            const urls = getAllAttachmentUrls(msg.attachments);
-            urls.forEach((url, index) => {
-                const ext = getFileExtension(url);
-                const isImage = IMAGE_EXTENSIONS.includes(ext);
-                const isVideo = VIDEO_EXTENSIONS.includes(ext);
+            msg.attachments.forEach((attachment, index) => {
+                const url = getAttachmentUrl(attachment);
+                const kind = classifyAttachment(attachment, msg);
 
-                if (isImage || isVideo) {
+                if (url && (kind === 'image' || kind === 'video')) {
                     mediaList.push({
                         id: `${msg.message_id || 'unknown'}-${index}`,
                         url: fixLocalUrl(url),
-                        type: isImage ? 'image' : 'video',
+                        type: kind,
                         sender: msg.sender,
                         timestamp: msg.created_at,
                     });
@@ -122,7 +116,7 @@ const MediaLinksScreen = ({ route, navigation }) => {
 
         // Sort by timestamp (newest first)
         return mediaList.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    }, [messages, getAllAttachmentUrls, getFileExtension]);
+    }, [messages]);
 
     // Extract links from messages
     const linkItems = useMemo(() => {
@@ -161,24 +155,24 @@ const MediaLinksScreen = ({ route, navigation }) => {
         messages.forEach((msg) => {
             if (!msg.attachments || msg.attachments.length === 0) return;
 
-            const urls = getAllAttachmentUrls(msg.attachments);
-            urls.forEach((url, index) => {
-                const ext = getFileExtension(url);
-                if (DOC_EXTENSIONS.includes(ext)) {
-                    docList.push({
-                        id: `${msg.message_id || 'unknown'}-doc-${index}`,
-                        url: fixLocalUrl(url),
-                        name: getFileName(url),
-                        extension: ext.toUpperCase(),
-                        sender: msg.sender,
-                        timestamp: msg.created_at,
-                    });
-                }
+            msg.attachments.forEach((attachment, index) => {
+                const url = getAttachmentUrl(attachment);
+                if (!url || classifyAttachment(attachment, msg) !== 'document') return;
+                const name = attachment.filename || attachment.name || getFileName(url);
+                const ext = getFileExtension(name) || getFileExtension(url);
+                docList.push({
+                    id: `${msg.message_id || 'unknown'}-doc-${index}`,
+                    url: fixLocalUrl(url),
+                    name,
+                    extension: ext.toUpperCase(),
+                    sender: msg.sender,
+                    timestamp: msg.created_at,
+                });
             });
         });
 
         return docList.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    }, [messages, getAllAttachmentUrls, getFileExtension, getFileName]);
+    }, [messages, getFileExtension, getFileName]);
 
     // Get domain from URL
     const getDomain = useCallback((url) => {

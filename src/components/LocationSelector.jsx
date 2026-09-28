@@ -140,7 +140,8 @@ const LocationSelector = ({
         lastQueryRef.current = q;
         searchTimeoutRef.current = setTimeout(async () => {
             try {
-                const places = await photonSearch(q, { limit: 10 });
+                // Cities only — the app works at city level.
+                const places = await photonSearch(q, { limit: 10, layer: 'city' });
                 if (lastQueryRef.current === q) setResults(places);
             } catch (e) {
                 if (lastQueryRef.current === q) setResults([]);
@@ -214,7 +215,7 @@ const LocationSelector = ({
                                 lightBackground && styles.dropdownLabelLight,
                             ]}
                         >
-                            Location
+                            City
                         </Text>
                         <Text
                             style={[
@@ -224,7 +225,7 @@ const LocationSelector = ({
                             ]}
                             numberOfLines={1}
                         >
-                            {selected?.display_name || 'Search city, region or country'}
+                            {selected?.display_name || 'Search city'}
                         </Text>
                     </View>
                     <Icon name="search" size={20} color={lightBackground ? '#2C3D5B80' : '#ffffff80'} />
@@ -265,7 +266,7 @@ const LocationSelector = ({
                     />
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Select Location</Text>
+                            <Text style={styles.modalTitle}>Select City</Text>
                             <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
                                 <Icon name="close" size={24} color="#2C3D5B" />
                             </TouchableOpacity>
@@ -275,7 +276,7 @@ const LocationSelector = ({
                             <Icon name="search" size={20} color="#999" style={styles.searchIcon} />
                             <TextInput
                                 style={styles.searchInput}
-                                placeholder="Type city, region or country..."
+                                placeholder="Type a city name..."
                                 placeholderTextColor="#999"
                                 value={query}
                                 onChangeText={(t) => { setQuery(t); runSearch(t); }}
@@ -333,7 +334,7 @@ const LocationSelector = ({
                                     <Icon name="search" size={48} color="#ccc" />
                                     <Text style={styles.emptyText}>Start typing to search</Text>
                                     <Text style={styles.emptySubtext}>
-                                        Works for any city, region or country worldwide.
+                                        Works for any city worldwide.
                                     </Text>
                                 </View>
                             )}

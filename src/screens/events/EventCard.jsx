@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
     View,
     Text,
@@ -18,6 +18,9 @@ import { icons } from '../../assets/icons';
 import FastImage from 'react-native-fast-image';
 import { thumbnailUrl } from '../../utils/imageUtils';
 import { getCurrencySymbol } from '../../utils/currency';
+import ReportUserModal from '../../components/ReportUserModal';
+import { buildAdContext } from '../../utils/chatAdContext';
+import { buildAdShareContent } from '../../services/deepLinkService';
 
 export default function EventCard({ event, onGiveQuote }) {
     const navigation = useNavigation();
@@ -33,24 +36,29 @@ export default function EventCard({ event, onGiveQuote }) {
     const handleShare = async () => {
         try {
             const lines = [event.title, event.location, event.date].filter(Boolean);
-            await Share.share({
-                title: event.title || 'Gig',
-                message: lines.join(' • ') + (event.description ? `\n\n${event.description}` : ''),
-            });
+            await Share.share(buildAdShareContent({
+                type: 'event',
+                id: event._original?.event_ad_id || event.id,
+                title: event.title || 'Event',
+                text: lines.join(' • ') + (event.description ? `\n\n${event.description}` : ''),
+            }));
         } catch (e) {
             // share dialog cancellations land here on iOS; nothing to do.
         }
     };
 
+    const [showReport, setShowReport] = useState(false);
+    const ownerId = event._original?.user_id || event.user_id || event.userId;
+    const ownerName = event._original?.user?.full_name || event.organizer?.name || event.userName || 'Event poster';
+
+    // Real report (reason + written details + optional screenshots) against
+    // the event poster, tagged with this ad. Was a fake "Thanks" alert.
     const handleReport = () => {
-        Alert.alert(
-            'Report this event?',
-            'A moderator will review this ad. You won\'t see further updates from this report.',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Report', style: 'destructive', onPress: () => Alert.alert('Thanks', 'Your report has been recorded.') },
-            ],
-        );
+        if (!ownerId) {
+            Alert.alert('Unable to report', 'This event is missing its owner. Please try again later.');
+            return;
+        }
+        setShowReport(true);
     };
 
     const handleMoreOptions = () => {
@@ -62,7 +70,9 @@ export default function EventCard({ event, onGiveQuote }) {
                     destructiveButtonIndex: 1,
                 },
                 (idx) => {
-                    if (idx === 0) handleShare();
+                    // iOS can't present the share sheet while the action sheet
+                    // is still animating away — nothing appeared. Wait for it.
+                    if (idx === 0) setTimeout(handleShare, 450);
                     if (idx === 1) handleReport();
                 },
             );
@@ -76,6 +86,7 @@ export default function EventCard({ event, onGiveQuote }) {
     };
 
     return (
+        <>
         <TouchableOpacity style={[styles.card]} onPress={handleCardPress}>
             {/* Title, Status, and More Icon Row */}
             <View style={styles.rowBetween}>
@@ -173,6 +184,14 @@ export default function EventCard({ event, onGiveQuote }) {
                 </TouchableOpacity>
             </View>
         </TouchableOpacity>
+        <ReportUserModal
+            visible={showReport}
+            onClose={() => setShowReport(false)}
+            reportedUserId={ownerId}
+            reportedUserName={ownerName}
+            adContext={buildAdContext('event', event._original?.event_ad_id || event.id, event.title)}
+        />
+        </>
     );
 }
 

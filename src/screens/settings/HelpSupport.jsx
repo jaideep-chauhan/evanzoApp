@@ -21,7 +21,7 @@ export default function HelpSupport() {
     const faqs = [
         {
             question: 'How do I post an event ?',
-            answer: 'Go to the Gigs tab and click "Post Gig". Fill in the details about your event including date, location, and requirements.'
+            answer: 'Go to the Gigs tab and click "Post Gig". Fill in the details about your event including date, city, and requirements.'
         },
         {
             question: 'What happens after I hire a vendor?',

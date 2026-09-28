@@ -186,7 +186,7 @@ const SavedVendors = () => {
         // the legacy location string so cards show just "Chandigarh" instead
         // of "Chandigarh, Chandigarh, India".
         const location = String(
-            v.city || (v.location ? String(v.location).split(',')[0].trim() : '') || 'Location not specified',
+            v.city || (v.location ? String(v.location).split(',')[0].trim() : '') || 'City not specified',
         );
         const ratingNum = Number(v.rating);
         const ratingDisplay = (Number.isFinite(ratingNum) ? ratingNum : 0).toFixed(1);

@@ -3,7 +3,8 @@ import { Animated, ActivityIndicator, Alert } from 'react-native';
 import { VendorCardSkeleton, renderSkeletons } from '../../components/SkeletonLoader';
 import { getCached, setCached } from '../../services/listCacheService';
 import BannerAdView from '../../components/ads/BannerAdView';
-import { BANNER_LIST_INTERVAL } from '../../services/adsConfig';
+import { shouldShowBannerAfter } from '../../services/adsConfig';
+import { buildAdContext } from '../../utils/chatAdContext';
 
 // v2 = formatted vendor objects now include owner_name + owner_profile_pic.
 // Bumping the key invalidates pre-existing cached rows that don't have those
@@ -405,7 +406,7 @@ export default function Vendor() {
 
     const handleTabPress = (tabLabel, tabIndex) => {
         // Don't set active tab here - it will be set when filter is actually applied
-        if (tabLabel === 'Location') {
+        if (tabLabel === 'City') {
             setShowLocationModal(true);
         } else if (tabLabel === 'Quick Message') {
             setShowPreSaveModal(true);
@@ -420,7 +421,7 @@ export default function Vendor() {
 
         // Set active tab only if a location is selected
         if (location) {
-            setActiveTab(0); // Location is index 0
+            setActiveTab(0); // City is index 0
         } else {
             setActiveTab(null);
         }
@@ -588,7 +589,7 @@ export default function Vendor() {
                         onLocationSelect={(loc) => handleLocationSelect(loc)}
                     />
                     <Tabs
-                        tabs={['Location', 'Quick Message', 'Category']}
+                        tabs={['City', 'Quick Message', 'Category']}
                         onTabPress={handleTabPress}
                         defaultActive={activeTab}
                     />
@@ -788,6 +789,7 @@ export default function Vendor() {
                                                 // Navigate to existing chat
                                                 console.log('📱 Navigating to existing chat:', existingChatResult.chatId);
                                                 navigation.navigate('ChatScreen', {
+                                                    adContext: buildAdContext('vendor', vendor._original?.vendor_ad_id || vendor.id, vendor.name),
                                                     chatId: existingChatResult.chatId,
                                                     // Show the vendor owner's personal name in
                                                     // the chat header. owner_name is populated by
@@ -811,6 +813,7 @@ export default function Vendor() {
                                                 // No existing chat, navigate with recipientId to create new
                                                 console.log('📱 No existing chat, will create new one');
                                                 navigation.navigate('ChatScreen', {
+                                                    adContext: buildAdContext('vendor', vendor._original?.vendor_ad_id || vendor.id, vendor.name),
                                                     recipientId: vendorUserId,
                                                     // Show the vendor owner's personal name in
                                                     // the chat header. owner_name is populated by
@@ -840,6 +843,7 @@ export default function Vendor() {
                                             
                                             // Fallback: navigate directly with recipientId
                                             navigation.navigate('ChatScreen', {
+                                                    adContext: buildAdContext('vendor', vendor._original?.vendor_ad_id || vendor.id, vendor.name),
                                                 recipientId: vendorUserId,
                                                 chatName:
                                                     vendor.owner_name ||
@@ -857,7 +861,7 @@ export default function Vendor() {
                                         }
                                     }}
                                 />
-                                {(idx + 1) % BANNER_LIST_INTERVAL === 0 && (
+                                {shouldShowBannerAfter(idx, vendors.length) && (
                                     <BannerAdView style={{ marginVertical: 12 }} />
                                 )}
                               </React.Fragment>
@@ -924,7 +928,7 @@ export default function Vendor() {
                             ]}
                             numberOfLines={1}
                         >
-                            {searchQuery || 'Search by name, location, category...'}
+                            {searchQuery || 'Search by name, city, category...'}
                         </Text>
                     </TouchableOpacity>
                     <TouchableOpacity

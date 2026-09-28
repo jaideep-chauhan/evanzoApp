@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 // Deep linking via React Navigation + native Universal Links (iOS) / App Links
 // (Android). No third-party SDK.
 //
@@ -38,4 +39,15 @@ export const createAdLink = ({ type, id }) => {
     return `${WEB_BASE_URL}/${path}/${id}`;
 };
 
-export default { linking, createAdLink, WEB_BASE_URL };
+// Share content for an ad, per platform. iOS treats `message` and `url` as
+// separate items — putting the link in both showed it twice — so on iOS the
+// link goes only in `url` (rich preview). Android ignores `url`, so there the
+// link is appended to the message.
+export const buildAdShareContent = ({ type, id, text, title }) => {
+    const link = createAdLink({ type, id });
+    return Platform.OS === 'ios'
+        ? { title, message: text, url: link }
+        : { title, message: `${text}\n\n👉 Open it on Evnzo: ${link}` };
+};
+
+export default { linking, createAdLink, buildAdShareContent, WEB_BASE_URL };

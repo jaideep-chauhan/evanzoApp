@@ -15,7 +15,8 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { EventCardSkeleton, renderSkeletons } from '../../components/SkeletonLoader';
 import { getCached, setCached } from '../../services/listCacheService';
 import BannerAdView from '../../components/ads/BannerAdView';
-import { BANNER_LIST_INTERVAL } from '../../services/adsConfig';
+import { shouldShowBannerAfter } from '../../services/adsConfig';
+import { buildAdContext } from '../../utils/chatAdContext';
 
 // v2: cached formatted rows now include `currency` for the budget display.
 const EVENTS_CACHE_KEY = 'events:public:v2';
@@ -600,7 +601,7 @@ export default function Gigs() {
         // handleDateRangeSelect, handleCategorySelect) flip activeTab
         // only when a real value is committed.
 
-        if (tabLabel === 'Location') {
+        if (tabLabel === 'City') {
             setShowLocationModal(true);
         } else if (tabLabel === 'Date') {
             setShowDateRangeModal(true);
@@ -615,7 +616,7 @@ export default function Gigs() {
 
         // Set active tab only if a location is selected
         if (location) {
-            setActiveTab(0); // Location is index 0
+            setActiveTab(0); // City is index 0
         } else {
             setActiveTab(null);
         }
@@ -780,11 +781,7 @@ export default function Gigs() {
                 chatName: organizerName,
                 avatar: organizerAvatar,
                 isOnline: false, // Will be updated by socket
-                eventContext: {
-                    eventId: event._original?.event_ad_id || event.id,
-                    eventTitle: event.title,
-                    eventBudget: event.budget
-                }
+                adContext: buildAdContext('event', event._original?.event_ad_id || event.id, event.title),
             });
         } catch (error) {
             console.error('Error navigating to chat:', error);
@@ -957,7 +954,7 @@ export default function Gigs() {
                     />
                     <View style={{ marginBottom: 10 }}>
                         <Tabs
-                            tabs={['Location', 'Date', 'Category']}
+                            tabs={['City', 'Date', 'Category']}
                             onTabPress={handleTabPress}
                             defaultActive={activeTab}
                         />
@@ -1095,7 +1092,7 @@ export default function Gigs() {
                             event={event}
                             onGiveQuote={() => handleGiveQuote(event)}
                         />
-                        {(idx + 1) % BANNER_LIST_INTERVAL === 0 && (
+                        {shouldShowBannerAfter(idx, events.length) && (
                             <BannerAdView style={{ marginVertical: 12 }} />
                         )}
                       </React.Fragment>
@@ -1181,7 +1178,7 @@ export default function Gigs() {
                                 ]}
                                 numberOfLines={1}
                             >
-                                {searchQuery || 'Search by title, location, category...'}
+                                {searchQuery || 'Search by title, city, category...'}
                             </Text>
                         </TouchableOpacity>
                         <TouchableOpacity

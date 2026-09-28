@@ -15,6 +15,8 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../ThemeContext';
 import chatService from '../../services/chatService';
+import api, { fixLocalUrl } from '../../services/api';
+import { classifyAttachment, getAttachmentUrl } from '../../utils/chatAttachments';
 import settingsService from '../../services/settingsService';
 import ReportUserModal from '../../components/ReportUserModal';
 import BlockUserModal from '../../components/BlockUserModal';
@@ -22,15 +24,15 @@ import BlockUserModal from '../../components/BlockUserModal';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MEDIA_PREVIEW_SIZE = (SCREEN_WIDTH - 48 - 12) / 4;
 
-// File type constants for media detection
-const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
-const VIDEO_EXTENSIONS = ['mp4', 'mov', 'avi', 'mkv', 'webm'];
-
 const ChatInfoScreen = ({ route, navigation }) => {
     const theme = useTheme();
-    const { chatId, chatName, avatar, recipientId, isOnline } = route.params || {};
+    const { chatId, chatName, avatar, recipientId: recipientIdParam, isOnline } = route.params || {};
 
     const [messages, setMessages] = useState([]);
+    // The other person. Opened from a notification the screen may only know
+    // the chatId, so fall back to the chat's participant list.
+    const [recipientId, setRecipientId] = useState(recipientIdParam || null);
+    const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [currentUserId, setCurrentUserId] = useState(null);
 
@@ -59,13 +61,37 @@ const ChatInfoScreen = ({ route, navigation }) => {
                     setCurrentUserId(userId);
                 }
 
+                let otherUserId = recipientIdParam || null;
+                if (!otherUserId && chatId) {
+                    const chatResult = await chatService.getChatById(chatId);
+                    const participants = chatResult.data?.participants || [];
+                    const other = participants.find(
+                        p => String(p.user_id || p.user?.user_id) !== String(userId),
+                    );
+                    otherUserId = other?.user_id || other?.user?.user_id || null;
+                    if (otherUserId) {
+                        setRecipientId(otherUserId);
+                    }
+                }
+
+                if (otherUserId) {
+                    try {
+                        const res = await api.get(`/profile/public/${otherUserId}`);
+                        if (res.data?.data) {
+                            setProfile(res.data.data);
+                        }
+                    } catch (e) {
+                        console.warn('[ChatInfo] Failed to load profile:', e.message);
+                    }
+                }
+
                 // Check if user is blocked
-                if (recipientId) {
+                if (otherUserId) {
                     try {
                         const blockedResult = await settingsService.getBlockedUsers();
                         if (blockedResult.success && Array.isArray(blockedResult.data)) {
                             const blocked = blockedResult.data.some(
-                                u => String(u.userId) === String(recipientId)
+                                u => String(u.userId) === String(otherUserId)
                             );
                             setIsUserBlocked(blocked);
                         }
@@ -89,7 +115,7 @@ const ChatInfoScreen = ({ route, navigation }) => {
         };
 
         loadData();
-    }, [chatId]);
+    }, [chatId, recipientIdParam]);
 
     // Extract media items from messages
     const mediaItems = useMemo(() => {
@@ -99,18 +125,16 @@ const ChatInfoScreen = ({ route, navigation }) => {
             if (!msg.attachments || msg.attachments.length === 0) return;
 
             msg.attachments.forEach((attachment, index) => {
-                const url = attachment.url || attachment.uri;
-                if (!url) return;
+                const url = getAttachmentUrl(attachment);
+                const kind = classifyAttachment(attachment, msg);
 
-                const ext = url.match(/\.([a-zA-Z0-9]+)(?:[?#]|$)/)?.[1]?.toLowerCase() || '';
-                const isImage = IMAGE_EXTENSIONS.includes(ext);
-                const isVideo = VIDEO_EXTENSIONS.includes(ext);
-
-                if (isImage || isVideo) {
+                if (url && (kind === 'image' || kind === 'video')) {
                     mediaList.push({
                         id: `${msg.message_id}-${index}`,
-                        url,
-                        type: isImage ? 'image' : 'video',
+                        url: fixLocalUrl(url),
+                        // Server-generated thumbnail for videos when there is one
+                        thumbnail: attachment.metadata?.thumbnail ? fixLocalUrl(attachment.metadata.thumbnail) : null,
+                        type: kind,
                         timestamp: msg.created_at,
                     });
                 }
@@ -124,18 +148,15 @@ const ChatInfoScreen = ({ route, navigation }) => {
     const mediaCounts = useMemo(() => {
         let media = 0, links = 0, docs = 0;
         const urlRegex = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
-        const docExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'];
 
         messages.forEach((msg) => {
             // Count media from attachments
             if (msg.attachments) {
                 msg.attachments.forEach((att) => {
-                    const url = att.url || att.uri || '';
-                    const ext = url.match(/\.([a-zA-Z0-9]+)(?:[?#]|$)/)?.[1]?.toLowerCase() || '';
-
-                    if (IMAGE_EXTENSIONS.includes(ext) || VIDEO_EXTENSIONS.includes(ext)) {
+                    const kind = classifyAttachment(att, msg);
+                    if (kind === 'image' || kind === 'video') {
                         media++;
-                    } else if (docExtensions.includes(ext)) {
+                    } else if (kind === 'document') {
                         docs++;
                     }
                 });
@@ -155,7 +176,7 @@ const ChatInfoScreen = ({ route, navigation }) => {
 
     // Handle navigation to Media & Links screen
     const handleViewMedia = useCallback(() => {
-        navigation.navigate('MediaLinksScreen', {
+        navigation.navigate('MediaLinks', {
             chatId,
             chatName,
             messages,
@@ -163,11 +184,31 @@ const ChatInfoScreen = ({ route, navigation }) => {
     }, [navigation, chatId, chatName, messages]);
 
     // Render avatar
+    const displayName = profile?.full_name
+        || [profile?.first_name, profile?.last_name].filter(Boolean).join(' ')
+        || chatName;
+    const avatarUrl = profile?.profile_pic ? fixLocalUrl(profile.profile_pic) : avatar;
+    const cityText = profile?.city
+        ? [profile.city, profile.state].filter(Boolean).join(', ')
+        : (profile?.location || '').split(',')[0]?.trim();
+    const adsCount = (profile?.statistics?.vendor_ads || 0) + (profile?.statistics?.events || 0);
+
+    const openFullProfile = () => {
+        if (!recipientId) {
+            return;
+        }
+        navigation.navigate('UserProfile', {
+            userId: recipientId,
+            userName: displayName,
+            userAvatar: avatarUrl,
+        });
+    };
+
     const renderAvatar = () => {
-        if (avatar) {
+        if (avatarUrl) {
             return (
                 <Image
-                    source={{ uri: avatar }}
+                    source={{ uri: avatarUrl }}
                     style={styles.largeAvatar}
                     resizeMode="cover"
                 />
@@ -176,7 +217,7 @@ const ChatInfoScreen = ({ route, navigation }) => {
 
         return (
             <View style={[styles.largeAvatarFallback, { backgroundColor: theme.colors.primary }]}>
-                <Text style={styles.largeAvatarText}>{getInitials(chatName)}</Text>
+                <Text style={styles.largeAvatarText}>{getInitials(displayName)}</Text>
             </View>
         );
     };
@@ -193,7 +234,7 @@ const ChatInfoScreen = ({ route, navigation }) => {
                 activeOpacity={0.8}
             >
                 <Image
-                    source={{ uri: item.url }}
+                    source={{ uri: isVideo && item.thumbnail ? item.thumbnail : item.url }}
                     style={styles.mediaPreviewImage}
                     resizeMode="cover"
                 />
@@ -228,12 +269,72 @@ const ChatInfoScreen = ({ route, navigation }) => {
                 showsVerticalScrollIndicator={false}
             >
                 {/* Profile Section */}
-                <View style={[styles.profileSection, { backgroundColor: theme.colors.white }]}>
+                <TouchableOpacity
+                    style={[styles.profileSection, { backgroundColor: theme.colors.white }]}
+                    onPress={openFullProfile}
+                    activeOpacity={recipientId ? 0.8 : 1}
+                    disabled={!recipientId}
+                >
                     {renderAvatar()}
-                    <Text style={[styles.chatName, { color: theme.colors.text }]}>{chatName}</Text>
+                    <Text style={[styles.chatName, { color: theme.colors.text }]}>{displayName}</Text>
                     <Text style={[styles.statusText, { color: theme.colors.textSecondary }]}>
                         {isOnline ? 'Online' : 'Last seen recently'}
                     </Text>
+                </TouchableOpacity>
+
+                {/* About / details — like WhatsApp's contact info */}
+                <View style={[styles.section, { backgroundColor: theme.colors.white }]}>
+                    <View style={styles.infoRow}>
+                        <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>About</Text>
+                        <Text style={[styles.infoValue, { color: theme.colors.text }]}>
+                            {profile?.bio?.trim() || (loading ? '…' : 'No bio yet')}
+                        </Text>
+                    </View>
+                    {!!cityText && (
+                        <View style={styles.infoRow}>
+                            <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>City</Text>
+                            <View style={styles.infoValueRow}>
+                                <Icon name="location-outline" size={16} color={theme.colors.textSecondary} />
+                                <Text style={[styles.infoValue, styles.infoValueInline, { color: theme.colors.text }]}>
+                                    {cityText}
+                                </Text>
+                            </View>
+                        </View>
+                    )}
+                    {!!profile && (
+                        <TouchableOpacity
+                            style={styles.infoRow}
+                            disabled={adsCount === 0}
+                            // Open their profile on the tab that has ads
+                            onPress={() => navigation.navigate('UserProfile', {
+                                userId: recipientId,
+                                userName: displayName,
+                                userAvatar: avatarUrl,
+                                initialTab: (profile.statistics?.vendor_ads || 0) > 0 ? 'services' : 'events',
+                            })}
+                        >
+                            <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>Ads posted</Text>
+                            <View style={styles.infoValueRow}>
+                                <Text style={[styles.infoValue, styles.infoValueGrow, { color: theme.colors.text }]}>
+                                    {adsCount === 0
+                                        ? 'None yet'
+                                        : `${profile.statistics?.vendor_ads || 0} service ads · ${profile.statistics?.events || 0} events`}
+                                </Text>
+                                {adsCount > 0 && (
+                                    <Icon name="chevron-forward" size={18} color={theme.colors.textSecondary} />
+                                )}
+                            </View>
+                        </TouchableOpacity>
+                    )}
+                    {!!recipientId && (
+                        <TouchableOpacity style={[styles.actionItem, styles.lastActionItem]} onPress={openFullProfile}>
+                            <View style={[styles.actionIcon, { backgroundColor: '#E8F4FD' }]}>
+                                <Icon name="person-outline" size={20} color={theme.colors.primary} />
+                            </View>
+                            <Text style={[styles.actionText, { color: theme.colors.text }]}>View full profile</Text>
+                            <Icon name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+                        </TouchableOpacity>
+                    )}
                 </View>
 
                 {/* Media, Links, Docs Section */}
@@ -357,7 +458,7 @@ const ChatInfoScreen = ({ route, navigation }) => {
                 visible={showReportModal}
                 onClose={() => setShowReportModal(false)}
                 reportedUserId={recipientId}
-                reportedUserName={chatName}
+                reportedUserName={displayName}
                 chatId={chatId}
                 reportType="user"
                 onReportSubmitted={() => {
@@ -370,7 +471,7 @@ const ChatInfoScreen = ({ route, navigation }) => {
                 visible={showBlockModal}
                 onClose={() => setShowBlockModal(false)}
                 userId={recipientId}
-                userName={chatName}
+                userName={displayName}
                 isBlocked={isUserBlocked}
                 onBlockComplete={(result) => {
                     setIsUserBlocked(result.blocked);
@@ -451,6 +552,32 @@ const styles = StyleSheet.create({
     },
     statusText: {
         fontSize: 14,
+    },
+    // About / details
+    infoRow: {
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: '#E5E7EB',
+    },
+    infoLabel: {
+        fontSize: 13,
+        marginBottom: 4,
+    },
+    infoValue: {
+        fontSize: 15,
+        lineHeight: 21,
+    },
+    infoValueRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    infoValueGrow: {
+        flex: 1,
+    },
+    infoValueInline: {
+        marginLeft: 4,
+        flex: 1,
     },
     // Section
     section: {

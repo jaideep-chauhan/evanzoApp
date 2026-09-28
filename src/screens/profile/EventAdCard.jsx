@@ -23,7 +23,7 @@ import FastImage from 'react-native-fast-image';
 
 export default function EventAdCard({
     eventId,
-    title = 'Corporate Gig',
+    title = 'Corporate Event',
     location = 'Ontario, Canada',
     duration = '2 hours',
     date = 'October 30, 2023',

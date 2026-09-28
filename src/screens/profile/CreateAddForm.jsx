@@ -34,6 +34,7 @@ import { detectDefaultCurrency } from '../../utils/currency';
 import { CustomSuccessModal } from '../../components/CustomSuccessModal';
 import { CustomToast } from '../../components/CustomToast';
 import ImageEditorModal from '../../components/ImageEditorModal';
+import ImageGalleryModal from '../../components/ImageGalleryModal';
 import LocationSelector from '../../components/LocationSelector';
 import { icons, getCategoryIcon } from '../../assets/icons';
 
@@ -50,7 +51,7 @@ const SERVICE_TO_CATEGORY_MAP = {
     'Catering': ['Catering', 'Food & Beverage'],
     'Music': ['DJ', 'Live Music', 'Sound System'],
     'Decoration': ['Decoration', 'Florist'],
-    'Venue': ['Venue', 'Gig Space'],
+    'Venue': ['Venue', 'Event Space'],
     'Transport': ['Transport', 'Car Rental'],
 };
 
@@ -67,7 +68,7 @@ const TAG_OPTIONS = [
 const EVENT_TYPE_TAG_OPTIONS = {
     'Wedding': ['Indian', 'Christian', 'Traditional', 'Modern', 'Destination'],
     'Birthday': ['Kids', 'Adult', 'Theme', 'Surprise'],
-    'Corporate Gig': ['Conference', 'Product Launch', 'Team Building', 'Award Ceremony'],
+    'Corporate Event': ['Conference', 'Product Launch', 'Team Building', 'Award Ceremony'],
     'Festival': ['Music', 'Cultural', 'Food', 'Holiday'],
 };
 
@@ -156,6 +157,7 @@ const CreateAddForm = ({ type, onClose }) => {
     const [categoryNames, setCategoryNames] = useState([]); // Will store category names for display
     const [selectedCategoryData, setSelectedCategoryData] = useState([]); // Full category data with subcategories
     const [vendorDescription, setVendorDescription] = useState('');
+    const [vendorLink, setVendorLink] = useState(''); // website / social link
     const [companyName, setCompanyName] = useState('');
     const [vendorLocation, setVendorLocation] = useState('Ontario, Canada');
     const [vendorLocationData, setVendorLocationData] = useState(null); // { country, state, city, latitude, longitude }
@@ -174,6 +176,8 @@ const CreateAddForm = ({ type, onClose }) => {
 
     // Image editor modal
     const [showImageEditor, setShowImageEditor] = useState(false);
+    // Photo tapped in the form's preview row → full-screen view (null = closed)
+    const [previewPhotoIndex, setPreviewPhotoIndex] = useState(null);
     const [tempSelectedImages, setTempSelectedImages] = useState([]);
 
     // Submission progress — drives the <UploadProgressOverlay>. Stages:
@@ -317,9 +321,9 @@ const CreateAddForm = ({ type, onClose }) => {
         'Photographer': 'Photography',
         'Videographer': 'Videography',
         'Caterer': 'Catering',
-        'Decorator': 'Gig Decoration',
+        'Decorator': 'Event Decoration',
         'DJ': 'DJ / Music',
-        'Gig Planner': 'Gig Planning',
+        'Event Planner': 'Event Planning',
         'Florist': 'Florist',
         'Makeup Artist': 'Makeup Artist',
         'Venue': 'Venue Rental',
@@ -379,7 +383,7 @@ const CreateAddForm = ({ type, onClose }) => {
         'Caterer',
         'Decorator',
         'DJ',
-        'Gig Planner',
+        'Event Planner',
         'Florist',
         'Makeup Artist',
         'Venue',
@@ -390,7 +394,7 @@ const CreateAddForm = ({ type, onClose }) => {
     const tagOptions = [
         'Birthday party',
         'Corporate',
-        'Gig',
+        'Event',
         'Candid',
         'Wedding',
         'Pre Wedding',
@@ -415,9 +419,9 @@ const CreateAddForm = ({ type, onClose }) => {
         'Formal',
         'Casual',
         'Small Gathering',
-        'Large Gig',
-        'Day Gig',
-        'Evening Gig',
+        'Large Event',
+        'Day Event',
+        'Evening Event',
         'Weekend',
         'Weekday',
     ];
@@ -475,6 +479,11 @@ const CreateAddForm = ({ type, onClose }) => {
                 multiple: true,
                 maxFiles: type === 'vendor' ? 20 : 10,
                 compressImageQuality: 0.8,
+                // Keep enough resolution for the 1080×1350 (4:5) crop — at the
+                // old 1080px cap a crop from a landscape photo was upscaled and
+                // blurry. Photos are compressed again before upload.
+                compressImageMaxWidth: 2160,
+                compressImageMaxHeight: 2160,
             });
             logBreadcrumb(`CreateAd(${type}): picker returned ${selectedImages?.length || 0} images`);
 
@@ -692,7 +701,7 @@ const CreateAddForm = ({ type, onClose }) => {
                     clearDraft();
                     setModalState({
                         visible: true,
-                        title: 'Gig Ad Posted',
+                        title: 'Event Ad Posted',
                         message: 'Your event ad is now live and visible to vendors.',
                         type: 'success'
                     });
@@ -729,8 +738,31 @@ const CreateAddForm = ({ type, onClose }) => {
                     return;
                 }
 
-                // Prepare offer data - send as array of objects matching database structure
-                const validOffers = offers.filter(offer => offer.amount || offer.discount);
+                // Offers need BOTH an amount and a 1-100% discount — a half-filled
+                // offer used to be saved and then shown as "0%".
+                const filledOffers = offers.filter(offer => String(offer.amount || '').trim() || String(offer.discount || '').trim());
+                const badOffer = filledOffers.find(offer => {
+                    const amount = Number(offer.amount);
+                    const discount = Number(offer.discount);
+                    return !(amount > 0) || !(discount >= 1 && discount <= 100);
+                });
+                if (badOffer) {
+                    setToastState({ visible: true, message: 'Each offer needs an amount and a discount between 1% and 100%', type: 'error' });
+                    setIsLoading(false);
+                    return;
+                }
+                // Optional link: add https:// if missing, must look like a URL.
+                const rawLink = vendorLink.trim();
+                const normalizedLink = rawLink && !/^https?:\/\//i.test(rawLink) ? `https://${rawLink}` : rawLink;
+                if (normalizedLink && !/^https?:\/\/[^\s/$.?#].[^\s]*\.[^\s]{2,}/i.test(normalizedLink)) {
+                    setToastState({ visible: true, message: 'Please enter a valid website or Instagram link', type: 'error' });
+                    setIsLoading(false);
+                    return;
+                }
+                const validOffers = filledOffers.map(offer => ({
+                    amount: String(offer.amount).trim(),
+                    discount: String(Number(offer.discount)),
+                }));
 
                 // Create FormData for file upload
                 const formData = new FormData();
@@ -741,6 +773,7 @@ const CreateAddForm = ({ type, onClose }) => {
                 formData.append('categories', JSON.stringify(category || []));
                 formData.append('description', vendorDescription || '');
                 formData.append('company_name', companyName);
+                if (normalizedLink) formData.append('portfolio_url', normalizedLink);
                 formData.append('location', vendorLocation);
                 // Structured location fields — only present when the user
                 // selected an API result in the modal.
@@ -916,7 +949,7 @@ const CreateAddForm = ({ type, onClose }) => {
             {/* Header */}
             <View style={styles.headerPro}>
                 <Text style={styles.headerTitlePro}>
-                    {type === 'event' ? 'Create Gig Ad' : 'Create Vendor Ad'}
+                    {type === 'event' ? 'Create Event Ad' : 'Create Vendor Ad'}
                 </Text>
             </View>
             <ScrollView
@@ -955,7 +988,7 @@ const CreateAddForm = ({ type, onClose }) => {
                         </View>
 
                         <View style={styles.fieldGroupPro}>
-                            <Text style={styles.labelPro}>Gig Type</Text>
+                            <Text style={styles.labelPro}>Event Type</Text>
                             <TouchableOpacity
                                 style={[styles.inputPro, styles.dropdownButton]}
                                 onPress={() => setShowEventTypeDropdown(true)}
@@ -1004,7 +1037,7 @@ const CreateAddForm = ({ type, onClose }) => {
                         </View>
 
                         <View style={styles.fieldGroupPro}>
-                            <Text style={styles.labelPro}>Location</Text>
+                            <Text style={styles.labelPro}>City</Text>
                             <LocationSelector
                                 initialCountry={eventLocationData?.country || ''}
                                 initialState={eventLocationData?.state || ''}
@@ -1171,11 +1204,13 @@ const CreateAddForm = ({ type, onClose }) => {
                                         <View style={styles.photosContainer}>
                                             {photos.map((photo, index) => (
                                                 <View key={index} style={styles.photoWrapper}>
-                                                    <Image
-                                                        source={{ uri: photo.uri }}
-                                                        style={styles.selectedPhoto}
-                                                        resizeMode="contain"
-                                                    />
+                                                    <TouchableOpacity activeOpacity={0.85} onPress={() => setPreviewPhotoIndex(index)}>
+                                                        <Image
+                                                            source={{ uri: photo.uri }}
+                                                            style={styles.selectedPhoto}
+                                                            resizeMode="cover"
+                                                        />
+                                                    </TouchableOpacity>
                                                     {photo.cropped && (
                                                         <View style={styles.croppedBadgeSmall}>
                                                             <Icon name="checkmark-circle" size={12} color="#4CAF50" />
@@ -1252,6 +1287,19 @@ const CreateAddForm = ({ type, onClose }) => {
                                 </Text>
                             )}
                         </View>
+                        <View style={styles.fieldGroupPro}>
+                            <Text style={styles.labelPro}>Website / Instagram link (optional)</Text>
+                            <TextInput
+                                style={[styles.inputPro, { backgroundColor: theme.colors.primary }]}
+                                value={vendorLink}
+                                onChangeText={setVendorLink}
+                                placeholder="e.g. instagram.com/yourbusiness"
+                                placeholderTextColor="#ffffff80"
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                                keyboardType="url"
+                            />
+                        </View>
 
                         <View style={styles.fieldGroupPro}>
                             <Text style={styles.labelPro}>Services Offered (Optional)</Text>
@@ -1306,7 +1354,7 @@ const CreateAddForm = ({ type, onClose }) => {
                             />
                         </View>
                         <View style={styles.fieldGroupPro}>
-                            <Text style={styles.labelPro}>Location</Text>
+                            <Text style={styles.labelPro}>City</Text>
                             <LocationSelector
                                 initialCountry={vendorLocationData?.country || ''}
                                 initialState={vendorLocationData?.state || ''}
@@ -1353,12 +1401,14 @@ const CreateAddForm = ({ type, onClose }) => {
                                         </View>
                                     </View>
                                     <View style={styles.offerInputContainer}>
-                                        <Text style={styles.offerLabel}>Discount</Text>
+                                        <Text style={styles.offerLabel}>Discount (%)</Text>
                                         <TextInput
                                             style={[styles.inputPro, styles.offerInput]}
                                             value={offer.discount}
-                                            onChangeText={(value) => updateOffer(index, 'discount', value)}
-                                            placeholder="10%"
+                                            // Digits only; the grey "10%" placeholder looked like a
+                                            // filled-in value, so people left it empty → "0%".
+                                            onChangeText={(value) => updateOffer(index, 'discount', value.replace(/[^0-9]/g, '').slice(0, 3))}
+                                            placeholder="e.g. 10"
                                             placeholderTextColor="#ffffff80"
                                             keyboardType="numeric"
                                             onFocus={() => {
@@ -1398,11 +1448,13 @@ const CreateAddForm = ({ type, onClose }) => {
                                         <View style={styles.photosContainer}>
                                             {photos.map((photo, index) => (
                                                 <View key={index} style={styles.photoWrapper}>
-                                                    <Image
-                                                        source={{ uri: photo.uri }}
-                                                        style={styles.selectedPhoto}
-                                                        resizeMode="contain"
-                                                    />
+                                                    <TouchableOpacity activeOpacity={0.85} onPress={() => setPreviewPhotoIndex(index)}>
+                                                        <Image
+                                                            source={{ uri: photo.uri }}
+                                                            style={styles.selectedPhoto}
+                                                            resizeMode="cover"
+                                                        />
+                                                    </TouchableOpacity>
                                                     {photo.cropped && (
                                                         <View style={styles.croppedBadgeSmall}>
                                                             <Icon name="checkmark-circle" size={12} color="#4CAF50" />
@@ -1677,7 +1729,7 @@ const CreateAddForm = ({ type, onClose }) => {
                     />
                     <View style={styles.professionalDropdown}>
                         <View style={styles.dropdownHeader}>
-                            <Text style={styles.dropdownTitle}>Select Gig Type</Text>
+                            <Text style={styles.dropdownTitle}>Select Event Type</Text>
                             <TouchableOpacity
                                 onPress={() => setShowEventTypeDropdown(false)}
                                 style={styles.dropdownCloseBtn}
@@ -1763,6 +1815,12 @@ const CreateAddForm = ({ type, onClose }) => {
             />
 
             {/* Image Editor Modal */}
+            <ImageGalleryModal
+                visible={previewPhotoIndex !== null}
+                images={photos.map((photo) => ({ uri: photo.uri }))}
+                initialIndex={previewPhotoIndex ?? 0}
+                onClose={() => setPreviewPhotoIndex(null)}
+            />
             <ImageEditorModal
                 visible={showImageEditor}
                 images={tempSelectedImages}
@@ -1922,7 +1980,7 @@ const styles = StyleSheet.create({
     },
     addAttachmentPro: {
         width: 56,
-        height: 56,
+        height: 70,
         borderWidth: 2,
         borderColor: '#ffffff40',
         borderStyle: 'dashed',
@@ -2201,8 +2259,9 @@ const styles = StyleSheet.create({
         position: 'relative',
     },
     selectedPhoto: {
+        // 4:5, matching the ad photo crop
         width: 56,
-        height: 56,
+        height: 70,
         borderRadius: 12,
         borderWidth: 1,
         borderColor: '#ffffff30',

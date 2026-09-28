@@ -35,10 +35,12 @@ const OfferCard = ({ amount = 0, percent = 0, currency = 'USD' }) => {
                     <Text style={[styles.valueText, { marginLeft: 0, fontWeight: '700' }]}>{getCurrencySymbol(currency)}</Text>
                     <Text style={styles.valueText}>{amount}</Text>
                 </View>
-                <View style={styles.valueBox}>
-                    <FontAwesome name="percent" size={9} color="#2C3D5B" />
-                    <Text style={styles.valueText}>{percent}%</Text>
-                </View>
+                {Number(percent) > 0 && (
+                    <View style={styles.valueBox}>
+                        <FontAwesome name="percent" size={9} color="#2C3D5B" />
+                        <Text style={styles.valueText}>{Number(percent)}%</Text>
+                    </View>
+                )}
             </View>
         </View>
     );

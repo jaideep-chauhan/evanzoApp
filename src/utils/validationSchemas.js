@@ -158,8 +158,8 @@ export const vendorAdSchema = Yup.object().shape({
     .min(10, 'Description must be at least 10 characters')
     .max(500, 'Description cannot exceed 500 characters'),
   vendorLocation: Yup.string()
-    .required('Location is required')
-    .min(3, 'Location must be at least 3 characters'),
+    .required('City is required')
+    .min(3, 'City must be at least 3 characters'),
   offerAmount: Yup.number()
     .nullable()
     .transform((value, originalValue) => (originalValue === '' ? null : value))
@@ -184,8 +184,8 @@ export const eventAdSchema = Yup.object().shape({
     .required('Gig type is required')
     .min(2, 'Gig type must be at least 2 characters'),
   location: Yup.string()
-    .required('Location is required')
-    .min(3, 'Location must be at least 3 characters'),
+    .required('City is required')
+    .min(3, 'City must be at least 3 characters'),
   date: Yup.string()
     .required('Gig date is required')
     .matches(

@@ -1,15 +1,16 @@
 import api from './api';
 import {Share} from 'react-native';
 import savedEventsStorage from './savedEventsStorage';
-import {createAdLink} from './deepLinkService';
+import {buildAdShareContent} from './deepLinkService';
 
 class EventDetailsService {
-  // Fetch a full gig/event by id (public endpoint) — used when the screen is
-  // opened from a shared deep link that only carries the id, so it renders
-  // real data instead of a placeholder stub.
+  // Fetch a full gig by id (public endpoint) — used when the screen is opened
+  // from a shared deep link or a push notification that only carries the id,
+  // so it renders real data instead of a placeholder stub. Gigs are event ads
+  // (/event_ad/:id); the old /events/:id route 404s for them.
   async getEventDetails(eventId) {
     try {
-      const response = await api.get(`/events/${eventId}`);
+      const response = await api.get(`/event_ad/${eventId}`);
       return { success: true, data: response.data.data };
     } catch (error) {
       console.error('Get event details error:', error);
@@ -171,34 +172,22 @@ class EventDetailsService {
   // Share event
   async shareEvent(event) {
     try {
-      // Shareable deep link to THIS event. Opens the ad in-app if
-      // installed; otherwise routes via store + deferred deep link.
-      const link = await createAdLink({
+      // Shareable deep link to THIS event (link placement per platform).
+      const shareOptions = buildAdShareContent({
         type: 'event',
-        id: event.id || event.event_ad_id,
-        title: event.title,
-        description: event.description,
-        imageUrl: event.images?.[0]?.uri || event.images?.[0] || '',
-      });
-
-      const shareOptions = {
+        id: event.event_ad_id || event._original?.event_ad_id || event.id,
         title: `Check out this event: ${event.title}`,
-        message: `
-🎉 ${event.title}
-📍 ${event.location}
-📅 ${event.date}
-⏱️ Duration: ${event.duration} hours
-👥 Guests: ${event.guests || 'TBD'}
-💰 Budget: ${event.budget}
-
-${event.description}
-
-Gig organized by ${event.organizer?.name || 'Gig Organizer'}
-
-👉 Open it on Evnzo: ${link}
-                `.trim(),
-        url: link, // deep link (iOS shows it as the rich share target)
-      };
+        text: [
+          `🎉 ${event.title}`,
+          event.location ? `📍 ${event.location}` : null,
+          event.date ? `📅 ${event.date}` : null,
+          event.duration ? `⏱️ Duration: ${event.duration} hours` : null,
+          event.guests ? `👥 Guests: ${event.guests}` : null,
+          event.budget ? `💰 Budget: ${event.budget}` : null,
+          event.description ? `\n${event.description}` : null,
+          event.organizer?.name ? `\nOrganized by ${event.organizer.name}` : null,
+        ].filter(Boolean).join('\n'),
+      });
 
       const result = await Share.share(shareOptions);
       return {

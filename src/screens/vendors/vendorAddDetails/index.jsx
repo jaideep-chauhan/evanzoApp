@@ -1,4 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react'
+import { goBackOrHome } from '../../../utils/navigationHelpers';
+import { buildAdContext, adMetadata } from '../../../utils/chatAdContext';
 import VendorProfileCard from './VendorProfileCard';
 // Removed SafeAreaView
 import { ScrollView, StyleSheet, View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Keyboard, Platform, Alert, ActivityIndicator } from 'react-native';
@@ -60,6 +62,9 @@ export default function VendorChat({ navigation }) {
     // "vendor/:vendorId"). For the id-only case we fetch the full ad so a
     // shared link opens with real photos + details instead of an empty stub.
     const [vendor, setVendor] = useState(route.params?.vendor || null);
+    // Viewing your own ad → no quote bar.
+    const vendorOwnerId = vendor?.user_id || vendor?._original?.user_id || vendor?.owner_id || vendor?.vendor_user_id;
+    const isOwnAd = !!user && !!vendorOwnerId && String(vendorOwnerId) === String(user.user_id || user.id);
     const [vendorLoading, setVendorLoading] = useState(
         !route.params?.vendor && !!route.params?.vendorId,
     );
@@ -86,6 +91,24 @@ export default function VendorChat({ navigation }) {
             alive = false;
         };
     }, [route.params?.vendor, route.params?.vendorId]);
+
+    // Opened from a list card: list data doesn't include the website link, so
+    // fetch it (once) in the background and merge it in.
+    const passedVendorId = route.params?.vendor?._original?.vendor_ad_id || route.params?.vendor?.id;
+    useEffect(() => {
+        if (!route.params?.vendor || !passedVendorId) return undefined;
+        if (route.params.vendor.portfolio_url !== undefined || route.params.vendor._original?.portfolio_url !== undefined) return undefined;
+        let alive = true;
+        vendorDetailsService.getVendorDetails(passedVendorId)
+            .then((res) => {
+                const url = res?.data?.portfolio_url;
+                if (alive && url) setVendor((prev) => (prev ? { ...prev, portfolio_url: url } : prev));
+            })
+            .catch(() => {});
+        return () => {
+            alive = false;
+        };
+    }, [route.params?.vendor, passedVendorId]);
 
 
     // Format images to ensure they're in the correct format
@@ -140,7 +163,14 @@ export default function VendorChat({ navigation }) {
         }
 
         if (!user) {
-            Alert.alert('Error', 'You must be logged in to send a quote');
+            Alert.alert(
+                'Log in to send a quote',
+                'You need an account to contact vendors.',
+                [
+                    { text: 'Not now', style: 'cancel' },
+                    { text: 'Log in', onPress: () => navigation.navigate('Login') },
+                ],
+            );
             return;
         }
 
@@ -169,10 +199,17 @@ export default function VendorChat({ navigation }) {
             const chatId = chatResult.data.chat_id;
 
             // Step 2: Format quote message
-            const quoteMessage = `📋 Quote Request:\n\n${quoteText.trim()}\n\n💼 Service: ${vendor?.type || vendor?.category || 'General Service'}\n📍 Location: ${vendor?.location || 'Not specified'}`;
+            const quoteMessage = `📋 Quote Request:\n\n${quoteText.trim()}\n\n💼 Service: ${vendor?.type || vendor?.category || 'General Service'}\n📍 City: ${vendor?.location || 'Not specified'}`;
 
             // Step 3: Send quote message
-            const messageResult = await chatService.sendMessage(chatId, quoteMessage, 'text');
+            const quoteAd = buildAdContext(
+                'vendor',
+                vendor?._original?.vendor_ad_id || vendor?.vendor_ad_id || vendor?.id,
+                vendor?.company_name || vendor?.name || vendor?._original?.title,
+            );
+            const messageResult = await chatService.sendMessage(
+                chatId, quoteMessage, 'text', null, null, adMetadata(quoteAd),
+            );
 
             if (messageResult.success) {
                 Alert.alert(
@@ -216,7 +253,8 @@ export default function VendorChat({ navigation }) {
             }
 
         } catch (error) {
-            Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+            console.error('Send quote failed:', error?.response?.data || error?.message);
+            Alert.alert('Error', error?.response?.data?.message || error?.message || 'Could not send your quote. Please try again.');
         } finally {
             setIsSubmittingQuote(false);
         }
@@ -251,7 +289,7 @@ export default function VendorChat({ navigation }) {
                     style={styles.scrollView}
                     showsVerticalScrollIndicator={false}
                     contentOffset={{ x: 0, y: initialScrollY }}
-                    contentContainerStyle={{ paddingBottom: quoteBarHeight + 20 }}
+                    contentContainerStyle={{ paddingBottom: isOwnAd ? 40 : quoteBarHeight + 20 }}
                 >
                     <VendorProfileCard
                         // Avatar at the top of the detail page should be the
@@ -285,7 +323,7 @@ export default function VendorChat({ navigation }) {
                         }
                         category={vendor?.type || ''}
                         location={vendor?.location || ''}
-                        onBackPress={() => navigation && navigation.goBack ? navigation.goBack() : null}
+                        onBackPress={() => goBackOrHome(navigation)}
                         onBellPress={() => {
                             if (navigation && navigation.navigate) {
                                 // NotificationInbox = the received-notifications
@@ -301,6 +339,7 @@ export default function VendorChat({ navigation }) {
                         <VendorDetailsSection
                             photos={formattedImages}
                             description={vendor?.description || ''}
+                            link={vendor?.portfolio_url || vendor?._original?.portfolio_url || ''}
                             onSend={() => console.log('Send button pressed')}
                             hideMessageSection={true}
                             offers={vendor?.offers || []}
@@ -310,7 +349,9 @@ export default function VendorChat({ navigation }) {
                     </View>
                 </ScrollView>
 
-                {/* Quote Section — fixed at the bottom (white box removed). */}
+                {/* Quote Section — fixed at the bottom. Hidden on your own ad
+                    (you can't quote yourself — the send used to fail). */}
+                {!isOwnAd && (
                 <View onLayout={(e) => setQuoteBarHeight(e.nativeEvent.layout.height)} style={[styles.quoteSectionContainer, Platform.OS === 'android' && kbHeight > 0 && { bottom: 10 + kbHeight }]}>
                     <View style={styles.quoteSection}>
                         {/* Input + Quick Message button share a rounded
@@ -355,6 +396,7 @@ export default function VendorChat({ navigation }) {
                         </TouchableOpacity>
                     </View>
                 </View>
+                )}
             </View>
         </KeyboardAvoidingView>
     );

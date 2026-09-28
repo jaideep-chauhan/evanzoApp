@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     Modal,
     View,
@@ -9,6 +9,7 @@ import {
     ActivityIndicator,
     ScrollView,
     Image,
+    TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -43,10 +44,13 @@ export default function CategorySelectionModalEnhanced({
     const [error, setError] = useState(null);
     // Active tab key when `categoryTabs` is in use (dual Gig/Vendor type).
     const [activeTabKey, setActiveTabKey] = useState(null);
+    // Search across categories and their subcategories
+    const [searchQuery, setSearchQuery] = useState('');
 
     // Fetch categories when modal becomes visible or use provided filteredCategories
     useEffect(() => {
         if (visible) {
+            setSearchQuery('');
             if (categoryTabs && categoryTabs.length > 0) {
                 // Dual-type mode: show the first tab's items as a flat
                 // multi-select list. selectionStep stays 'subcategory' so we
@@ -91,6 +95,7 @@ export default function CategorySelectionModalEnhanced({
     const handleTabSwitch = (tab) => {
         if (tab.key === activeTabKey) return;
         setActiveTabKey(tab.key);
+        setSearchQuery('');
         setCategories(tab.items || []);
         setSelectedCategory({ name: tab.label });
         setSelectedSubcategories([]);
@@ -151,6 +156,7 @@ export default function CategorySelectionModalEnhanced({
         })));
 
         // Always set the selected category and show subcategories (if any)
+        setSearchQuery('');
         setSelectedCategory(category);
 
         // Check if category has subcategories
@@ -176,6 +182,7 @@ export default function CategorySelectionModalEnhanced({
     };
 
     const handleBackToCategories = () => {
+        setSearchQuery('');
         setSelectionStep('category');
         setSelectedCategory(null);
         setSelectedSubcategories([]);
@@ -200,27 +207,81 @@ export default function CategorySelectionModalEnhanced({
         onClose();
     };
 
+    const query = searchQuery.trim().toLowerCase();
+    const nameMatches = (name) => String(name || '').toLowerCase().includes(query);
+
+    // Step 1 (parents) — or the flat list in tabs / subcategory-only mode
+    const visibleCategories = useMemo(
+        () => (query ? categories.filter((c) => nameMatches(c.name || c)) : categories),
+        [categories, query], // eslint-disable-line react-hooks/exhaustive-deps
+    );
+    // Step 1 search also finds subcategories, shown as "Sub · Parent"
+    const matchingSubcategories = useMemo(() => {
+        if (!query || categoryTabs || showOnlySubcategories) return [];
+        const found = [];
+        categories.forEach((parent) =>
+            (parent.subcategories || []).forEach((sub) => {
+                if (nameMatches(sub.name)) found.push({ ...sub, _parent: parent });
+            }),
+        );
+        return found;
+    }, [categories, query, categoryTabs, showOnlySubcategories]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Step 2 (inside a parent)
+    const visibleSubcategories = useMemo(() => {
+        const subs = selectedCategory?.subcategories || [];
+        return query ? subs.filter((s) => nameMatches(s.name)) : subs;
+    }, [selectedCategory, query]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Picking a subcategory straight from search results
+    const handleSearchedSubcategoryPick = (sub) => {
+        const { _parent: parent, ...subcategory } = sub;
+        setSearchQuery('');
+        setSelectedCategory(parent);
+        setSelectedSubcategories([subcategory]);
+        setSelectionStep('subcategory');
+    };
+
+    const renderSearchedSubcategory = (sub) => (
+        <TouchableOpacity
+            key={`sub-${sub.category_id}`}
+            style={styles.categoryRow}
+            onPress={() => handleSearchedSubcategoryPick(sub)}
+        >
+            <Icon name="pricetag-outline" size={18} color={theme.colors.primary} />
+            <View style={styles.categoryRowBody}>
+                <Text style={[styles.categoryRowName, { color: theme.colors.primary }]} numberOfLines={1}>
+                    {sub.name}
+                </Text>
+                <Text style={styles.categoryRowMeta} numberOfLines={1}>in {sub._parent?.name}</Text>
+            </View>
+            <Icon name="add-circle-outline" size={20} color={theme.colors.primary} />
+        </TouchableOpacity>
+    );
+
     const renderCategoryItem = ({ item }) => {
         const categoryName = item.name || item;
         const iconSource = getCategoryIcon(categoryName);
 
+        const subCount = item.subcategories?.length || 0;
+
         return (
-            <TouchableOpacity
-                style={[
-                    styles.categoryButton,
-                    { borderColor: theme.colors.primary + '33', flexDirection: 'row', alignItems: 'center', gap: 8 }
-                ]}
-                onPress={() => handleCategoryClick(item)}
-            >
+            <TouchableOpacity style={styles.categoryRow} onPress={() => handleCategoryClick(item)}>
                 {iconSource ? (
-                    <Image source={iconSource} style={{ width: 18, height: 18, resizeMode: 'contain' }} />
-                ) : null}
-                <Text style={[
-                    styles.categoryText,
-                    { color: theme.colors.primary }
-                ]}>
-                    {categoryName}
-                </Text>
+                    <Image source={iconSource} style={styles.categoryRowIcon} />
+                ) : (
+                    <Icon name="grid-outline" size={18} color={theme.colors.primary} />
+                )}
+                <View style={styles.categoryRowBody}>
+                    <Text style={[styles.categoryRowName, { color: theme.colors.primary }]} numberOfLines={1}>
+                        {categoryName}
+                    </Text>
+                    {subCount > 0 && (
+                        <Text style={styles.categoryRowMeta}>
+                            {subCount} {subCount === 1 ? 'subcategory' : 'subcategories'}
+                        </Text>
+                    )}
+                </View>
+                <Icon name="chevron-forward" size={18} color="#9AA5B8" />
             </TouchableOpacity>
         );
     };
@@ -237,25 +298,14 @@ export default function CategorySelectionModalEnhanced({
                 ]}
                 onPress={() => handleSubcategoryToggle(item)}
             >
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={[
-                        styles.subcategoryText,
-                        { color: isSelected ? '#fff' : theme.colors.primary }
-                    ]}>
+                <View style={styles.subcategoryInner}>
+                    <Text
+                        style={[styles.subcategoryText, { color: isSelected ? '#fff' : theme.colors.primary }]}
+                        numberOfLines={2}
+                    >
                         {item.name}
                     </Text>
-                    {isSelected && (
-                        <TouchableOpacity
-                            onPress={(e) => {
-                                e.stopPropagation();
-                                handleSubcategoryToggle(item);
-                            }}
-                            style={{ marginLeft: 4 }}
-                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                            <Icon name="close-circle" size={16} color="#fff" />
-                        </TouchableOpacity>
-                    )}
+                    {isSelected && <Icon name="checkmark-circle" size={16} color="#fff" style={styles.subcategoryCheck} />}
                 </View>
             </TouchableOpacity>
         );
@@ -277,7 +327,7 @@ export default function CategorySelectionModalEnhanced({
                             <Icon name="arrow-back" size={22} color={theme.colors.primary} />
                         </TouchableOpacity>
                     )}
-                    <Text style={styles.titleHeader}>
+                    <Text style={[styles.titleHeader, { color: theme.colors.primary }]} numberOfLines={1}>
                         {categoryTabs
                             ? 'Select Category'
                             : selectionStep === 'category' ? 'Select Category' : selectedCategory?.name}
@@ -315,10 +365,34 @@ export default function CategorySelectionModalEnhanced({
                     </View>
                 )}
 
+                {/* Search */}
+                {!isLoading && !error && (
+                    <View style={styles.searchBar}>
+                        <Icon name="search" size={18} color="#8A94A6" />
+                        <TextInput
+                            style={styles.searchInput}
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                            placeholder={selectionStep === 'subcategory' && !categoryTabs && !showOnlySubcategories
+                                ? `Search in ${selectedCategory?.name || 'category'}…`
+                                : 'Search categories…'}
+                            placeholderTextColor="#8A94A6"
+                            autoCorrect={false}
+                            returnKeyType="search"
+                            clearButtonMode="never"
+                        />
+                        {searchQuery.length > 0 && (
+                            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                <Icon name="close-circle" size={18} color="#8A94A6" />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                )}
+
                 {selectionStep === 'subcategory' && selectedSubcategories.length > 0 && !isLoading && (
                     <View style={[styles.selectedInfo, { backgroundColor: theme.colors.primary + '10', borderColor: theme.colors.primary + '33' }]}>
                         <Text style={[styles.selectedInfoText, { color: theme.colors.primary }]}>
-                            {selectedSubcategories.length} subcategory selected
+                            {selectedSubcategories.length} {selectedSubcategories.length === 1 ? 'subcategory' : 'subcategories'} selected
                         </Text>
                     </View>
                 )}
@@ -350,14 +424,28 @@ export default function CategorySelectionModalEnhanced({
                 {/* Categories List */}
                 {!isLoading && !error && selectionStep === 'category' && categories.length > 0 && (
                     <FlatList
-                        key="categories-list-2col"
-                        data={categories}
+                        key="categories-list"
+                        data={visibleCategories}
                         renderItem={renderCategoryItem}
-                        numColumns={2}
                         keyExtractor={(item, index) => item.category_id?.toString() || index.toString()}
-                        contentContainerStyle={styles.categoriesContainer}
+                        contentContainerStyle={styles.listContainer}
                         showsVerticalScrollIndicator={false}
-                        columnWrapperStyle={styles.row}
+                        keyboardShouldPersistTaps="handled"
+                        ListHeaderComponent={query && visibleCategories.length > 0 ? (
+                            <Text style={styles.sectionLabel}>Categories</Text>
+                        ) : null}
+                        ListFooterComponent={matchingSubcategories.length > 0 ? (
+                            <View>
+                                <Text style={styles.sectionLabel}>Subcategories</Text>
+                                {matchingSubcategories.map(renderSearchedSubcategory)}
+                            </View>
+                        ) : null}
+                        ListEmptyComponent={matchingSubcategories.length === 0 ? (
+                            <View style={styles.emptyContainer}>
+                                <Icon name="search-outline" size={32} color="#999" />
+                                <Text style={styles.emptyText}>No categories match "{searchQuery}"</Text>
+                            </View>
+                        ) : null}
                     />
                 )}
 
@@ -368,7 +456,13 @@ export default function CategorySelectionModalEnhanced({
                             // When showing filtered subcategories directly
                             <FlatList
                                 key="filtered-subcategories-list-2col"
-                                data={categories}
+                                data={visibleCategories}
+                                keyboardShouldPersistTaps="handled"
+                                ListEmptyComponent={
+                                    <View style={styles.emptyContainer}>
+                                        <Text style={styles.emptyText}>No matches for "{searchQuery}"</Text>
+                                    </View>
+                                }
                                 renderItem={renderSubcategoryItem}
                                 numColumns={2}
                                 keyExtractor={(item, index) => item.category_id?.toString() || index.toString()}
@@ -380,7 +474,13 @@ export default function CategorySelectionModalEnhanced({
                             // Normal subcategory display
                             <FlatList
                                 key="subcategories-list-2col"
-                                data={selectedCategory.subcategories || []}
+                                data={visibleSubcategories}
+                                keyboardShouldPersistTaps="handled"
+                                ListEmptyComponent={
+                                    <View style={styles.emptyContainer}>
+                                        <Text style={styles.emptyText}>No matches for "{searchQuery}"</Text>
+                                    </View>
+                                }
                                 renderItem={renderSubcategoryItem}
                                 numColumns={2}
                                 keyExtractor={(item, index) => item.category_id?.toString() || index.toString()}
@@ -441,20 +541,18 @@ export default function CategorySelectionModalEnhanced({
 
 const styles = StyleSheet.create({
     safeAreaPad: {
-        paddingTop: 18,
+        paddingTop: 4,
     },
     container: {
         flex: 1,
         backgroundColor: '#fff',
     },
     header: {
-        backgroundColor: '#E7F0FF',
-        borderTopLeftRadius: 16,
-        borderTopRightRadius: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: '#dbeafe',
+        backgroundColor: '#fff',
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: '#E3E8F0',
         paddingVertical: 14,
-        paddingHorizontal: 16,
+        paddingHorizontal: 52, // room for the back / close buttons
         justifyContent: 'center',
         alignItems: 'center',
         position: 'relative',
@@ -516,6 +614,72 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         fontSize: 13,
     },
+    searchBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginHorizontal: 16,
+        marginTop: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 12,
+        backgroundColor: '#F2F5FA',
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 15,
+        color: '#1F2A44',
+        padding: 0,
+    },
+    listContainer: {
+        paddingTop: 8,
+        paddingBottom: 24,
+    },
+    sectionLabel: {
+        marginTop: 12,
+        marginBottom: 4,
+        marginHorizontal: 16,
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#8A94A6',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    categoryRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: '#E3E8F0',
+    },
+    categoryRowIcon: {
+        width: 22,
+        height: 22,
+        resizeMode: 'contain',
+    },
+    categoryRowBody: {
+        flex: 1,
+    },
+    categoryRowName: {
+        fontSize: 15,
+        fontWeight: '600',
+    },
+    categoryRowMeta: {
+        marginTop: 2,
+        fontSize: 12,
+        color: '#8A94A6',
+    },
+    subcategoryInner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 6,
+    },
+    subcategoryCheck: {
+        marginLeft: 6,
+    },
     categoriesContainer: {
         paddingTop: 16,
         paddingBottom: 24,
@@ -544,7 +708,8 @@ const styles = StyleSheet.create({
         elevation: 1,
     },
     subcategoryButton: {
-        flex: 1,
+        // Fixed half width so an odd last chip doesn't stretch full-width
+        width: '48.5%',
         paddingVertical: 12,
         paddingHorizontal: 4,
         borderRadius: 10,
@@ -568,10 +733,11 @@ const styles = StyleSheet.create({
         lineHeight: 15,
     },
     subcategoryText: {
-        fontSize: 11,
+        fontSize: 13,
         fontWeight: '600',
         textAlign: 'center',
-        lineHeight: 15,
+        lineHeight: 17,
+        flexShrink: 1,
     },
     bottomButtonsContainer: {
         flexDirection: 'row',

@@ -1,0 +1,46 @@
+import UIKit
+import React
+import React_RCTAppDelegate
+import ReactAppDependencyProvider
+import FirebaseCore
+
+@main
+class AppDelegate: RCTAppDelegate {
+
+  override func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+    // Firebase must be configured before React Native starts. Push handling
+    // (APNs registration, permission prompt, foreground display, taps) is left
+    // to @react-native-firebase/messaging and notifee — don't make this class
+    // the UNUserNotificationCenter / Messaging delegate, or taps never reach JS.
+    FirebaseApp.configure()
+
+    self.moduleName = "EVNZO"
+    self.dependencyProvider = RCTAppDependencyProvider()
+    self.initialProps = [:]
+
+    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  // MARK: - Deep Links (React Navigation / RCTLinkingManager)
+  // Universal Links: https://evnzo.com/event/123, /vendor/45
+  override func application(_ application: UIApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
+    return RCTLinkingManager.application(application, continue: userActivity, restorationHandler: restorationHandler)
+  }
+
+  // Custom URI scheme: evnzo://event/123
+  override func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
+    return RCTLinkingManager.application(app, open: url, options: options)
+  }
+
+  override func sourceURL(for bridge: RCTBridge) -> URL? {
+    self.bundleURL()
+  }
+
+  override func bundleURL() -> URL? {
+#if DEBUG
+    RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: "index")
+#else
+    Bundle.main.url(forResource: "main", withExtension: "jsbundle")
+#endif
+  }
+}

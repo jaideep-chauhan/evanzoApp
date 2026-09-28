@@ -45,7 +45,7 @@ class EventService {
         return {
           success: true,
           data: data.data,
-          message: data.message || 'Gig ad created successfully',
+          message: data.message || 'Event ad created successfully',
         };
       }
 
@@ -53,7 +53,7 @@ class EventService {
       return {
         success: true,
         data: response.data.data,
-        message: 'Gig ad created successfully',
+        message: 'Event ad created successfully',
       };
     } catch (error) {
       return {
@@ -98,7 +98,7 @@ class EventService {
       return {
         success: true,
         data: response.data.data,
-        message: 'Gig ad updated successfully',
+        message: 'Event ad updated successfully',
       };
     } catch (error) {
       return {
@@ -116,13 +116,13 @@ class EventService {
         '[eventService.deleteEventAd] missing/invalid eventId:',
         eventId,
       );
-      return {success: false, message: 'Gig ad id is missing'};
+      return {success: false, message: 'Event ad id is missing'};
     }
     try {
       await api.delete(`/event_ad/${numericId}`);
       return {
         success: true,
-        message: 'Gig ad deleted successfully',
+        message: 'Event ad deleted successfully',
       };
     } catch (error) {
       console.error(
@@ -273,7 +273,7 @@ class EventService {
         '[eventService.markEventAdComplete] missing/invalid eventId:',
         eventId,
       );
-      return {success: false, message: 'Gig ad id is missing'};
+      return {success: false, message: 'Event ad id is missing'};
     }
     try {
       const response = await api.patch(`/event_ad/${numericId}/status`, {
@@ -282,7 +282,7 @@ class EventService {
       return {
         success: true,
         data: response.data.data,
-        message: 'Gig marked as completed',
+        message: 'Event marked as completed',
       };
     } catch (error) {
       console.error(
@@ -406,14 +406,14 @@ class EventService {
     };
 
     // Determine event category
-    const category = event.event_type || event.service_needed || 'General Gig';
+    const category = event.event_type || event.service_needed || 'General Event';
 
     return {
       id: event.id || event.event_ad_id,
       user_id: event.user_id, // Include user_id at top level for easy access
       title:
         event.title ||
-        `${event.event_type || 'Gig'} - ${event.service_needed || ''}`,
+        `${event.event_type || 'Event'} - ${event.service_needed || ''}`,
       service_needed: event.service_needed,
       event_type: event.event_type,
       event_tags: event.event_tags || [],

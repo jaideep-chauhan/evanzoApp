@@ -6,6 +6,7 @@ import socialAuthService from '../services/socialAuthService';
 import socketService from '../services/socketService';
 import { secureStorage, migrateFromAsyncStorage } from '../utils/secureStorage';
 import { setCrashUser } from '../services/crashReporting';
+import notificationService from '../services/notificationService';
 
 const AuthContext = createContext({});
 
@@ -34,6 +35,16 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         setCrashUser(user?.user_id || user?.id || null);
     }, [user]);
+
+    // Register this device for push notifications whenever a user is signed
+    // in — covers every login method and a restored session on app start.
+    const signedInUserId = user?.user_id || user?.id || null;
+    useEffect(() => {
+        notificationService.setCurrentUserId(signedInUserId);
+        if (signedInUserId) {
+            notificationService.registerDeviceToken();
+        }
+    }, [signedInUserId]);
 
     const checkAuthState = async () => {
         try {
@@ -676,12 +687,18 @@ export const AuthProvider = ({ children }) => {
 
             // Try to notify backend of logout (skip if we're already getting 401s)
             if (!navigateToLogin) {
+                // Stop this device getting the user's pushes. Needs the auth
+                // token, so it has to happen before the tokens are cleared below.
+                await notificationService.unregisterDevice();
                 try {
                     await api.post('/auth/logout');
                 } catch (logoutError) {
                     // Continue with local logout even if server call fails
                 }
             }
+
+            // Nothing on the icon or in the tray belongs to the next user.
+            await notificationService.clearAllNotifications();
 
             // Clear ALL auth-related data
             // Tokens live in Keychain/Keystore — clear them separately.

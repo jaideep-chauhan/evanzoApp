@@ -1,4 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { goBackOrHome } from '../../utils/navigationHelpers';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import ImageGalleryModal from '../../components/ImageGalleryModal';
+import { buildAdContext, adMetadata } from '../../utils/chatAdContext';
 import useInterstitialAd from '../../hooks/useInterstitialAd';
 import {
     View,
@@ -36,6 +40,8 @@ const AVATAR_SIZE = 40;
 
 export default function EventDetailViewEnhanced() {
     const navigation = useNavigation();
+    // Keep the back button clear of the notch / Dynamic Island.
+    const insets = useSafeAreaInsets();
     const route = useRoute();
     const { user } = useAuth();
 
@@ -57,6 +63,8 @@ export default function EventDetailViewEnhanced() {
     useEffect(() => { tickInterstitial(); }, [tickInterstitial]);
     const [showFullDesc, setShowFullDesc] = useState(false);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    // Index of the photo open full screen, or null
+    const [galleryIndex, setGalleryIndex] = useState(null);
     // Real organizer rating/count from the user-review system (the hardcoded
     // 5.0/10 in getOrganizerData was a placeholder). Same source as the User
     // Profile screen, so the two stay consistent.
@@ -230,6 +238,10 @@ export default function EventDetailViewEnhanced() {
         status: eventFromParams.status || 'active',
     };
 
+    // Viewing your own event → no quote bar.
+    const eventOwnerId = eventData.organizer?.user_id || eventFromParams?.user_id || eventFromParams?.organizer_id || eventFromParams?.created_by;
+    const isOwnEvent = !!user && !!eventOwnerId && String(eventOwnerId) === String(user.user_id || user.id);
+
     // Pull the organizer's real rating + review count (replaces the 5.0/10
     // placeholder). Keyed on user_id so it only refetches when the organizer
     // changes.
@@ -254,7 +266,14 @@ export default function EventDetailViewEnhanced() {
         }
 
         if (!user) {
-            Alert.alert('Error', 'You must be logged in to send a quote');
+            Alert.alert(
+                'Log in to send a quote',
+                'You need an account to contact the event poster.',
+                [
+                    { text: 'Not now', style: 'cancel' },
+                    { text: 'Log in', onPress: () => navigation.navigate('Login') },
+                ],
+            );
             return;
         }
 
@@ -289,7 +308,14 @@ export default function EventDetailViewEnhanced() {
             const quoteMessage = `Message from event- "${eventData.title}" on "${eventData.date}"\n\n${quoteText.trim()}`;
 
             // Step 3: Send quote message
-            const messageResult = await chatService.sendMessage(chatId, quoteMessage, 'text');
+            const quoteAd = buildAdContext(
+                'event',
+                eventData._original?.event_ad_id || eventData.event_ad_id || eventData.id,
+                eventData.title,
+            );
+            const messageResult = await chatService.sendMessage(
+                chatId, quoteMessage, 'text', null, null, adMetadata(quoteAd),
+            );
 
             if (messageResult.success) {
                 Alert.alert(
@@ -301,7 +327,8 @@ export default function EventDetailViewEnhanced() {
                             onPress: () => {
                                 navigation.navigate('ChatScreen', {
                                     chatId: chatId,
-                                    chatTitle: eventData.organizer.name || 'Gig Organizer',
+                                    // ChatScreen reads chatName (chatTitle was silently ignored)
+                                    chatName: eventData.organizer.name || 'Gig Organizer',
                                 });
                             }
                         },
@@ -317,8 +344,8 @@ export default function EventDetailViewEnhanced() {
             }
 
         } catch (error) {
-            console.error('Error sending quote:', error);
-            Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+            console.error('Error sending quote:', error?.response?.data || error);
+            Alert.alert('Error', error?.response?.data?.message || error?.message || 'Could not send your quote. Please try again.');
         } finally {
             setIsSubmittingQuote(false);
         }
@@ -371,9 +398,17 @@ export default function EventDetailViewEnhanced() {
 
                 <ScrollView style={styles.scrollContent} contentContainerStyle={{ paddingBottom: quoteBarHeight + 20 }} showsVerticalScrollIndicator={false}>
                 {/* Blue Header Banner */}
-                <ImageBackground source={bg1} style={styles.banner} resizeMode="cover">
+                <ImageBackground
+                    source={bg1}
+                    style={[styles.banner, Platform.OS === 'ios' && { paddingTop: Math.max(insets.top + 12, 60) }]}
+                    resizeMode="cover"
+                >
                     <View style={styles.headerIcons}>
-                        <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
+                        <TouchableOpacity
+                            style={styles.iconBtn}
+                            onPress={() => goBackOrHome(navigation)}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
                             <Icon name="arrow-back-outline" size={22} color="#fff" />
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.iconBtn}>
@@ -462,7 +497,12 @@ export default function EventDetailViewEnhanced() {
                             scrollEventThrottle={16}
                         >
                             {eventData.images.map((imageSource, idx) => (
-                                <View key={idx} style={styles.photoWrapper}>
+                                <TouchableOpacity
+                                    key={idx}
+                                    style={styles.photoWrapper}
+                                    activeOpacity={0.9}
+                                    onPress={() => setGalleryIndex(idx)}
+                                >
                                     <Image
                                         source={imageSource}
                                         style={styles.eventImage}
@@ -471,10 +511,16 @@ export default function EventDetailViewEnhanced() {
                                             console.log('Error loading event image:', imageSource, error.nativeEvent?.error);
                                         }}
                                     />
-                                </View>
+                                </TouchableOpacity>
                             ))}
                         </ScrollView>
                     )}
+                    <ImageGalleryModal
+                        visible={galleryIndex !== null}
+                        images={eventData.images || []}
+                        initialIndex={galleryIndex ?? 0}
+                        onClose={() => setGalleryIndex(null)}
+                    />
 
                     {/* Description */}
                     <View style={styles.descContainer}>
@@ -563,6 +609,8 @@ export default function EventDetailViewEnhanced() {
             </ScrollView>
 
             {/* Quote Input - Sticky Bottom */}
+            {/* Hidden on your own event (you can't quote yourself). */}
+            {!isOwnEvent && (
             <View onLayout={(e) => setQuoteBarHeight(e.nativeEvent.layout.height)} style={[styles.quoteSectionContainer, Platform.OS === 'android' && kbHeight > 0 && { bottom: 10 + kbHeight }]}>
                 <View style={styles.quoteSection}>
                     <TextInput
@@ -587,6 +635,7 @@ export default function EventDetailViewEnhanced() {
                     </TouchableOpacity>
                 </View>
             </View>
+            )}
         </View>
         </KeyboardAvoidingView>
     );
@@ -741,7 +790,7 @@ const styles = StyleSheet.create({
     },
     carousel: {
         marginBottom: 12,
-        height: width - 40,
+        height: (width - 40) * 1.25, // 4:5 like the ad photos
     },
     photoWrapper: {
         width: width - 40, // Full width minus margins (20 on each side)
@@ -756,7 +805,7 @@ const styles = StyleSheet.create({
     },
     eventImage: {
         width: width - 40, // Full width single image display
-        height: width - 40,
+        height: (width - 40) * 1.25,
         borderRadius: 16,
     },
     descContainer: {

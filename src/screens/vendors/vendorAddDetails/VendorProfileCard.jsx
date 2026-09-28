@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import {
     View,
@@ -268,6 +269,8 @@ export default function VendorProfileCard({
     navigation,
     vendor, // Pass the full vendor object
 }) {
+    // Keep the back/bell buttons clear of the notch / Dynamic Island.
+    const insets = useSafeAreaInsets();
     // Tapping the avatar or the name opens the vendor's reviews/ads page — the
     // same destination the old "See All" link used (now removed).
     const openReviews = () => {
@@ -291,7 +294,7 @@ export default function VendorProfileCard({
     return (
         <View style={{ flex: 1, backgroundColor: '#fff' }}>
             {/* Header Background */}
-            <ImageBackground source={bg1} style={styles.headerBackground} resizeMode="cover">
+            <ImageBackground source={bg1} style={[styles.headerBackground, { paddingTop: Math.max(insets.top + 12, 50) }]} resizeMode="cover">
                 <View style={styles.headerIconsRow}>
                     <TouchableOpacity style={styles.circleBtn} onPress={onBackPress}>
                         <Icon name="arrow-back-outline" size={22} color="#fff" />

@@ -37,7 +37,10 @@ const ReportUserModal = ({
     reportedUserName,
     chatId,
     messageId,
-    reportType = 'user', // 'user' or 'message'
+    reportType = 'user', // 'user' | 'message' | 'ad'
+    // Reporting an ad: { type: 'vendor' | 'event', id, title }. Recorded with
+    // the report so the admin knows which ad it's about.
+    adContext = null,
     onReportSubmitted,
 }) => {
     const theme = useTheme();
@@ -80,14 +83,18 @@ const ReportUserModal = ({
             const reportData = {
                 reported_user_id: reportedUserId,
                 reason: selectedReason,
-                details: additionalDetails,
+                details: adContext
+                    ? `[${adContext.type === 'event' ? 'Event' : 'Service'} ad #${adContext.id} "${adContext.title}"] ${additionalDetails}`.trim()
+                    : additionalDetails,
                 screenshots: screenshotUrls,
-                report_type: reportType,
+                report_type: adContext ? 'ad' : reportType,
                 chat_id: chatId,
                 message_id: messageId,
             };
 
-            const response = await api.post('/users/report', reportData);
+            // /profile/report is the user-facing endpoint (/users/* is admin-only,
+            // so reports used to fail).
+            const response = await api.post('/profile/report', reportData);
 
             if (response.data?.success || response.status === 200 || response.status === 201) {
                 setShowSuccess(true);
@@ -159,7 +166,7 @@ const ReportUserModal = ({
                             <Icon name="close" size={24} color={theme.colors.text} />
                         </TouchableOpacity>
                         <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
-                            Report {reportType === 'message' ? 'Message' : 'User'}
+                            {adContext ? 'Report Ad' : `Report ${reportType === 'message' ? 'Message' : 'User'}`}
                         </Text>
                         <View style={styles.closeButton} />
                     </View>
@@ -173,7 +180,7 @@ const ReportUserModal = ({
                             <View style={[styles.userInfo, { backgroundColor: theme.colors.background }]}>
                                 <Icon name="person-circle-outline" size={24} color={theme.colors.primary} />
                                 <Text style={[styles.userName, { color: theme.colors.text }]}>
-                                    Reporting: {reportedUserName}
+                                    Reporting: {adContext ? `${adContext.title} (by ${reportedUserName})` : reportedUserName}
                                 </Text>
                             </View>
                         )}
@@ -188,7 +195,7 @@ const ReportUserModal = ({
 
                         {/* Reason Selection */}
                         <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                            Why are you reporting this {reportType}?
+                            Why are you reporting this {adContext ? 'ad' : reportType}?
                         </Text>
 
                         {REPORT_REASONS.map((reason) => (

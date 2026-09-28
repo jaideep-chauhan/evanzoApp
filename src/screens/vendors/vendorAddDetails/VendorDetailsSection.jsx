@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ImageGalleryModal from '../../../components/ImageGalleryModal';
 import {
     View,
     Text,
@@ -6,6 +7,7 @@ import {
     Image,
     TextInput,
     TouchableOpacity,
+    Linking,
     ScrollView,
     Dimensions,
 } from 'react-native';
@@ -48,6 +50,7 @@ export default function VendorDetailsSection({
     photos = [],
     onSend,
     description = "",
+    link = "", // website / social link (portfolio_url)
     reviews = [],
     hideMessageSection = false,
     offers = [],
@@ -59,6 +62,8 @@ export default function VendorDetailsSection({
     console.log('VendorDetailsSection - Photos length:', photos?.length);
 
     const [descExpanded, setDescExpanded] = useState(false);
+    // Index of the photo open full screen, or null
+    const [galleryIndex, setGalleryIndex] = useState(null);
     const [imageDimensions, setImageDimensions] = useState({});
     return (
         // This section is already rendered inside the screen's vertical
@@ -94,7 +99,12 @@ export default function VendorDetailsSection({
                                 console.log(`Image source for photo ${idx}:`, imageSource);
 
                                 return (
-                                    <View key={idx} style={styles.photoWrapper}>
+                                    <TouchableOpacity
+                                        key={idx}
+                                        style={styles.photoWrapper}
+                                        activeOpacity={0.9}
+                                        onPress={() => setGalleryIndex(idx)}
+                                    >
                                         <Image
                                             source={imageSource}
                                             style={styles.photo}
@@ -104,9 +114,9 @@ export default function VendorDetailsSection({
                                             onLoad={() => {
                                                 console.log('Successfully loaded image:', photo);
                                             }}
-                                            resizeMode="contain"
+                                            resizeMode="cover"
                                         />
-                                    </View>
+                                    </TouchableOpacity>
                                 );
                             })
                         :
@@ -117,6 +127,12 @@ export default function VendorDetailsSection({
                             </View>
                         }
                     </ScrollView>
+                    <ImageGalleryModal
+                        visible={galleryIndex !== null}
+                        images={(photos || []).map((photo) => getImageSource(photo, defaultImg))}
+                        initialIndex={galleryIndex ?? 0}
+                        onClose={() => setGalleryIndex(null)}
+                    />
                     {/* Description below images */}
                     <View style={styles.descContainer}>
                         {!descExpanded ? (
@@ -137,6 +153,17 @@ export default function VendorDetailsSection({
                             </>
                         )}
                     </View>
+                    {!!link && (
+                        <TouchableOpacity
+                            style={styles.linkRow}
+                            onPress={() => Linking.openURL(link).catch(() => {})}
+                        >
+                            <Text style={styles.linkIcon}>🔗</Text>
+                            <Text style={styles.linkText} numberOfLines={1}>
+                                {link.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
 
                 <OfferGrid offers={offers} currency={currency} />
@@ -199,9 +226,8 @@ const styles = StyleSheet.create({
     },
     carousel: {
         marginTop: 12,
-        // Square aspect — must match the photoWrapper width so the image
-        // sits flush in its viewport rather than overflowing horizontally.
-        height: SCREEN_WIDTH - 64,
+        // 4:5 — ad photos are cropped to 4:5, so they fill the slide.
+        height: (SCREEN_WIDTH - 64) * 1.25,
     },
     photoWrapper: {
         // SCREEN_WIDTH - 64 accounts for the container's 16px padding AND
@@ -220,10 +246,29 @@ const styles = StyleSheet.create({
     },
     photo: {
         width: SCREEN_WIDTH - 64,
-        height: SCREEN_WIDTH - 64,
+        height: (SCREEN_WIDTH - 64) * 1.25,
         borderRadius: 12,
         opacity: 1,
         backgroundColor: '#f0f0f0', // Add background color for loading state
+    },
+    linkRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 12,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 10,
+        backgroundColor: '#EEF2F8',
+    },
+    linkIcon: {
+        fontSize: 14,
+        marginRight: 8,
+    },
+    linkText: {
+        flex: 1,
+        color: '#2C3D5B',
+        fontWeight: '600',
+        textDecorationLine: 'underline',
     },
     descContainer: {
         marginTop: 14,

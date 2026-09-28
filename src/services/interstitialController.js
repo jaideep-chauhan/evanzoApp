@@ -6,6 +6,17 @@ import { AD_UNITS, INTERSTITIAL_FREQUENCY } from './adsConfig';
 let interstitial = null;
 let loaded = false;
 let counter = 0; // counts events that trigger maybe-show
+let failures = 0; // consecutive load failures, for back-off
+let retryTimer = null;
+
+// Reload after a failed load: 30s, 60s, 2m, … capped at 5 minutes.
+const scheduleReload = () => {
+    clearTimeout(retryTimer);
+    const delay = Math.min(30000 * 2 ** Math.max(0, failures - 1), 300000);
+    retryTimer = setTimeout(() => {
+        if (!interstitial) loadNext();
+    }, delay);
+};
 
 const loadNext = () => {
     try {
@@ -15,6 +26,7 @@ const loadNext = () => {
 
         const onLoaded = interstitial.addAdEventListener(AdEventType.LOADED, () => {
             loaded = true;
+            failures = 0;
             if (__DEV__) console.log('[Ads] Interstitial loaded');
         });
         const onClosed = interstitial.addAdEventListener(AdEventType.CLOSED, () => {
@@ -25,8 +37,10 @@ const loadNext = () => {
         const onError = interstitial.addAdEventListener(AdEventType.ERROR, (err) => {
             console.warn('[Ads] Interstitial error:', err?.message || err);
             cleanup();
-            // Don't infinite-loop on errors; wait until next tickAndMaybeShow
-            // to try again.
+            // Try again on a back-off timer so one is ready by the next show
+            // (previously it waited for the next Nth tick, then N more).
+            failures += 1;
+            scheduleReload();
         });
 
         // Track unsub fns for cleanup

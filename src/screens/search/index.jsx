@@ -100,7 +100,7 @@ export default function SearchScreen() {
                 searchService
                     .getAutocompleteSuggestions(term, searchType)
                     .catch(() => ({ success: false, data: [] })),
-                searchLocations(term, { limit: 6 }).catch(() => []),
+                searchLocations(term, { limit: 6, layer: 'city' }).catch(() => []),
             ]);
 
             const items = resp?.success && Array.isArray(resp.data) ? resp.data : [];
@@ -129,7 +129,7 @@ export default function SearchScreen() {
                 locations.push({
                     type: 'location',
                     value: name,
-                    display: p?.secondary_text || p?.display_name || 'Location',
+                    display: p?.secondary_text || p?.display_name || 'City',
                 });
                 if (locations.length >= 6) break;
             }
@@ -248,7 +248,7 @@ export default function SearchScreen() {
                         const type = String(item?.type || '').toLowerCase();
                         const isCategory = type === 'category';
                         const label = item?.value || item?.display || item?.name || '';
-                        const sub = isCategory ? 'Category' : (item?.display || 'Location');
+                        const sub = isCategory ? 'Category' : (item?.display || 'City');
                         return (
                             <TouchableOpacity
                                 style={styles.resultRow}

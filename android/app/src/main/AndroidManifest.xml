@@ -99,5 +99,11 @@
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-2655968575466386~3663620867"
             tools:replace="android:value" />
+
+        <!-- Icon for push notifications the system displays while the app is
+             in the background (channel + colour come from firebase.json). -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
     </application>
 </manifest>

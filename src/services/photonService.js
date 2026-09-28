@@ -40,9 +40,12 @@ const normalizePhotonFeature = (feature) => {
   };
 };
 
-export const searchLocations = async (query, { limit = 8, lang = 'en' } = {}) => {
+// `layer` limits results to one kind of place — e.g. 'city' returns only
+// cities/towns/villages (no streets, states or countries).
+export const searchLocations = async (query, { limit = 8, lang = 'en', layer } = {}) => {
   if (!query || query.trim().length < 2) return [];
-  const url = `${PHOTON_BASE}?q=${encodeURIComponent(query)}&limit=${limit}&lang=${lang}`;
+  const layerParam = layer ? `&layer=${encodeURIComponent(layer)}` : '';
+  const url = `${PHOTON_BASE}?q=${encodeURIComponent(query)}&limit=${limit}&lang=${lang}${layerParam}`;
   const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
   if (!res.ok) throw new Error(`Photon search failed: ${res.status}`);
   const data = await res.json();

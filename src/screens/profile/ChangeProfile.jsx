@@ -31,12 +31,12 @@ const ChangeProfile = () => {
             </View>
 
             <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Location</Text>
+                <Text style={styles.label}>City</Text>
                 <TextInput
                     style={styles.input}
                     value={location}
                     onChangeText={setLocation}
-                    placeholder="Enter your location"
+                    placeholder="Enter your city"
                     placeholderTextColor="#999"
                 />
             </View>

@@ -109,7 +109,7 @@ const SimilarEventCard = ({ item, onPress }) => {
                 <View style={[styles.pill, styles.pillLocation]}>
                     <Ionicons name="location-outline" size={12} color="#666" />
                     <Text style={styles.pillText} numberOfLines={1}>
-                        {item.location || 'Location TBD'}
+                        {item.location || 'City TBD'}
                     </Text>
                 </View>
                 <View style={[styles.pill, styles.pillDate]}>

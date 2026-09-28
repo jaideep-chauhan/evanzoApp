@@ -40,11 +40,18 @@ export const API_BASE_URL = BASE_URL; // Export for socket service
 // matches the "/api" inside "https://api..." and corrupts the host.
 export const MEDIA_BASE_URL = BASE_URL.replace(/\/api\/?$/, '');
 
-// Pass-through URL fixer kept for compatibility with screens that grew up
-// against an older dev setup where localhost ↔ machine-IP rewriting lived
-// here. In production it's a no-op — the URL is already absolute.
+// Make an upload URL loadable on a device. The backend builds file URLs from
+// its BASE_URL env var and falls back to http://localhost:3000 when that's
+// unset — so many stored attachment URLs point at "localhost", which a phone
+// can't reach. Rebuild those (and relative paths) against MEDIA_BASE_URL,
+// same as chatService.processAttachments does for the chat screen.
 export const fixLocalUrl = (url) => {
     if (!url || typeof url !== 'string') return url;
+    const local = url.match(/^https?:\/\/(?:localhost|127\.0\.0\.1|10\.0\.2\.2)(?::\d+)?(\/.*)?$/i);
+    if (local) return `${MEDIA_BASE_URL}${local[1] || ''}`;
+    if (!/^(https?|file|content|data|blob):/i.test(url)) {
+        return `${MEDIA_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+    }
     return url;
 };
 

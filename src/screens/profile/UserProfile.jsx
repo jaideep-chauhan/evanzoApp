@@ -17,6 +17,7 @@ import api from '../../services/api';
 import EventCard from '../events/EventCard';
 import VendorCard from '../vendors/VendorCard';
 import eventService from '../../services/eventService';
+import vendorService from '../../services/vendorService';
 import vendorDetailsService from '../../services/vendorDetailsService';
 
 export default function UserProfile() {
@@ -24,9 +25,11 @@ export default function UserProfile() {
     const route = useRoute();
     const theme = useTheme();
 
-    const { userId, userName, userAvatar } = route.params;
+    // initialTab: open straight on 'events' | 'services' | 'reviews' (e.g. a
+    // "New Review" notification opens the user's own profile on Reviews).
+    const { userId, userName, userAvatar, initialTab } = route.params;
 
-    const [activeTab, setActiveTab] = useState('events'); // 'events' | 'services' | 'reviews'
+    const [activeTab, setActiveTab] = useState(initialTab || 'events'); // 'events' | 'services' | 'reviews'
     const [eventAds, setEventAds] = useState([]);
     const [vendorAds, setVendorAds] = useState([]);
     const [reviews, setReviews] = useState([]);
@@ -123,7 +126,9 @@ export default function UserProfile() {
             if (vendorsResponse.data?.success) {
                 const vendors = vendorsResponse.data.data || [];
                 console.log('✅ Found', vendors.length, 'vendor ads');
-                setVendorAds(vendors);
+                // Same shape the Vendors tab gives VendorCard (name, images,
+                // offers, …) — raw API rows rendered as empty cards.
+                setVendorAds(vendors.map(vendor => vendorService.formatVendorForDisplay(vendor)));
             } else {
                 console.log('❌ Vendors API returned success=false');
             }
@@ -170,13 +175,25 @@ export default function UserProfile() {
         />
     );
 
+    // VendorCard takes individual props (not a `vendor` object) and opens the
+    // ad itself on tap (VendorAddDetail). No Chat button here — this profile
+    // is usually reached from that very chat, and the ad page has its own.
     const renderVendorAd = ({ item }) => (
         <VendorCard
-            vendor={item}
-            onPress={() => {
-                // Navigate to vendor details
-                navigation.navigate('VendorDetailsSection', { vendor: item });
-            }}
+            vendorId={item._original?.vendor_ad_id || item.id}
+            fullVendorData={item}
+            initials={item.initials}
+            ownerProfilePic={item.owner_profile_pic}
+            name={item.name}
+            type={item.type}
+            rating={item.rating}
+            description={item.description}
+            images={item.images}
+            extraCount={item.extraCount}
+            location={item.location}
+            offers={item.offers || []}
+            currency={item.currency}
+            isChat={false}
         />
     );
 

@@ -1,7 +1,8 @@
 import { Platform } from 'react-native';
 import { TestIds } from 'react-native-google-mobile-ads';
 
-// Production AdMob unit IDs. Used in BOTH dev and release builds.
+// Production AdMob unit IDs, used by release builds. Dev builds (__DEV__) use
+// Google's test IDs instead — see pick() below.
 // Note: simulators / emulators routinely no-fill on production units
 // even with testDeviceIdentifiers set — that's expected. Real ads
 // serve on real devices and TestFlight / internal-track installs.
@@ -51,5 +52,11 @@ export const INTERSTITIAL_FREQUENCY = 4;
 
 // Insert an inline banner row after every Nth item in the vendor/event list.
 export const BANNER_LIST_INTERVAL = 6;
+
+// Banner after every Nth item — and, for lists shorter than N, after the last
+// item, so short (e.g. filtered) lists still show one ad.
+export const shouldShowBannerAfter = (index, total) =>
+    (index + 1) % BANNER_LIST_INTERVAL === 0 ||
+    (total < BANNER_LIST_INTERVAL && index === total - 1);
 
 export default AD_UNITS;

@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import App from './App';
 import {name as appName} from './app.json';
 import {initCrashReporting} from './src/services/crashReporting';
+import {ensureNotificationChannels} from './src/services/notificationService';
 
 // Crash + JS-error reporting (Firebase Crashlytics). Init as early as possible
 // so startup crashes are captured too. Native crashes are automatic; the JS
@@ -20,23 +21,31 @@ initCrashReporting();
 messaging().setBackgroundMessageHandler(async remoteMessage => {
   console.log('Background message received:', remoteMessage);
 
-  // Display notification using notifee
-  if (remoteMessage.notification) {
-    await notifee.displayNotification({
-      title: remoteMessage.notification.title,
-      body: remoteMessage.notification.body,
-      android: {
-        channelId: 'general',
-        pressAction: {
-          id: 'default',
-        },
+  // A message with a `notification` block is already shown by the system
+  // while the app is in the background/killed — showing it again here would
+  // duplicate it. Only data-only messages need displaying ourselves.
+  if (remoteMessage.notification) return;
+
+  const data = remoteMessage.data || {};
+  if (!data.title && !data.body) return;
+
+  await ensureNotificationChannels();
+  await notifee.displayNotification({
+    title: data.title,
+    body: data.body,
+    android: {
+      channelId: data.type === 'message' || data.type === 'chat_message' ? 'chat_messages' : 'general',
+      smallIcon: 'ic_notification',
+      color: '#2C3D5B',
+      pressAction: {
+        id: 'default',
       },
-      ios: {
-        sound: 'default',
-      },
-      data: remoteMessage.data,
-    });
-  }
+    },
+    ios: {
+      sound: 'default',
+    },
+    data,
+  });
 });
 
 // Background/quit-state notification TAP. We can't navigate from here (the

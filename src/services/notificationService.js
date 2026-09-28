@@ -8,37 +8,78 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {Platform, AppState} from 'react-native';
 import api from './api';
 import {navigationRef} from './navigationService';
+import {secureStorage} from '../utils/secureStorage';
+import {APP_VERSION} from '../config/appVersion';
+
+// Android notification channels. The backend picks one of these ids per push
+// (see pushNotification.service channelForType), so they must stay in sync.
+export const NOTIFICATION_CHANNELS = [
+  {
+    id: 'chat_messages',
+    name: 'Chat Messages',
+    description: 'Notifications for new chat messages',
+    importance: AndroidImportance.HIGH,
+  },
+  {
+    id: 'admin_notifications',
+    name: 'Ad Updates',
+    description: 'Your ads being approved or rejected',
+    importance: AndroidImportance.HIGH,
+  },
+  {
+    id: 'general',
+    name: 'General',
+    description: 'Gigs, responses, reviews and other updates',
+    importance: AndroidImportance.HIGH,
+  },
+];
+
+// Idempotent — safe to call from the headless background handler too.
+export const ensureNotificationChannels = async () => {
+  if (Platform.OS !== 'android') return;
+  await Promise.all(
+    NOTIFICATION_CHANNELS.map((channel) =>
+      notifee.createChannel({...channel, sound: 'default', vibration: true, badge: true}),
+    ),
+  );
+};
+
+const channelForData = (data = {}) => {
+  const {type, action_type: actionType} = data;
+  if (type === 'message' || type === 'chat_message' || actionType === 'open_chat') {
+    return 'chat_messages';
+  }
+  if (['ad_approved', 'ad_rejected', 'admin_notification'].includes(actionType || type)) {
+    return 'admin_notifications';
+  }
+  return 'general';
+};
 
 class NotificationService {
   constructor() {
     this.messageListener = null;
     this.notificationOpenedListener = null;
+    this.foregroundEventUnsubscribe = null;
+    this.tokenRefreshUnsubscribe = null;
+    this.listenersReady = false;
+    // Signed-in user (set by AuthContext) — some notifications are about the
+    // user themself, e.g. "New Review" opens their own profile's Reviews tab.
+    this.currentUserId = null;
   }
 
-  // Initialize notification service
+  setCurrentUserId(userId) {
+    this.currentUserId = userId || null;
+  }
+
+  // Called once at app start. Registering the device with the backend needs a
+  // logged-in user, so that happens separately via registerDeviceToken(),
+  // which AuthContext calls whenever a user signs in (or a session is restored).
   async initialize() {
     try {
-      // Check if Firebase is properly configured
-      // If not configured, skip initialization gracefully
-      if (!this.isFirebaseConfigured()) {
-        console.log(
-          '⚠️ Firebase not configured, skipping notification service initialization',
-        );
-        return;
-      }
-
-      // Request notification permissions
-      await this.requestPermission();
-
-      // Get and save FCM token
-      await this.registerDeviceToken();
-
-      // Create notification channels for Android
       if (Platform.OS === 'android') {
         await this.createNotificationChannels();
       }
 
-      // Set up notification listeners
       this.setupNotificationListeners();
 
       // Handle initial notification (app opened from notification)
@@ -48,17 +89,6 @@ class NotificationService {
     } catch (error) {
       console.error('❌ Error initializing notification service:', error);
       console.log('ℹ️ App will continue without push notifications');
-    }
-  }
-
-  // Check if Firebase is properly configured
-  isFirebaseConfigured() {
-    try {
-      // Try to access Firebase messaging without throwing
-      const app = messaging.app;
-      return app !== null && app !== undefined;
-    } catch (error) {
-      return false;
     }
   }
 
@@ -83,25 +113,30 @@ class NotificationService {
     }
   }
 
-  // Register device token with backend
+  // Register this device's FCM token with the backend for the logged-in user.
+  // No-op when logged out (the endpoint needs auth); AuthContext calls this
+  // again as soon as someone signs in.
   async registerDeviceToken() {
     try {
-      // Get FCM token
+      if (!(await secureStorage.getItem('authToken'))) return;
+
+      await this.requestPermission();
       const fcmToken = await messaging().getToken();
       console.log('📱 FCM Token:', fcmToken);
-
-      // Save token locally
       await AsyncStorage.setItem('fcm_token', fcmToken);
-
-      // Send token to backend
       await this.sendTokenToBackend(fcmToken);
+      this.syncBadge();
 
-      // Listen for token refresh
-      messaging().onTokenRefresh(async newToken => {
-        console.log('🔄 FCM Token refreshed:', newToken);
-        await AsyncStorage.setItem('fcm_token', newToken);
-        await this.sendTokenToBackend(newToken);
-      });
+      // Only one refresh listener, however many times the user logs in.
+      if (!this.tokenRefreshUnsubscribe) {
+        this.tokenRefreshUnsubscribe = messaging().onTokenRefresh(async newToken => {
+          console.log('🔄 FCM Token refreshed:', newToken);
+          await AsyncStorage.setItem('fcm_token', newToken);
+          if (await secureStorage.getItem('authToken')) {
+            await this.sendTokenToBackend(newToken);
+          }
+        });
+      }
     } catch (error) {
       console.error('Error getting FCM token:', error);
     }
@@ -110,56 +145,38 @@ class NotificationService {
   // Send FCM token to backend
   async sendTokenToBackend(token) {
     try {
-      const response = await api.post('/notifications/register-device', {
-        fcm_token: token,
-        device_type: Platform.OS,
-        device_model: Platform.OS === 'ios' ? 'iPhone' : 'Android',
+      const response = await api.post('/push-notifications/register-device', {
+        device_token: token,
+        platform: Platform.OS,
+        app_version: APP_VERSION,
       });
 
       if (response.data.success) {
         console.log('✅ FCM token registered with backend');
       }
     } catch (error) {
-      console.error('Error sending token to backend:', error);
+      console.error('Error sending token to backend:', error?.response?.data || error.message);
+    }
+  }
+
+  // Stop pushes to this device for the current user. Must run BEFORE the auth
+  // token is cleared on logout — otherwise the next person to log in on a
+  // shared phone would still get the previous user's messages.
+  async unregisterDevice() {
+    try {
+      const token = await AsyncStorage.getItem('fcm_token');
+      if (!token) return;
+      await api.post('/push-notifications/unregister-device', {device_token: token});
+      console.log('✅ FCM token unregistered');
+    } catch (error) {
+      console.log('⚠️ Could not unregister FCM token:', error?.response?.data || error.message);
     }
   }
 
   // Create notification channels for Android
   async createNotificationChannels() {
     try {
-      // Chat messages channel
-      await notifee.createChannel({
-        id: 'chat_messages',
-        name: 'Chat Messages',
-        description: 'Notifications for new chat messages',
-        importance: AndroidImportance.HIGH,
-        sound: 'default',
-        vibration: true,
-        badge: true,
-      });
-
-      // Admin notifications channel
-      await notifee.createChannel({
-        id: 'admin_notifications',
-        name: 'Admin Notifications',
-        description: 'Notifications from admin (ad approvals, rejections)',
-        importance: AndroidImportance.HIGH,
-        sound: 'default',
-        vibration: true,
-        badge: true,
-      });
-
-      // General notifications channel
-      await notifee.createChannel({
-        id: 'general',
-        name: 'General',
-        description: 'General app notifications',
-        importance: AndroidImportance.DEFAULT,
-        sound: 'default',
-        vibration: true,
-        badge: true,
-      });
-
+      await ensureNotificationChannels();
       console.log('✅ Notification channels created');
     } catch (error) {
       console.error('Error creating notification channels:', error);
@@ -168,6 +185,9 @@ class NotificationService {
 
   // Set up notification listeners
   setupNotificationListeners() {
+    if (this.listenersReady) return;
+    this.listenersReady = true;
+
     // Foreground message handler
     this.messageListener = messaging().onMessage(async remoteMessage => {
       console.log('📬 Foreground notification received:', remoteMessage);
@@ -184,36 +204,48 @@ class NotificationService {
     this.appStateSub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         this.consumePendingNotificationNav();
+        this.syncBadge();
       }
     });
 
     // Notification interaction handler (when user taps notification)
-    notifee.onForegroundEvent(({type, detail}) => {
+    this.foregroundEventUnsubscribe = notifee.onForegroundEvent(({type, detail}) => {
       if (type === EventType.PRESS) {
         console.log('👆 Notification pressed:', detail);
         this.handleNotificationPress(detail.notification);
       }
     });
 
-    // Handle notification opened app
-    messaging().onNotificationOpenedApp(remoteMessage => {
+    // Tap on a notification the system displayed while the app was in the background
+    this.notificationOpenedListener = messaging().onNotificationOpenedApp(remoteMessage => {
       console.log('📱 App opened from notification:', remoteMessage);
       this.handleNotificationNavigation(remoteMessage.data);
     });
   }
 
-  // Display notification using Notifee
+  // True when the user is already looking at the chat this message belongs to.
+  isViewingChat(chatId) {
+    if (!chatId) return false;
+    try {
+      const route = navigationRef.current?.getCurrentRoute?.();
+      return route?.name === 'ChatScreen' && String(route?.params?.chatId) === String(chatId);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // Display notification using Notifee (app in the foreground — FCM doesn't
+  // show anything on its own then)
   async displayNotification(remoteMessage) {
     try {
       const {data, notification} = remoteMessage;
 
-      // Determine channel based on notification type
-      let channelId = 'general';
-      if (data?.type === 'chat_message') {
-        channelId = 'chat_messages';
-      } else if (data?.type === 'admin_notification') {
-        channelId = 'admin_notifications';
+      // The message is already on screen; don't also pop a notification for it.
+      if (channelForData(data) === 'chat_messages' && this.isViewingChat(data?.chat_id)) {
+        return;
       }
+
+      const channelId = channelForData(data);
 
       // Prepare notification payload
       const notificationPayload = {
@@ -241,40 +273,21 @@ class NotificationService {
         data: data || {},
       };
 
-      // Add specific handling for chat messages
-      if (data?.type === 'chat_message') {
+      // Chat messages use Android's conversation style. Tapping opens the chat
+      // (no Reply/View buttons — nothing handled them, so they did nothing).
+      if (channelId === 'chat_messages') {
         notificationPayload.android.style = {
           type: AndroidStyle.MESSAGING,
           person: {
-            name: data.sender_name || 'User',
+            name: data?.sender_name || 'User',
           },
           messages: [
             {
-              text: notification?.body || data?.message,
+              text: notification?.body || data?.message || '',
               timestamp: Date.now(),
             },
           ],
         };
-
-        // Add action buttons for chat
-        notificationPayload.android.actions = [
-          {
-            title: 'Reply',
-            pressAction: {
-              id: 'reply',
-            },
-            input: {
-              allowFreeFormInput: true,
-              placeholder: 'Type your reply...',
-            },
-          },
-          {
-            title: 'View',
-            pressAction: {
-              id: 'view',
-            },
-          },
-        ];
       }
 
       // Display the notification
@@ -328,6 +341,7 @@ class NotificationService {
       merged.sender_name ||
       (notification.title || '').replace(/^New message from\s*/i, '') ||
       'Chat';
+    const senderId = merged.sender_id || merged.senderId;
 
     switch (key) {
       // ---- Chat (two backend payloads: message/open_chat and chat_message) ----
@@ -335,8 +349,29 @@ class NotificationService {
       case 'message':
       case 'chat_message':
         return chatId
-          ? { name: 'ChatScreen', params: { chatId, chatName } }
+          ? {
+              name: 'ChatScreen',
+              params: { chatId, chatName, ...(senderId ? { recipientId: senderId } : {}) },
+            }
           : { name: 'Main', params: { screen: 'Messages' } };
+
+      // ---- Admin decision on the user's own ad ----
+      case 'ad_approved':
+        if (vendorAdId) return { name: 'VendorAddDetail', params: { vendorId: vendorAdId } };
+        if (eventAdId) return { name: 'EventDetailView', params: { eventId: eventAdId } };
+        return { name: 'Main', params: { screen: 'Profile' } };
+      case 'ad_rejected':
+        // A rejected ad isn't publicly viewable — send the owner to their profile/ads.
+        return { name: 'Main', params: { screen: 'Profile' } };
+
+      // ---- Gig date jobs (backend gigDateJobs.js) ----
+      case 'gig_date_reminder':
+        return eventAdId
+          ? { name: 'EventDetailView', params: { eventId: eventAdId } }
+          : { name: 'Main', params: { screen: 'Profile' } };
+      case 'gig_expired':
+        // Closed gigs no longer show publicly — the owner manages them from Profile.
+        return { name: 'Main', params: { screen: 'Profile' } };
 
       // ---- Gig/event ad response + new-gig reminder ----
       case 'view_event_ad':
@@ -354,9 +389,16 @@ class NotificationService {
           ? { name: 'VendorAddDetail', params: { vendorId: vendorAdId } }
           : { name: 'Main', params: { screen: 'Profile' } };
 
-      // ---- New review on your vendor ad (payload only has review_id) ----
+      // ---- New review of you → your own profile, Reviews tab ----
+      // (Reviews are per user, and older notifications only carry review_id.)
       case 'view_review':
       case 'review':
+        if (this.currentUserId) {
+          return {
+            name: 'UserProfile',
+            params: { userId: this.currentUserId, initialTab: 'reviews' },
+          };
+        }
         return vendorAdId
           ? { name: 'VendorAddDetail', params: { vendorId: vendorAdId } }
           : { name: 'Main', params: { screen: 'Profile' } };
@@ -374,8 +416,6 @@ class NotificationService {
       case 'payment':
       case 'earning':
       case 'admin_notification':
-      case 'ad_approved':
-      case 'ad_rejected':
         return { name: 'Main', params: { screen: 'Profile' } };
 
       // ---- Informational (system/promotion/test) + anything unknown ----
@@ -457,17 +497,57 @@ class NotificationService {
     }
   }
 
-  // Update app badge count
-  async updateBadgeCount() {
+  // Keep the app-icon badge in step with what's actually unread (chats +
+  // other notifications, same number the backend puts on iOS pushes). At zero
+  // it also clears the tray: Android launchers count tray notifications, so
+  // leftovers kept the number on the icon after everything was read.
+  async syncBadge() {
     try {
-      // Get unread count from backend or local storage
-      const unreadCount = await this.getUnreadNotificationCount();
-
-      if (Platform.OS === 'ios') {
-        await notifee.setBadgeCount(unreadCount);
+      if (!(await secureStorage.getItem('authToken'))) return;
+      let count;
+      try {
+        const res = await api.get('/notifications/badge-count');
+        count = res.data?.data?.count;
+      } catch (e) {
+        // Older backend without /badge-count
+        const [chat, inbox] = await Promise.all([
+          api.get('/chat/unread-count').catch(() => null),
+          api.get('/notifications/unread-count').catch(() => null),
+        ]);
+        count = (chat?.data?.data?.unread_count || 0) + (inbox?.data?.data?.count || 0);
+      }
+      count = Number(count) || 0;
+      await notifee.setBadgeCount(count);
+      if (count === 0) {
+        await notifee.cancelDisplayedNotifications();
       }
     } catch (error) {
-      console.error('Error updating badge count:', error);
+      console.log('⚠️ Could not sync badge:', error?.message);
+    }
+  }
+
+  // Kept for existing callers.
+  async updateBadgeCount() {
+    await this.syncBadge();
+  }
+
+  // Remove a chat's notifications from the tray once the user opens it.
+  async clearChatNotifications(chatId) {
+    if (!chatId) return;
+    try {
+      const displayed = await notifee.getDisplayedNotifications();
+      await Promise.all(
+        displayed
+          .filter(({notification}) => {
+            const data = notification?.data || {};
+            return String(data.chat_id || data.chatId || '') === String(chatId);
+          })
+          .map(({id, notification}) =>
+            notifee.cancelDisplayedNotification(id, notification?.android?.tag),
+          ),
+      );
+    } catch (error) {
+      console.log('⚠️ Could not clear chat notifications:', error?.message);
     }
   }
 
@@ -518,12 +598,18 @@ class NotificationService {
 
   // Clean up listeners
   cleanup() {
-    if (this.messageListener) {
-      this.messageListener();
-    }
-    if (this.notificationOpenedListener) {
-      this.notificationOpenedListener();
-    }
+    [
+      this.messageListener,
+      this.notificationOpenedListener,
+      this.foregroundEventUnsubscribe,
+      this.tokenRefreshUnsubscribe,
+    ].forEach((unsubscribe) => unsubscribe?.());
+    this.appStateSub?.remove?.();
+    this.messageListener = null;
+    this.notificationOpenedListener = null;
+    this.foregroundEventUnsubscribe = null;
+    this.tokenRefreshUnsubscribe = null;
+    this.listenersReady = false;
   }
 
   // ───────────────────────────────────────────────────────────────────

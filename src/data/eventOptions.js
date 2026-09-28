@@ -11,7 +11,7 @@ export const SERVICE_OPTIONS = [
   'Caterer',
   'Decorator',
   'DJ',
-  'Gig Planner',
+  'Event Planner',
   'Florist',
   'Makeup Artist',
   'Venue',
@@ -22,13 +22,13 @@ export const SERVICE_OPTIONS = [
   'Entertainment',
 ];
 
-// Gig types — stored on the ad as `event_type`.
+// Event types — stored on the ad as `event_type`.
 export const EVENT_TYPE_OPTIONS = [
   'Wedding',
   'Engagement',
   'Birthday',
   'Baby Shower',
-  'Corporate Gig',
+  'Corporate Event',
   'Product Launch',
   'Pre-Wedding Shoot',
   'Anniversary',
@@ -40,7 +40,7 @@ export const EVENT_TYPE_OPTIONS = [
   'Religious Ceremony',
   'Workshop or Seminar',
   'Brand Promotion',
-  'Cultural Gig',
+  'Cultural Event',
   'Proposal Setup',
   'Bachelor/Bachelorette',
   'Other',

@@ -44,7 +44,7 @@ export default function SearchHeader({ onSearchChange, searchValue = '', searchT
     const PH_HEIGHT = 22;
     const placeholders = [
         searchType === 'events' ? 'Search for gigs...' : 'Search for vendors...',
-        'Search by location...',
+        'Search by city...',
         'Search by category...',
         'Type to search...',
     ];

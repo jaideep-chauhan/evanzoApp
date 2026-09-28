@@ -143,6 +143,13 @@ export const cropImage = async (imagePath, options = {}) => {
             cropperToolbarTitle: 'Crop Image',
             cropperChooseText: 'Choose',
             cropperCancelText: 'Cancel',
+            // Brand colours — the library defaults made the toolbar/buttons
+            // hard to see (and the ratio is locked, so no ratio tabs).
+            cropperToolbarColor: '#2C3D5B',
+            cropperStatusBarColor: '#2C3D5B',
+            cropperToolbarWidgetColor: '#FFFFFF',
+            cropperActiveWidgetColor: '#2C3D5B',
+            hideBottomControls: !freeStyleCropEnabled,
             showCropGuidelines: true,
             showCropFrame: true,
             enableRotationGesture: true,
@@ -199,4 +206,19 @@ export const IMAGE_DIMENSIONS = {
 
     // Fixed square ratio - maintains 1:1 aspect ratio
     FIXED_SQUARE: { width: 1080, height: 1080, freeStyleCropEnabled: false },
+
+    // Fixed 4:5 portrait - every ad photo (vendor + event) is cropped to this
+    FIXED_AD_PORTRAIT: { width: 1080, height: 1350, freeStyleCropEnabled: false },
+};
+
+// Width / height of an ad photo (4:5)
+export const AD_PHOTO_ASPECT_RATIO = 4 / 5;
+
+/**
+ * True when an image's dimensions are already 4:5 (within 1% to absorb
+ * rounding from resizing), so it doesn't need to go through the cropper.
+ */
+export const isAdPhotoAspectRatio = (width, height) => {
+    if (!width || !height) return false;
+    return Math.abs(width / height - AD_PHOTO_ASPECT_RATIO) / AD_PHOTO_ASPECT_RATIO < 0.01;
 };

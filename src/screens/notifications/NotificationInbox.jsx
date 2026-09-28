@@ -175,6 +175,7 @@ export default function NotificationInbox() {
         if (!notification.is_read) {
             const result = await notificationService.markAsRead(notification.notification_id);
             if (result.success) {
+                notificationService.syncBadge();
                 setNotifications((prev) =>
                     prev.map((n) =>
                         n.notification_id === notification.notification_id
@@ -211,6 +212,7 @@ export default function NotificationInbox() {
                             notification.notification_id,
                         );
                         if (result.success) {
+                            notificationService.syncBadge();
                             setNotifications((prev) =>
                                 prev.filter(
                                     (n) => n.notification_id !== notification.notification_id,
@@ -232,6 +234,7 @@ export default function NotificationInbox() {
         if (unreadCount === 0) return;
         const result = await notificationService.markAllAsRead();
         if (result.success) {
+            notificationService.syncBadge();
             setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
             setUnreadCount(0);
         } else {

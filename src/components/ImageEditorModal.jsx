@@ -9,16 +9,30 @@ import {
     ScrollView,
     Dimensions,
     ActivityIndicator,
+    Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { cropImage, IMAGE_DIMENSIONS } from '../utils/imageCropperUtils';
+import {
+    cropImage,
+    IMAGE_DIMENSIONS,
+    AD_PHOTO_ASPECT_RATIO,
+    isAdPhotoAspectRatio,
+} from '../utils/imageCropperUtils';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+// 4:5 preview frame, capped so it still leaves room for the controls on short screens
+const FRAME_WIDTH = Math.min(SCREEN_WIDTH - 80, SCREEN_HEIGHT * 0.5 * AD_PHOTO_ASPECT_RATIO);
+
+// Every ad photo must end up 4:5 — either cropped here, or already that shape.
+const isReady = (image) =>
+    !!image && (image.cropped || isAdPhotoAspectRatio(image.width, image.height));
 
 const ImageEditorModal = ({ visible, images, onClose, onDone }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [editedImages, setEditedImages] = useState(images || []);
     const [isCropping, setIsCropping] = useState(false);
+    const [showCropRequired, setShowCropRequired] = useState(false);
 
     // Sync editedImages with images prop when modal opens
     useEffect(() => {
@@ -27,17 +41,19 @@ const ImageEditorModal = ({ visible, images, onClose, onDone }) => {
             console.log('🖼️ Setting edited images:', images.length);
             setEditedImages(images);
             setCurrentIndex(0);
+            setShowCropRequired(false);
         }
     }, [visible, images]);
 
     const currentImage = editedImages[currentIndex];
+    const pendingCount = editedImages.filter((image) => !isReady(image)).length;
 
     const handleCropImage = async () => {
         try {
             setIsCropping(true);
             const croppedImage = await cropImage(
                 editedImages[currentIndex].originalUri || editedImages[currentIndex].uri,
-                { ...IMAGE_DIMENSIONS.FIXED_SQUARE }
+                { ...IMAGE_DIMENSIONS.FIXED_AD_PORTRAIT }
             );
 
             if (croppedImage) {
@@ -70,7 +86,31 @@ const ImageEditorModal = ({ visible, images, onClose, onDone }) => {
         }
     };
 
+    // ✕ / Android back: confirm before throwing away the picked photos.
+    const handleCancel = () => {
+        if (!editedImages || editedImages.length === 0) {
+            onClose();
+            return;
+        }
+        Alert.alert(
+            'Discard photos?',
+            `The ${editedImages.length} photo${editedImages.length === 1 ? '' : 's'} you picked won't be added.`,
+            [
+                { text: 'Keep editing', style: 'cancel' },
+                { text: 'Discard', style: 'destructive', onPress: onClose },
+            ],
+        );
+    };
+
     const handleDone = () => {
+        // Don't let a photo through until it's 4:5 — jump to the first one
+        // that still needs cropping instead.
+        const firstPendingIndex = editedImages.findIndex((image) => !isReady(image));
+        if (firstPendingIndex !== -1) {
+            setCurrentIndex(firstPendingIndex);
+            setShowCropRequired(true);
+            return;
+        }
         onDone(editedImages);
         onClose();
     };
@@ -119,31 +159,35 @@ const ImageEditorModal = ({ visible, images, onClose, onDone }) => {
             visible={visible}
             animationType="slide"
             statusBarTranslucent
-            onRequestClose={onClose}
+            onRequestClose={handleCancel}
         >
             <View style={styles.container}>
                 {/* Header */}
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={onClose} style={styles.headerButton}>
+                    <TouchableOpacity onPress={handleCancel} style={styles.headerButton}>
                         <Icon name="close" size={28} color="#fff" />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>
                         Edit Images ({currentIndex + 1}/{editedImages.length})
                     </Text>
                     <TouchableOpacity onPress={handleDone} style={styles.headerButton}>
-                        <Text style={styles.doneText}>Done</Text>
+                        <Text style={[styles.doneText, pendingCount > 0 && styles.doneTextPending]}>
+                            Done
+                        </Text>
                     </TouchableOpacity>
                 </View>
 
                 {/* Main Image Display with Fixed Frame */}
                 <View style={styles.mainImageContainer}>
-                    {/* Fixed Square Frame */}
+                    {/* Fixed 4:5 Frame */}
                     <View style={styles.imageFrame}>
                         {currentImage && (
                             <Image
                                 source={{ uri: currentImage.uri }}
                                 style={styles.mainImage}
-                                resizeMode="cover"
+                                // Whole photo until it's 4:5, so it doesn't look
+                                // already cropped when it still needs cropping.
+                                resizeMode={isReady(currentImage) ? 'cover' : 'contain'}
                             />
                         )}
 
@@ -162,10 +206,12 @@ const ImageEditorModal = ({ visible, images, onClose, onDone }) => {
                     </View>
 
                     {/* Info Text */}
-                    <Text style={styles.infoText}>
-                        {currentImage?.cropped
-                            ? '✓ Image cropped to square format'
-                            : 'Image may need cropping to fit square format'}
+                    <Text style={[styles.infoText, showCropRequired && pendingCount > 0 && styles.infoTextWarning]}>
+                        {isReady(currentImage)
+                            ? '✓ Photo is in 4:5 format'
+                            : showCropRequired
+                                ? `Crop ${pendingCount === 1 ? 'this photo' : `all ${pendingCount} remaining photos`} to 4:5 before continuing`
+                                : 'Tap Crop to fit this photo to 4:5'}
                     </Text>
                 </View>
 
@@ -312,6 +358,9 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#4CAF50',
     },
+    doneTextPending: {
+        opacity: 0.5,
+    },
     mainImageContainer: {
         flex: 1,
         justifyContent: 'center',
@@ -320,8 +369,8 @@ const styles = StyleSheet.create({
         padding: 16,
     },
     imageFrame: {
-        width: SCREEN_WIDTH - 80,
-        height: SCREEN_WIDTH - 80,
+        width: FRAME_WIDTH,
+        height: FRAME_WIDTH / AD_PHOTO_ASPECT_RATIO,
         backgroundColor: '#1a1a1a',
         borderRadius: 16,
         overflow: 'hidden',
@@ -360,6 +409,10 @@ const styles = StyleSheet.create({
         marginTop: 16,
         textAlign: 'center',
         paddingHorizontal: 24,
+    },
+    infoTextWarning: {
+        color: '#FFB74D',
+        fontWeight: '600',
     },
     croppedBadge: {
         position: 'absolute',
@@ -442,7 +495,7 @@ const styles = StyleSheet.create({
         gap: 12,
     },
     thumbnail: {
-        width: 70,
+        width: 56,
         height: 70,
         borderRadius: 12,
         borderWidth: 2,

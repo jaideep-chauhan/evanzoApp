@@ -268,10 +268,10 @@ const PreSavedMessage = ({ onClose, visible }) => {
                 </View>
 
                 <View style={styles.fieldGroup}>
-                    <Text style={[styles.label, { color: theme.colors.primary }]}>Location</Text>
+                    <Text style={[styles.label, { color: theme.colors.primary }]}>City</Text>
                     <TextInput
                         style={styles.input}
-                        placeholder="Enter event location"
+                        placeholder="Enter event city"
                         placeholderTextColor="#999"
                         value={location}
                         onChangeText={setLocation}

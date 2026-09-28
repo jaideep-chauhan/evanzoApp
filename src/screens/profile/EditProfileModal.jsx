@@ -341,7 +341,7 @@ export default function EditProfileModal({ visible, onClose, onUpdate }) {
                             + a pre-joined formattedLocation we can drop into
                             formData.location directly. */}
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Location</Text>
+                            <Text style={styles.label}>City</Text>
                             <LocationSelector
                                 lightBackground
                                 // formData.location is the fresh formatted
