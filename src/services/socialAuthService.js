@@ -26,7 +26,7 @@ class SocialAuthService {
                 // 1075894285533) caused "invalid_audience: The audience client
                 // and the client need to be in the same project." The matching
                 // REVERSED_CLIENT_ID is the URL scheme in ios/EVNZO/Info.plist.
-                iosClientId: '453180956529-lci338mf6g2c2itecgn9vuna9sqeo8th.apps.googleusercontent.com',
+                iosClientId: '453180956529-jdurl915tc5eqig6tgne5aktmm32sjhl.apps.googleusercontent.com',
                 offlineAccess: true,
                 hostedDomain: '',
                 forceCodeForRefreshToken: true,
