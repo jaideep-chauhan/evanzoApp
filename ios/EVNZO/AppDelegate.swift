@@ -3,6 +3,7 @@ import React
 import React_RCTAppDelegate
 import ReactAppDependencyProvider
 import FirebaseCore
+import FirebaseMessaging
 
 @main
 class AppDelegate: RCTAppDelegate {
@@ -19,6 +20,21 @@ class AppDelegate: RCTAppDelegate {
     self.initialProps = [:]
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  // MARK: - APNs token
+  // Info.plist sets FirebaseAppDelegateProxyEnabled = NO, which also switches
+  // off RNFB's swizzling of these callbacks — so the APNs device token has to
+  // be handed to FCM here, or messaging().getToken() fails with
+  // "No APNS token specified before fetching FCM Token" and iOS never gets pushes.
+  @objc(application:didRegisterForRemoteNotificationsWithDeviceToken:)
+  func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+    Messaging.messaging().apnsToken = deviceToken
+  }
+
+  @objc(application:didFailToRegisterForRemoteNotificationsWithError:)
+  func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+    NSLog("APNs registration failed: %@", error.localizedDescription)
   }
 
   // MARK: - Deep Links (React Navigation / RCTLinkingManager)

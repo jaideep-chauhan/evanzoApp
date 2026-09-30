@@ -113,6 +113,23 @@ class NotificationService {
     }
   }
 
+  async waitForApnsToken(timeoutMs = 10000) {
+    try {
+      if (!messaging().isDeviceRegisteredForRemoteMessages) {
+        await messaging().registerDeviceForRemoteMessages();
+      }
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        if (await messaging().getAPNSToken()) return true;
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      console.warn('APNs token not available yet');
+    } catch (error) {
+      console.warn('APNs registration failed:', error?.message);
+    }
+    return false;
+  }
+
   // Register this device's FCM token with the backend for the logged-in user.
   // No-op when logged out (the endpoint needs auth); AuthContext calls this
   // again as soon as someone signs in.
@@ -121,6 +138,10 @@ class NotificationService {
       if (!(await secureStorage.getItem('authToken'))) return;
 
       await this.requestPermission();
+      // iOS: FCM can only mint a token once APNs has handed the app its device
+      // token, which arrives asynchronously after registration. Asking too
+      // early fails with "No APNS token specified before fetching FCM Token".
+      if (Platform.OS === 'ios') await this.waitForApnsToken();
       const fcmToken = await messaging().getToken();
       console.log('📱 FCM Token:', fcmToken);
       await AsyncStorage.setItem('fcm_token', fcmToken);
