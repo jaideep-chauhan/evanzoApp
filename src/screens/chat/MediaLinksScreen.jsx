@@ -106,6 +106,9 @@ const MediaLinksScreen = ({ route, navigation }) => {
                     mediaList.push({
                         id: `${msg.message_id || 'unknown'}-${index}`,
                         url: fixLocalUrl(url),
+                        // Grid tiles use the server-made thumbnail: smaller, and
+                        // some old messages still have one after the original was lost.
+                        thumbUrl: attachment?.metadata?.thumbnail ? fixLocalUrl(attachment.metadata.thumbnail) : null,
                         type: kind,
                         sender: msg.sender,
                         timestamp: msg.created_at,
@@ -255,7 +258,7 @@ const MediaLinksScreen = ({ route, navigation }) => {
                 activeOpacity={0.8}
             >
                 <Image
-                    source={{ uri: item.url }}
+                    source={{ uri: item.thumbUrl || item.url }}
                     style={styles.mediaThumbnail}
                     resizeMode="cover"
                 />

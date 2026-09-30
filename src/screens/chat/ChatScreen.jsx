@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { fixLocalUrl } from '../../services/api';
 import MessageStatus from './MessageStatus';
 import { useTheme } from '../../ThemeContext';
 import socketService from '../../services/socketService';
@@ -73,7 +74,7 @@ export default function ChatScreen({ route, navigation }) {
         const hideSub = Keyboard.addListener(hideEvt, () => setKeyboardVisible(false));
         return () => { showSub.remove(); hideSub.remove(); };
     }, []);
-    const { chatId: initialChatId, chatName, avatar, isOnline: initialOnline, recipientId, adContext } = route.params;
+    const { chatId: initialChatId, chatName, avatar: avatarParam, isOnline: initialOnline, recipientId, adContext } = route.params;
     // Opened from an ad card → the next message says which ad it's about.
     const [pendingAd, setPendingAd] = useState(adContext || null);
     // Same screen re-opened from a different ad → show that ad.
@@ -91,6 +92,8 @@ export default function ChatScreen({ route, navigation }) {
     const [newMessage, setNewMessage] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const [isOnline, setIsOnline] = useState(initialOnline || false);
+    // Opened from a notification or deep link there's no avatar param; it's filled in from the chat details below.
+    const [avatar, setAvatar] = useState(avatarParam || null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSending, setIsSending] = useState(false);
     const [currentUserId, setCurrentUserId] = useState(null);
@@ -496,11 +499,14 @@ export default function ChatScreen({ route, navigation }) {
                 }
             }
 
-            // Get chat details if needed in future
-            // const chatResult = await chatService.getChatById(actualChatId);
-            // if (chatResult.success) {
-            //     // Use chat data if needed
-            // }
+            if (!avatarParam) {
+                chatService.getChatById(actualChatId).then((chatResult) => {
+                    const participants = chatResult.success ? chatResult.data?.participants || [] : [];
+                    const other = participants.find((p) => String(p.user_id) !== String(userIdToUse));
+                    const pic = other?.user?.profile_pic;
+                    if (pic) setAvatar(fixLocalUrl(pic));
+                }).catch(() => {});
+            }
 
             // Join chat room
             socketService.joinChat(actualChatId);
@@ -3044,7 +3050,7 @@ export default function ChatScreen({ route, navigation }) {
                         />
                     )}
                     <TouchableOpacity
-                        style={styles.videoPlayerClose}
+                        style={[styles.videoPlayerClose, { top: insets.top + 12 }]}
                         onPress={() => setPlayingVideoUrl(null)}
                         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                     >

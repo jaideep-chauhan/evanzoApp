@@ -11,7 +11,7 @@ import {
     Image,
     TextInput,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { getCategoryIcon } from '../../assets/icons';
 import { useTheme } from '../../ThemeContext';
@@ -319,6 +319,10 @@ export default function CategorySelectionModalEnhanced({
             navigationBarTranslucent={true}
             onRequestClose={onClose}
         >
+            {/* A Modal is a separate native root on iOS, so it needs its own
+                provider or the insets read as 0 and the header sits under the
+                status bar. */}
+            <SafeAreaProvider>
             <SafeAreaView style={[styles.container, styles.safeAreaPad]}>
                 {/* Header */}
                 <View style={styles.header}>
@@ -535,6 +539,7 @@ export default function CategorySelectionModalEnhanced({
                     </View>
                 )}
             </SafeAreaView>
+            </SafeAreaProvider>
         </Modal>
     );
 }

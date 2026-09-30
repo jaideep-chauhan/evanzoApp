@@ -243,8 +243,8 @@ const VendorCard = ({
                                             </View>
                                         </View>
                                     )}
-                                    {/* Always shown (defaults to 0%) so the Discount
-                                        column never disappears. */}
+                                    {/* Hidden at 0%, like the ad cards and ad details. */}
+                                    {Number(offerPercent) > 0 && (
                                     <View style={styles.offerItem}>
                                         <Text style={[styles.offerLabel, { color: theme.colors.textSecondary }]}>
                                             Discount
@@ -253,6 +253,7 @@ const VendorCard = ({
                                             <Text style={styles.offerValue}>{`${offerPercent}%`}</Text>
                                         </View>
                                     </View>
+                                    )}
                                 </View>
                             </View>
                         </View>

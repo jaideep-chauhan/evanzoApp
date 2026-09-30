@@ -8,6 +8,7 @@ import {
     RefreshControl,
     Alert,
     ActivityIndicator,
+    StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -22,6 +23,19 @@ const DIVIDER = '#EEF1F5';
 const TEXT_PRIMARY = '#1F2A44';
 const TEXT_SECONDARY = '#6B7280';
 const TEXT_TERTIARY = '#9CA3AF';
+
+// Older message notifications stored a shared contact's raw JSON as the text.
+const displayMessage = (message) => {
+    if (typeof message !== 'string' || !message.trim().startsWith('{')) return message;
+    try {
+        const parsed = JSON.parse(message);
+        if (parsed && (parsed.phone !== undefined || parsed.name !== undefined)) {
+            const name = String(parsed.name || '').trim();
+            return name ? `👤 ${name}` : '👤 Contact';
+        }
+    } catch (_) { /* not JSON */ }
+    return message;
+};
 
 const ICON_MAP = {
     message: 'chatbubbles',
@@ -90,7 +104,7 @@ const NotificationItem = ({ notification, onPress, onLongPress }) => {
                 </Text>
                 {!!notification.message && (
                     <Text style={styles.itemMessage} numberOfLines={2}>
-                        {notification.message}
+                        {displayMessage(notification.message)}
                     </Text>
                 )}
             </View>
@@ -274,6 +288,8 @@ export default function NotificationInbox() {
 
     return (
         <SafeAreaView style={styles.safe}>
+            {/* White header: earlier screens may have left light-content set, which hides the iOS status bar here. */}
+            <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
             <View style={styles.header}>
                 <TouchableOpacity
                     style={styles.backBtn}

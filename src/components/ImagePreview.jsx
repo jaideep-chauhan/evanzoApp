@@ -11,12 +11,15 @@ import {
     Text,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width, height } = Dimensions.get('window');
 
 const ImagePreview = ({ visible, imageUrl, imageName, onClose, onDownload }) => {
     const [loading, setLoading] = useState(true);
     const [imageError, setImageError] = useState(false);
+    // Read here (outside the Modal) so the insets are real on iOS; StatusBar.currentHeight is Android-only.
+    const insets = useSafeAreaInsets();
 
     // Reset loading and error states when modal opens or image changes
     React.useEffect(() => {
@@ -44,7 +47,7 @@ const ImagePreview = ({ visible, imageUrl, imageName, onClose, onDownload }) => 
                 <StatusBar backgroundColor="rgba(0, 0, 0, 0.9)" barStyle="light-content" />
 
                 {/* Header */}
-                <View style={styles.header}>
+                <View style={[styles.header, { paddingTop: Math.max(insets.top, StatusBar.currentHeight || 0) + 8 }]}>
                     <TouchableOpacity
                         style={styles.closeButton}
                         onPress={handleClose}
