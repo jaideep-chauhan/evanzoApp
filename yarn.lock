@@ -2085,6 +2085,11 @@
   resolved "https://registry.yarnpkg.com/@react-native-community/geolocation/-/geolocation-3.4.0.tgz#8b6ee024a71cf94526ab796af1e9ae140684802c"
   integrity sha512-bzZH89/cwmpkPMKKveoC72C4JH0yF4St5Ceg/ZM9pA1SqX9MlRIrIrrOGZ/+yi++xAvFDiYfihtn9TvXWU9/rA==
 
+"@react-native-community/image-editor@^4.3.1":
+  version "4.3.1"
+  resolved "https://registry.yarnpkg.com/@react-native-community/image-editor/-/image-editor-4.3.1.tgz#44fe72f06ed11ae18efa0d6276ab5f9345030180"
+  integrity sha512-ALreVoxi3JRQ+92tKYbQD560i9oc86VjRQNMbA8xCM1pN9nbaSYb5ec5EuTPmdBAuH06knohthuUPD55R3yX3g==
+
 "@react-native-community/progress-bar-android@^1.0.5":
   version "1.0.5"
   resolved "https://registry.yarnpkg.com/@react-native-community/progress-bar-android/-/progress-bar-android-1.0.5.tgz#77c03389312ecaf73be55e21d4b7ff6fa4b2b8db"

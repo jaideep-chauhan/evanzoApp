@@ -765,7 +765,7 @@ export default function Gigs() {
 
             if (!organizerId) {
                 console.error('❌ No organizer ID found for event:', event);
-                Alert.alert('Error', 'Unable to contact event organizer. Please try again later.');
+                Alert.alert('Error', 'Unable to contact gig poster. Please try again later.');
                 return;
             }
 
@@ -1047,12 +1047,12 @@ export default function Gigs() {
                 {events.length === 0 ? (
                     <View style={styles.noEventsContainer}>
                         <Text style={styles.noEventsText}>
-                            {networkError ? 'Unable to load events' :
-                             ((searchQuery || selectedLocation || selectedCategoryNames.length > 0 || selectedDateRange) ? 'No events match your filters' : 'No events found')}
+                            {networkError ? 'Unable to load gigs' :
+                             ((searchQuery || selectedLocation || selectedCategoryNames.length > 0 || selectedDateRange) ? 'No gigs match your filters' : 'No gigs found')}
                         </Text>
                         <Text style={styles.noEventsSubtext}>
                             {networkError ? 'Check your internet connection' :
-                             ((searchQuery || selectedLocation || selectedCategoryNames.length > 0 || selectedDateRange) ? 'Try adjusting your filters or clear them to see all events' : 'Pull down to refresh')}
+                             ((searchQuery || selectedLocation || selectedCategoryNames.length > 0 || selectedDateRange) ? 'Try adjusting your filters or clear them to see all gigs' : 'Pull down to refresh')}
                         </Text>
                         {networkError && (
                             <TouchableOpacity

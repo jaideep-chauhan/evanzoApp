@@ -17,7 +17,7 @@ class EventDetailsService {
       return {
         success: false,
         message:
-          error.response?.data?.message || 'Failed to fetch event details',
+          error.response?.data?.message || 'Failed to fetch gig details',
         data: null,
       };
     }
@@ -122,7 +122,7 @@ class EventDetailsService {
         console.error('Invalid eventId:', eventId);
         return {
           success: false,
-          message: 'Invalid event ID',
+          message: 'Invalid gig ID',
         };
       }
 
@@ -164,7 +164,7 @@ class EventDetailsService {
       console.error('Toggle save event error:', error);
       return {
         success: false,
-        message: error.response?.data?.message || 'Failed to save/unsave event',
+        message: error.response?.data?.message || 'Failed to save/unsave gig',
       };
     }
   }
@@ -176,17 +176,7 @@ class EventDetailsService {
       const shareOptions = buildAdShareContent({
         type: 'event',
         id: event.event_ad_id || event._original?.event_ad_id || event.id,
-        title: `Check out this event: ${event.title}`,
-        text: [
-          `🎉 ${event.title}`,
-          event.location ? `📍 ${event.location}` : null,
-          event.date ? `📅 ${event.date}` : null,
-          event.duration ? `⏱️ Duration: ${event.duration} hours` : null,
-          event.guests ? `👥 Guests: ${event.guests}` : null,
-          event.budget ? `💰 Budget: ${event.budget}` : null,
-          event.description ? `\n${event.description}` : null,
-          event.organizer?.name ? `\nOrganized by ${event.organizer.name}` : null,
-        ].filter(Boolean).join('\n'),
+        title: event.title || 'Gig',
       });
 
       const result = await Share.share(shareOptions);
@@ -206,7 +196,7 @@ class EventDetailsService {
       console.error('Share event error:', error);
       return {
         success: false,
-        message: 'Failed to share event',
+        message: 'Failed to share gig',
       };
     }
   }
@@ -288,7 +278,7 @@ class EventDetailsService {
       return {
         success: false,
         message:
-          error.response?.data?.message || 'Failed to fetch similar events',
+          error.response?.data?.message || 'Failed to fetch similar gigs',
         data: [],
       };
     }

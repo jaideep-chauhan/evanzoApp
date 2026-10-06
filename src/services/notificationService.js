@@ -270,7 +270,8 @@ class NotificationService {
 
       // Prepare notification payload
       const notificationPayload = {
-        title: notification?.title || data?.title || 'Evnzo',
+        // Sender's name only for chat pushes (older backends prefix it).
+        title: (notification?.title || data?.title || 'Evnzo').replace(/^New message from\s+/i, '') || 'Evnzo',
         body: notification?.body || data?.body || 'You have a new notification',
         android: {
           channelId,

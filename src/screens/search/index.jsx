@@ -208,7 +208,7 @@ export default function SearchScreen() {
                     <TextInput
                         ref={inputRef}
                         style={styles.searchInput}
-                        placeholder={`Search ${searchType === 'events' ? 'events' : 'vendors'}...`}
+                        placeholder={`Search ${searchType === 'events' ? 'gigs' : 'vendors'}...`}
                         placeholderTextColor="#9CA3AF"
                         value={query}
                         onChangeText={handleChange}

@@ -265,8 +265,8 @@ const EventCardCarousel = ({ eventId, eventCategory, eventLocation }) => {
             <View style={styles.carouselContainer}>
                 <Text style={styles.sectionTitle}>You might also like</Text>
                 <View style={styles.noDataContainer}>
-                    <Text style={styles.noDataText}>No similar events found</Text>
-                    <Text style={styles.noDataSubtext}>Check back later for more events in your area</Text>
+                    <Text style={styles.noDataText}>No similar gigs found</Text>
+                    <Text style={styles.noDataSubtext}>Check back later for more gigs in your area</Text>
                 </View>
             </View>
         );

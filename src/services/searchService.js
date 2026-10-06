@@ -219,7 +219,7 @@ class SearchService {
       console.error('[SearchService] Error searching events:', error);
       return {
         success: false,
-        message: error.response?.data?.message || 'Failed to search events',
+        message: error.response?.data?.message || 'Failed to search gigs',
         data: {}
       };
     }

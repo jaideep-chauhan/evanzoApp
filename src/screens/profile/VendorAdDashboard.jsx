@@ -257,7 +257,7 @@ export default function VendorAdDashboard({ navigation }) {
                         activeOpacity={0.7}
                     >
                         <Text style={activeTab === 'event' ? styles.activeTabText : [styles.inactiveTabText, { color: theme.colors.primary }]}>
-                            Event Ads
+                            Gig Ads
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -396,8 +396,8 @@ export default function VendorAdDashboard({ navigation }) {
                         })
                     ) : (
                         <View style={styles.emptyContainer}>
-                            <Text style={[styles.emptyText, { color: theme.colors.primary }]}>No event ads yet</Text>
-                            <Text style={[styles.emptySubText, { color: theme.colors.textSecondary }]}>Create your first event ad to get started</Text>
+                            <Text style={[styles.emptyText, { color: theme.colors.primary }]}>No gig ads yet</Text>
+                            <Text style={[styles.emptySubText, { color: theme.colors.textSecondary }]}>Create your first gig ad to get started</Text>
                         </View>
                     )
                 )}
@@ -496,7 +496,7 @@ export default function VendorAdDashboard({ navigation }) {
                                     setShowCreateAd(false);
                                 }}
                             >
-                                <Text style={{color: '#fff', textAlign: 'center', fontSize: 16, fontWeight: '700'}}>Event</Text>
+                                <Text style={{color: '#fff', textAlign: 'center', fontSize: 16, fontWeight: '700'}}>Gig</Text>
                             </TouchableOpacity>
                         </TouchableOpacity>
                     </TouchableOpacity>

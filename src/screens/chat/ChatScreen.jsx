@@ -9,6 +9,7 @@ import {
     TextInput,
     KeyboardAvoidingView,
     Keyboard,
+    LayoutAnimation,
     Platform,
     StatusBar,
     Alert,
@@ -52,6 +53,11 @@ import ImagePreview from '../../components/ImagePreview';
 import preSavedMessageService from '../../services/preSavedMessageService';
 import { getCached, setCached } from '../../services/listCacheService';
 import { adMetadata, getMessageAd, adRoute } from '../../utils/chatAdContext';
+import {
+    setUploadProgress as setMediaUploadProgress,
+    clearUploadProgress as clearMediaUploadProgress,
+} from '../../utils/uploadProgressStore';
+import { MediaUploadOverlay, FileUploadStatus } from '../../components/MediaUploadProgress';
 
 // Cache key per chat — same prefix as other lists, so it shows up in the
 // regular cache namespace and gets pruned on log-out cache wipes.
@@ -67,11 +73,46 @@ export default function ChatScreen({ route, navigation }) {
     // When the keyboard is open, KeyboardAvoidingView already lifts the bar, so
     // the inset would leave an empty gap above the keyboard.
     const [keyboardVisible, setKeyboardVisible] = useState(false);
+    // How far the keyboard covers this screen, applied as bottom padding so
+    // the input bar always sits just above it. Measured (screen bottom vs.
+    // keyboard top) rather than assumed, because the platforms differ:
+    //  - iOS never resizes the screen for the keyboard.
+    //  - Android 15+ draws edge-to-edge, where "adjustResize" no longer
+    //    shrinks the window, so the input bar ended up behind the keyboard.
+    //  - Older Android does resize; the measured overlap is then 0 and
+    //    nothing is added twice.
+    const screenRef = useRef(null);
+    const [keyboardInset, setKeyboardInset] = useState(0);
     useEffect(() => {
         const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
         const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-        const showSub = Keyboard.addListener(showEvt, () => setKeyboardVisible(true));
-        const hideSub = Keyboard.addListener(hideEvt, () => setKeyboardVisible(false));
+        const applyInset = (inset, event) => {
+            if (Platform.OS === 'ios') {
+                // Move with the keyboard instead of jumping.
+                LayoutAnimation.configureNext({
+                    duration: event?.duration || 250,
+                    update: { type: LayoutAnimation.Types.keyboard },
+                });
+            }
+            setKeyboardInset(inset);
+        };
+        const showSub = Keyboard.addListener(showEvt, (event) => {
+            setKeyboardVisible(true);
+            const keyboardTop = event?.endCoordinates?.screenY;
+            const keyboardHeight = event?.endCoordinates?.height || 0;
+            const node = screenRef.current;
+            if (node?.measureInWindow && typeof keyboardTop === 'number') {
+                node.measureInWindow((x, y, width, height) => {
+                    applyInset(height > 0 ? Math.max(0, Math.round(y + height - keyboardTop)) : keyboardHeight, event);
+                });
+            } else {
+                applyInset(keyboardHeight, event);
+            }
+        });
+        const hideSub = Keyboard.addListener(hideEvt, (event) => {
+            setKeyboardVisible(false);
+            applyInset(0, event);
+        });
         return () => { showSub.remove(); hideSub.remove(); };
     }, []);
     const { chatId: initialChatId, chatName, avatar: avatarParam, isOnline: initialOnline, recipientId, adContext } = route.params;
@@ -171,7 +212,9 @@ export default function ChatScreen({ route, navigation }) {
 
         initializeChat();
         return () => {
-            // Cleanup on unmount
+            // Cleanup on unmount. Anything that arrived while the chat was
+            // open has been seen, so leave with a zero unread count.
+            markOpenChatRead(null, true);
             if (chatId) {
                 socketService.leaveChat(chatId);
             }
@@ -519,6 +562,7 @@ export default function ChatScreen({ route, navigation }) {
 
             // Mark chat as read, then refresh the app-icon badge so it clears
             // once the message notifications for this chat are marked read.
+            openChatIdRef.current = actualChatId;
             await chatService.markChatAsRead(actualChatId);
             notificationService.clearChatNotifications(actualChatId);
             notificationService.syncBadge();
@@ -650,6 +694,26 @@ export default function ChatScreen({ route, navigation }) {
         }
     };
 
+    // Reset this chat's unread count on the server and bring the app-icon
+    // badge back in step. Debounced so a burst of incoming messages makes one
+    // request.
+    const markReadTimerRef = useRef(null);
+    const openChatIdRef = useRef(initialChatId || null);
+    const markOpenChatRead = (id, immediate = false) => {
+        const targetId = id || openChatIdRef.current;
+        if (!targetId) return;
+        const run = () => {
+            markReadTimerRef.current = null;
+            chatService.markChatAsRead(targetId)
+                .then(() => notificationService.syncBadge())
+                .catch(() => {});
+            notificationService.clearChatNotifications(targetId);
+        };
+        if (markReadTimerRef.current) clearTimeout(markReadTimerRef.current);
+        if (immediate) run();
+        else markReadTimerRef.current = setTimeout(run, 600);
+    };
+
     const setupSocketListeners = () => {
         // New message received
         socketService.on('new-message', (data) => {
@@ -749,8 +813,12 @@ export default function ChatScreen({ route, navigation }) {
                 ).catch(() => {});
             }
 
-            // Mark as read since chat is open
+            // Mark as read since chat is open. Marking the single message
+            // doesn't reset the server's unread counter for this chat, so the
+            // app-icon badge kept the number until the chat was reopened —
+            // clear the whole chat and re-sync the badge.
             chatService.markMessageAsRead(data.message.message_id);
+            markOpenChatRead(data.message.chat_id || data.chatId);
 
             // Clear typing indicator for this user
             setTypingUsers(prev => {
@@ -1093,6 +1161,15 @@ export default function ChatScreen({ route, navigation }) {
         const messageText = failedMessage.failedText || failedMessage.text;
         const tempId = failedMessage.id;
 
+        // Photo / video / document: upload the same local file again.
+        if (failedMessage.localFile) {
+            setMessages((prev) =>
+                prev.map((msg) => (msg.id === tempId ? { ...msg, status: 'sending' } : msg))
+            );
+            await uploadMediaMessage(tempId, failedMessage.localFile, failedMessage.messageType);
+            return;
+        }
+
         setMessages((prev) =>
             prev.map((msg) => (msg.id === tempId ? { ...msg, status: 'sending' } : msg))
         );
@@ -1234,14 +1311,13 @@ export default function ChatScreen({ route, navigation }) {
                 console.log('MediaPicker Error: ', response.errorMessage);
                 Alert.alert('Error', 'Failed to select media');
             } else if (response.assets?.length) {
-                // WhatsApp-style: one message per photo/video, sent in the
-                // order they were picked. Sequential so they arrive in order
-                // and don't all upload at once.
-                for (const asset of response.assets) {
-                    const messageType = asset.type?.startsWith('video/') ? 'video' : 'image';
-                    console.log('Selected media:', { type: asset.type, messageType });
-                    await sendMediaMessage(asset, messageType);
-                }
+                // WhatsApp-style: one message per photo/video. Every bubble
+                // appears straight away with its own upload progress; the
+                // uploads themselves run in the order they were picked.
+                await sendMediaBatch(response.assets.map((asset) => ({
+                    file: asset,
+                    type: asset.type?.startsWith('video/') ? 'video' : 'image',
+                })));
             }
         });
     };
@@ -1289,64 +1365,40 @@ export default function ChatScreen({ route, navigation }) {
             const results = await DocumentPicker.pick({
                 type: [DocumentPicker.types.allFiles], // Allow ALL file types
                 copyTo: 'cachesDirectory',
-                allowMultiSelection: false,
+                allowMultiSelection: true,
             });
-
-            console.log('📂 Document picker raw results:', results);
 
             if (!results || results.length === 0) {
                 console.log('⚠️ No document selected or empty results');
                 return;
             }
 
-            const document = results[0];
-            console.log('📄 Document picked - Full object:', document);
+            const documents = [];
+            for (const document of results.slice(0, MAX_MEDIA_PER_PICK)) {
+                // Prefer fileCopyUri (local cache copy) over uri for better reliability on iOS
+                const fileUri = document.fileCopyUri || document.uri;
+                if (!fileUri || !document.name) {
+                    console.error('❌ Skipping document without a usable URI/name:', document);
+                    continue;
+                }
+                documents.push({
+                    file: {
+                        uri: fileUri.startsWith('file://') ? decodeURIComponent(fileUri) : fileUri,
+                        name: document.name,
+                        type: document.type || 'application/octet-stream',
+                        size: document.size,
+                    },
+                    // Always send documents as 'file' type to preserve original quality
+                    type: 'file',
+                });
+            }
 
-            // Validate required fields
-            if (!document.uri && !document.fileCopyUri) {
-                console.error('❌ No valid URI found for document');
+            if (documents.length === 0) {
                 Alert.alert('Error', 'Could not access the selected file');
                 return;
             }
 
-            if (!document.name) {
-                console.error('❌ No file name found');
-                Alert.alert('Error', 'Could not get file information');
-                return;
-            }
-
-            // Prefer fileCopyUri (local cache copy) over uri for better reliability on iOS
-            const fileUri = document.fileCopyUri || document.uri;
-
-            // Clean and decode the URI
-            let cleanUri = fileUri;
-            if (cleanUri.startsWith('file://')) {
-                cleanUri = decodeURIComponent(cleanUri);
-            }
-
-            console.log('📄 File details:', {
-                originalUri: document.uri,
-                fileCopyUri: document.fileCopyUri,
-                cleanUri: cleanUri,
-                name: document.name,
-                size: document.size,
-                type: document.type
-            });
-
-            // Create final document object with clean URI
-            const finalDocument = {
-                uri: cleanUri,
-                name: document.name,
-                type: document.type || 'application/octet-stream',
-                size: document.size
-            };
-
-            console.log('✅ Prepared document for sending:', finalDocument);
-
-            // Always send documents as 'file' type to preserve original quality
-            console.log('📤 Calling sendMediaMessage with file type...');
-            await sendMediaMessage(finalDocument, 'file');
-            console.log('✅ sendMediaMessage completed');
+            await sendMediaBatch(documents);
         } catch (err) {
             if (DocumentPicker.isCancel(err)) {
                 console.log('📂 Document picker cancelled by user');
@@ -1623,40 +1675,60 @@ export default function ChatScreen({ route, navigation }) {
     };
 
 
-    const sendMediaMessage = async (file, type) => {
+    const buildOptimisticMedia = (file, type) => ({
+        id: `temp-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+        text: type === 'image' ? '📷 Photo' : type === 'video' ? '🎥 Video' : '📄 Document',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        isMe: true,
+        messageType: type, // 'image', 'video', or 'file'
+        status: 'sending',
+        attachments: [{
+            type: type,
+            uri: file.uri,
+            name: file.name || file.fileName || 'file',
+            size: file.fileSize || file.size,
+        }],
+        // Kept so a failed upload can be retried from the bubble.
+        localFile: file,
+        createdAt: new Date().toISOString() // Add for consistent sorting
+    });
+
+    // Send one or more photos / videos / documents. All bubbles are added to
+    // the thread up front (so the whole selection is visible immediately,
+    // each showing its own progress); uploads then run one after another so
+    // they reach the other person in the order they were picked.
+    const activeUploadsRef = useRef(0);
+    const sendMediaBatch = async (items) => {
+        if (!chatId || !items?.length) return;
+
+        const queued = items.map(({ file, type }) => ({
+            file,
+            type,
+            message: buildOptimisticMedia(file, type),
+        }));
+        queued.forEach(({ message }) => setMediaUploadProgress(message.id, { state: 'queued', percent: 0 }));
+        setMessages(prev => [...prev, ...queued.map(({ message }) => message)]);
+
+        activeUploadsRef.current += 1;
+        setUploadingFile(true);
+        try {
+            for (const { file, type, message } of queued) {
+                await uploadMediaMessage(message.id, file, type);
+            }
+        } finally {
+            activeUploadsRef.current -= 1;
+            if (activeUploadsRef.current === 0) setUploadingFile(false);
+        }
+    };
+
+    const sendMediaMessage = (file, type) => sendMediaBatch([{ file, type }]);
+
+    const uploadMediaMessage = async (tempId, file, type) => {
         if (!chatId) return;
 
-        console.log('📤 sendMediaMessage called with:', {
-            type,
-            fileName: file.name || file.fileName,
-            fileType: file.type,
-            fileUri: file.uri,
-            fileCopyUri: file.fileCopyUri
-        });
-
-        setUploadingFile(true);
-        const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+        setMediaUploadProgress(tempId, { state: 'uploading', percent: 0 });
 
         try {
-            // Add optimistic message
-            const optimisticMessage = {
-                id: tempId,
-                text: type === 'image' ? '📷 Photo' : type === 'video' ? '🎥 Video' : '📄 Document',
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                isMe: true,
-                messageType: type, // 'image', 'video', or 'file'
-                status: 'sending',
-                attachments: [{
-                    type: type,
-                    uri: file.uri,
-                    name: file.name || 'file',
-                    size: file.fileSize || file.size,
-                }],
-                createdAt: new Date().toISOString() // Add for consistent sorting
-            };
-
-            setMessages(prev => [...prev, optimisticMessage]);
-
             // Verify file URI exists
             const fileUri = file.uri || file.fileCopyUri;
             let actualFilePath = fileUri;
@@ -1801,8 +1873,10 @@ export default function ChatScreen({ route, navigation }) {
 
             console.log('✅ FormData prepared, sending to API...');
 
-            const result = await chatService.sendMediaMessage(chatId, formData);
-            
+            const result = await chatService.sendMediaMessage(chatId, formData, {
+                onProgress: (percent) => setMediaUploadProgress(tempId, { state: 'uploading', percent }),
+            });
+
             console.log('📱 ChatScreen - Media send result:', result);
             
             if (result.success) {
@@ -1812,20 +1886,36 @@ export default function ChatScreen({ route, navigation }) {
                 // dev-host upload echoed back during the session would render
                 // a broken (localhost) URI on a real device.
                 const normalizedAttachments = chatService.processAttachments(result.data.attachments);
+                const remoteUrl = normalizedAttachments?.[0]?.url;
+                // Photos keep showing the local file until the uploaded copy
+                // is in the image cache — swapping straight to the remote URL
+                // left an empty bubble while it downloaded again.
+                const keepLocalPreview = type === 'image' && !!remoteUrl && !!file.uri;
                 setMessages(prev => prev.map(msg =>
                     msg.id === tempId
                         ? {
                             ...msg,
                             id: result.data.message_id,
                             status: 'sent',
-                            attachments: normalizedAttachments,
+                            localFile: undefined,
+                            attachments: keepLocalPreview
+                                ? normalizedAttachments.map((a, i) => (i === 0 ? { ...a, uri: file.uri } : a))
+                                : normalizedAttachments,
                         }
                         : msg
                 ));
+                if (keepLocalPreview) {
+                    const sentId = result.data.message_id;
+                    Image.prefetch(remoteUrl).catch(() => {}).finally(() => {
+                        setMessages(prev => prev.map(msg =>
+                            msg.id === sentId ? { ...msg, attachments: normalizedAttachments } : msg
+                        ));
+                    });
+                }
             } else {
                 console.error('❌ ChatScreen - Media send failed:', result.message);
-                // Remove optimistic message on failure
-                setMessages(prev => prev.filter(msg => msg.id !== tempId));
+                // Keep the bubble so the user can see what didn't go and retry it.
+                setMessages(prev => prev.map(msg => (msg.id === tempId ? { ...msg, status: 'failed' } : msg)));
                 Alert.alert('Error', result.message || 'Failed to send file');
             }
         } catch (error) {
@@ -1851,10 +1941,10 @@ export default function ChatScreen({ route, navigation }) {
                 errorMessage = `Error: ${error.message}`;
             }
 
-            setMessages(prev => prev.filter(msg => msg.id !== tempId));
+            setMessages(prev => prev.map(msg => (msg.id === tempId ? { ...msg, status: 'failed' } : msg)));
             Alert.alert('Upload Failed', errorMessage);
         } finally {
-            setUploadingFile(false);
+            clearMediaUploadProgress(tempId);
         }
     };
 
@@ -2453,6 +2543,9 @@ export default function ChatScreen({ route, navigation }) {
                                     console.log('Image loaded successfully from:', item.attachments[0].uri || item.attachments[0].url);
                                 }}
                             />
+                            {isMe && item.status === 'sending' && (
+                                <MediaUploadOverlay messageId={item.id} size={item.attachments[0].size} />
+                            )}
                         </TouchableOpacity>
                     ) : item.messageType === 'audio' && (item.attachments?.[0] || item.duration) ? (
                         <AudioPlayer
@@ -2488,9 +2581,13 @@ export default function ChatScreen({ route, navigation }) {
                                     }}
                                 />
                             </View>
-                            <View style={styles.videoPlayOverlay} pointerEvents="none">
-                                <Icon name="play" size={28} color="#fff" />
-                            </View>
+                            {isMe && item.status === 'sending' ? (
+                                <MediaUploadOverlay messageId={item.id} size={item.attachments[0].size} />
+                            ) : (
+                                <View style={styles.videoPlayOverlay} pointerEvents="none">
+                                    <Icon name="play" size={28} color="#fff" />
+                                </View>
+                            )}
                         </TouchableOpacity>
                     ) : (item.messageType === 'document' || item.messageType === 'file') && item.attachments?.[0] ? (
                         <TouchableOpacity
@@ -2511,11 +2608,17 @@ export default function ChatScreen({ route, navigation }) {
                                 <Text style={[styles.documentName, isMe ? styles.myText : styles.theirText]} numberOfLines={1}>
                                     {item.attachments[0].name || 'Document'}
                                 </Text>
-                                {item.attachments[0].size && (
+                                {isMe && item.status === 'sending' ? (
+                                    <FileUploadStatus
+                                        messageId={item.id}
+                                        size={item.attachments[0].size}
+                                        style={[styles.documentSize, styles.myTime]}
+                                    />
+                                ) : item.attachments[0].size ? (
                                     <Text style={[styles.documentSize, isMe ? styles.myTime : styles.theirTime]}>
                                         {formatFileSize(item.attachments[0].size)}
                                     </Text>
-                                )}
+                                ) : null}
                             </View>
                         </TouchableOpacity>
                     ) : item.messageType === 'contact' && item.contactData ? (
@@ -2676,16 +2779,9 @@ export default function ChatScreen({ route, navigation }) {
     // sees the chat layout right away instead of a centered spinner.
 
     return (
-        <KeyboardAvoidingView
-            style={styles.container}
-            // Android already resizes the window via windowSoftInputMode=
-            // "adjustResize", so KeyboardAvoidingView must be a no-op there
-            // (behavior=undefined). behavior="height" double-adjusts and leaves
-            // a gap at the bottom when the keyboard closes. iOS needs "padding"
-            // because it does NOT auto-resize.
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            enabled={Platform.OS === 'ios'}
-            keyboardVerticalOffset={0}
+        <View
+            ref={screenRef}
+            style={[styles.container, keyboardInset > 0 && { paddingBottom: keyboardInset }]}
         >
             <StatusBar barStyle="light-content" backgroundColor={theme.colors.primary} />
             {/* Header */}
@@ -3246,7 +3342,7 @@ export default function ChatScreen({ route, navigation }) {
                     </View>
                 </View>
             )}
-        </KeyboardAvoidingView>
+        </View>
     );
 }
 

@@ -35,12 +35,10 @@ export default function EventCard({ event, onGiveQuote }) {
 
     const handleShare = async () => {
         try {
-            const lines = [event.title, event.location, event.date].filter(Boolean);
             await Share.share(buildAdShareContent({
                 type: 'event',
                 id: event._original?.event_ad_id || event.id,
-                title: event.title || 'Event',
-                text: lines.join(' • ') + (event.description ? `\n\n${event.description}` : ''),
+                title: event.title || 'Gig',
             }));
         } catch (e) {
             // share dialog cancellations land here on iOS; nothing to do.
@@ -49,13 +47,13 @@ export default function EventCard({ event, onGiveQuote }) {
 
     const [showReport, setShowReport] = useState(false);
     const ownerId = event._original?.user_id || event.user_id || event.userId;
-    const ownerName = event._original?.user?.full_name || event.organizer?.name || event.userName || 'Event poster';
+    const ownerName = event._original?.user?.full_name || event.organizer?.name || event.userName || 'Gig poster';
 
     // Real report (reason + written details + optional screenshots) against
     // the event poster, tagged with this ad. Was a fake "Thanks" alert.
     const handleReport = () => {
         if (!ownerId) {
-            Alert.alert('Unable to report', 'This event is missing its owner. Please try again later.');
+            Alert.alert('Unable to report', 'This gig is missing its owner. Please try again later.');
             return;
         }
         setShowReport(true);

@@ -43,11 +43,15 @@ export const createAdLink = ({ type, id }) => {
 // separate items — putting the link in both showed it twice — so on iOS the
 // link goes only in `url` (rich preview). Android ignores `url`, so there the
 // link is appended to the message.
-export const buildAdShareContent = ({ type, id, text, title }) => {
+//
+// A share is just the ad's title and its link — no description or other
+// details. The photo comes from the link's own preview (the backend's
+// og:image for that ad).
+export const buildAdShareContent = ({ type, id, title }) => {
     const link = createAdLink({ type, id });
     return Platform.OS === 'ios'
-        ? { title, message: text, url: link }
-        : { title, message: `${text}\n\n👉 Open it on Evnzo: ${link}` };
+        ? { title, message: title, url: link }
+        : { title, message: `${title}\n${link}` };
 };
 
 export default { linking, createAdLink, buildAdShareContent, WEB_BASE_URL };

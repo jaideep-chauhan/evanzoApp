@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -12,6 +12,7 @@ import {
     Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import ImageEditor from '@react-native-community/image-editor';
 import {
     cropImage,
     IMAGE_DIMENSIONS,
@@ -21,33 +22,88 @@ import {
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-// 4:5 preview frame, capped so it still leaves room for the controls on short screens
-const FRAME_WIDTH = Math.min(SCREEN_WIDTH - 80, SCREEN_HEIGHT * 0.5 * AD_PHOTO_ASPECT_RATIO);
+// 4:5 crop frame, capped so it still leaves room for the controls on short screens
+const FRAME_WIDTH = Math.round(Math.min(SCREEN_WIDTH - 32, SCREEN_HEIGHT * 0.52 * AD_PHOTO_ASPECT_RATIO));
+const FRAME_HEIGHT = Math.round(FRAME_WIDTH / AD_PHOTO_ASPECT_RATIO);
 
-// Every ad photo must end up 4:5 — either cropped here, or already that shape.
-const isReady = (image) =>
-    !!image && (image.cropped || isAdPhotoAspectRatio(image.width, image.height));
+// Saved ad photos are 4:5, at most this wide.
+const OUTPUT_WIDTH = IMAGE_DIMENSIONS.FIXED_AD_PORTRAIT.width;
 
-const ImageEditorModal = ({ visible, images, onClose, onDone }) => {
+let keyCounter = 0;
+const withKey = (image) => (image._key ? image : { ...image, _key: `img-${Date.now()}-${keyCounter++}` });
+
+// How a photo sits in the frame: scaled to fill it ("cover"), so at most one
+// axis overflows and can be dragged.
+const layoutFor = (width, height) => {
+    if (!width || !height) {
+        return { scale: 1, displayWidth: FRAME_WIDTH, displayHeight: FRAME_HEIGHT, maxX: 0, maxY: 0 };
+    }
+    const scale = Math.max(FRAME_WIDTH / width, FRAME_HEIGHT / height);
+    const displayWidth = width * scale;
+    const displayHeight = height * scale;
+    return {
+        scale,
+        displayWidth,
+        displayHeight,
+        maxX: Math.max(0, displayWidth - FRAME_WIDTH),
+        maxY: Math.max(0, displayHeight - FRAME_HEIGHT),
+    };
+};
+
+// Instagram-style photo step for ad photos. Each photo is shown already
+// fitted to the 4:5 frame, centred; the user only drags it if they want a
+// different part to show. Nothing has to be cropped by hand — Done cuts every
+// photo to what its frame shows.
+const ImageEditorModal = ({ visible, images, onClose, onDone, onAddMore }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
-    const [editedImages, setEditedImages] = useState(images || []);
+    const [editedImages, setEditedImages] = useState([]);
     const [isCropping, setIsCropping] = useState(false);
-    const [showCropRequired, setShowCropRequired] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    // Real (orientation-corrected) pixel sizes, keyed by image _key
+    const [sizes, setSizes] = useState({});
+    // Where each photo has been dragged to, keyed by image _key. A ref: the
+    // ScrollView owns the live position, we only need it when saving.
+    const offsetsRef = useRef({});
 
     // Sync editedImages with images prop when modal opens
     useEffect(() => {
-        console.log('🖼️ ImageEditorModal - visible:', visible, 'images:', images?.length || 0);
         if (visible && images && images.length > 0) {
-            console.log('🖼️ Setting edited images:', images.length);
-            setEditedImages(images);
+            offsetsRef.current = {};
+            setSizes({});
+            setEditedImages(images.map(withKey));
             setCurrentIndex(0);
-            setShowCropRequired(false);
         }
     }, [visible, images]);
 
-    const currentImage = editedImages[currentIndex];
-    const pendingCount = editedImages.filter((image) => !isReady(image)).length;
+    // The picker reports each photo's real size. Only measure when it
+    // didn't (Image.getSize is not reliable for several files at once).
+    useEffect(() => {
+        editedImages.forEach((image) => {
+            if ((image.width && image.height) || sizes[image._key]) return;
+            Image.getSize(
+                image.uri,
+                (width, height) => setSizes((prev) => (prev[image._key] ? prev : { ...prev, [image._key]: { width, height } })),
+                () => {},
+            );
+        });
+    }, [editedImages]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    const sizeOf = (image) =>
+        image.width && image.height
+            ? { width: image.width, height: image.height }
+            : sizes[image._key] || { width: 0, height: 0 };
+
+    const currentImage = editedImages[currentIndex];
+    const currentLayout = currentImage
+        ? layoutFor(sizeOf(currentImage).width, sizeOf(currentImage).height)
+        : layoutFor(0, 0);
+    const canDrag = currentLayout.maxX > 1 || currentLayout.maxY > 1;
+
+    const offsetFor = (image, layout) =>
+        offsetsRef.current[image._key] || { x: layout.maxX / 2, y: layout.maxY / 2 };
+
+    // "Crop" opens the full cropper (zoom / rotate) for people who want more
+    // than dragging. Its result is already 4:5.
     const handleCropImage = async () => {
         try {
             setIsCropping(true);
@@ -58,8 +114,10 @@ const ImageEditorModal = ({ visible, images, onClose, onDone }) => {
 
             if (croppedImage) {
                 const updatedImages = [...editedImages];
+                const key = `${updatedImages[currentIndex]._key}-c`;
                 updatedImages[currentIndex] = {
                     ...updatedImages[currentIndex],
+                    _key: key,
                     uri: croppedImage.uri,
                     width: croppedImage.width,
                     height: croppedImage.height,
@@ -86,7 +144,7 @@ const ImageEditorModal = ({ visible, images, onClose, onDone }) => {
         }
     };
 
-    // ✕ / Android back: confirm before throwing away the picked photos.
+    // Back / Android back: confirm before throwing away the picked photos.
     const handleCancel = () => {
         if (!editedImages || editedImages.length === 0) {
             onClose();
@@ -102,17 +160,60 @@ const ImageEditorModal = ({ visible, images, onClose, onDone }) => {
         );
     };
 
-    const handleDone = () => {
-        // Don't let a photo through until it's 4:5 — jump to the first one
-        // that still needs cropping instead.
-        const firstPendingIndex = editedImages.findIndex((image) => !isReady(image));
-        if (firstPendingIndex !== -1) {
-            setCurrentIndex(firstPendingIndex);
-            setShowCropRequired(true);
-            return;
+    // Cut one photo to the part its frame shows. Photos that are already 4:5
+    // pass through untouched.
+    const fitToFrame = async (image) => {
+        const { width, height } = sizeOf(image);
+        if (!width || !height || isAdPhotoAspectRatio(width, height)) return image;
+
+        const layout = layoutFor(width, height);
+        const offset = offsetFor(image, layout);
+        const cropWidth = Math.min(width, FRAME_WIDTH / layout.scale);
+        const cropHeight = Math.min(height, FRAME_HEIGHT / layout.scale);
+        const x = Math.max(0, Math.min(width - cropWidth, offset.x / layout.scale));
+        const y = Math.max(0, Math.min(height - cropHeight, offset.y / layout.scale));
+        const outWidth = Math.round(Math.min(OUTPUT_WIDTH, cropWidth));
+
+        const result = await ImageEditor.cropImage(image.uri, {
+            offset: { x: Math.round(x), y: Math.round(y) },
+            size: { width: Math.round(cropWidth), height: Math.round(cropHeight) },
+            displaySize: { width: outWidth, height: Math.round(outWidth / AD_PHOTO_ASPECT_RATIO) },
+            resizeMode: 'cover',
+            format: 'jpeg',
+            quality: 0.9,
+        });
+        const uri = typeof result === 'string' ? result : result.uri;
+        return {
+            ...image,
+            uri,
+            width: result.width || outWidth,
+            height: result.height || Math.round(outWidth / AD_PHOTO_ASPECT_RATIO),
+            cropped: true,
+        };
+    };
+
+    const handleDone = async () => {
+        if (isSaving) return;
+        setIsSaving(true);
+        try {
+            const fitted = [];
+            for (const image of editedImages) {
+                let result = image;
+                try {
+                    result = await fitToFrame(image);
+                } catch (error) {
+                    // Keep the photo as picked rather than losing it; ad
+                    // screens show photos in a 4:5 "cover" frame anyway.
+                    console.warn('Could not fit photo to 4:5:', error?.message);
+                }
+                const { _key, ...clean } = result;
+                fitted.push(clean);
+            }
+            onDone(fitted);
+            onClose();
+        } finally {
+            setIsSaving(false);
         }
-        onDone(editedImages);
-        onClose();
     };
 
     const handleRemoveImage = () => {
@@ -133,6 +234,22 @@ const ImageEditorModal = ({ visible, images, onClose, onDone }) => {
         }
     };
 
+    // "+" tile: pick more photos without leaving the editor.
+    const handleAddMore = async () => {
+        if (!onAddMore) return;
+        try {
+            const added = await onAddMore();
+            if (added && added.length > 0) {
+                setEditedImages((prev) => {
+                    setCurrentIndex(prev.length);
+                    return [...prev, ...added.map(withKey)];
+                });
+            }
+        } catch (error) {
+            console.warn('Adding photos failed:', error?.message);
+        }
+    };
+
     if (!visible) {
         return null;
     }
@@ -146,13 +263,20 @@ const ImageEditorModal = ({ visible, images, onClose, onDone }) => {
                 statusBarTranslucent
                 onRequestClose={onClose}
             >
-                <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-                    <ActivityIndicator size="large" color="#4CAF50" />
-                    <Text style={{ color: '#fff', marginTop: 16 }}>Loading images...</Text>
+                <View style={[styles.container, styles.centered]}>
+                    <ActivityIndicator size="large" color="#fff" />
+                    <Text style={styles.loadingText}>Loading images...</Text>
                 </View>
             </Modal>
         );
     }
+
+    const startOffset = currentImage ? offsetFor(currentImage, currentLayout) : { x: 0, y: 0 };
+    const rememberOffset = (event) => {
+        if (!currentImage) return;
+        const { x, y } = event.nativeEvent.contentOffset;
+        offsetsRef.current[currentImage._key] = { x, y };
+    };
 
     return (
         <Modal
@@ -162,136 +286,116 @@ const ImageEditorModal = ({ visible, images, onClose, onDone }) => {
             onRequestClose={handleCancel}
         >
             <View style={styles.container}>
+                {/* Blurred copy of the current photo behind everything */}
+                {currentImage && (
+                    <Image source={{ uri: currentImage.uri }} style={StyleSheet.absoluteFill} blurRadius={30} resizeMode="cover" />
+                )}
+                <View style={styles.backdropTint} />
+
                 {/* Header */}
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={handleCancel} style={styles.headerButton}>
-                        <Icon name="close" size={28} color="#fff" />
+                    <TouchableOpacity onPress={handleCancel} style={styles.backButton} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                        <Icon name="chevron-back" size={24} color="#fff" />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>
-                        Edit Images ({currentIndex + 1}/{editedImages.length})
+                        Edit Images ( {currentIndex + 1}/{editedImages.length} )
                     </Text>
-                    <TouchableOpacity onPress={handleDone} style={styles.headerButton}>
-                        <Text style={[styles.doneText, pendingCount > 0 && styles.doneTextPending]}>
-                            Done
-                        </Text>
+                    <TouchableOpacity onPress={handleDone} style={styles.doneButton} disabled={isSaving}>
+                        {isSaving ? (
+                            <ActivityIndicator size="small" color="#2C3D5B" />
+                        ) : (
+                            <Text style={styles.doneText}>Done</Text>
+                        )}
                     </TouchableOpacity>
                 </View>
 
-                {/* Main Image Display with Fixed Frame */}
+                {/* 4:5 crop frame — drag the photo inside it */}
                 <View style={styles.mainImageContainer}>
-                    {/* Fixed 4:5 Frame */}
                     <View style={styles.imageFrame}>
                         {currentImage && (
-                            <Image
-                                source={{ uri: currentImage.uri }}
-                                style={styles.mainImage}
-                                // Whole photo until it's 4:5, so it doesn't look
-                                // already cropped when it still needs cropping.
-                                resizeMode={isReady(currentImage) ? 'cover' : 'contain'}
-                            />
+                            <ScrollView
+                                // Remount per photo so each starts at its own position
+                                key={`${currentImage._key}-${currentLayout.displayWidth}x${currentLayout.displayHeight}`}
+                                horizontal={currentLayout.maxX > 1}
+                                style={styles.frameScroll}
+                                contentOffset={startOffset}
+                                bounces={false}
+                                overScrollMode="never"
+                                showsHorizontalScrollIndicator={false}
+                                showsVerticalScrollIndicator={false}
+                                scrollEnabled={canDrag && !isSaving}
+                                scrollEventThrottle={16}
+                                onScroll={rememberOffset}
+                                onMomentumScrollEnd={rememberOffset}
+                                onScrollEndDrag={rememberOffset}
+                            >
+                                <Image
+                                    source={{ uri: currentImage.uri }}
+                                    style={{ width: currentLayout.displayWidth, height: currentLayout.displayHeight }}
+                                    resizeMode="cover"
+                                />
+                            </ScrollView>
                         )}
 
-                        {/* Frame Border Overlay */}
-                        <View style={styles.frameBorder} pointerEvents="none">
-                            <View style={styles.frameCorner} />
+                        {/* Rule-of-thirds grid */}
+                        <View style={styles.grid} pointerEvents="none">
+                            <View style={[styles.gridLineV, { left: '33.33%' }]} />
+                            <View style={[styles.gridLineV, { left: '66.66%' }]} />
+                            <View style={[styles.gridLineH, { top: '33.33%' }]} />
+                            <View style={[styles.gridLineH, { top: '66.66%' }]} />
                         </View>
-
-                        {/* Crop Status Badge */}
-                        {currentImage?.cropped && (
-                            <View style={styles.croppedBadge}>
-                                <Icon name="checkmark-circle" size={16} color="#4CAF50" />
-                                <Text style={styles.croppedText}>Cropped</Text>
-                            </View>
-                        )}
                     </View>
 
-                    {/* Info Text */}
-                    <Text style={[styles.infoText, showCropRequired && pendingCount > 0 && styles.infoTextWarning]}>
-                        {isReady(currentImage)
-                            ? '✓ Photo is in 4:5 format'
-                            : showCropRequired
-                                ? `Crop ${pendingCount === 1 ? 'this photo' : `all ${pendingCount} remaining photos`} to 4:5 before continuing`
-                                : 'Tap Crop to fit this photo to 4:5'}
+                    <Text style={styles.infoText}>
+                        {canDrag
+                            ? 'Drag the photo to choose what shows'
+                            : 'This photo already fits the frame'}
                     </Text>
                 </View>
 
-                {/* Action Buttons */}
-                <View style={styles.actionButtons}>
+                {/* Previous · Crop · Delete · Next */}
+                <View style={styles.actionRow}>
                     <TouchableOpacity
-                        style={styles.actionButton}
+                        style={[styles.roundButton, currentIndex === 0 && styles.roundButtonDisabled]}
+                        onPress={handlePrevious}
+                        disabled={currentIndex === 0}
+                    >
+                        <Icon name="chevron-back" size={22} color="#fff" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.pillButton, styles.cropButton]}
                         onPress={handleCropImage}
-                        disabled={isCropping}
+                        disabled={isCropping || isSaving}
                     >
                         {isCropping ? (
-                            <ActivityIndicator color="#fff" size="small" />
+                            <ActivityIndicator color="#2C3D5B" size="small" />
                         ) : (
                             <>
-                                <Icon name="crop" size={24} color="#fff" />
-                                <Text style={styles.actionButtonText}>
-                                    {currentImage?.cropped ? 'Re-crop' : 'Crop'}
-                                </Text>
+                                <Icon name="crop" size={18} color="#2C3D5B" />
+                                <Text style={styles.cropButtonText}>Crop</Text>
                             </>
                         )}
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={[styles.actionButton, styles.deleteButton]}
+                        style={[styles.pillButton, styles.deleteButton]}
                         onPress={handleRemoveImage}
+                        disabled={isSaving}
                     >
-                        <Icon name="trash" size={24} color="#fff" />
-                        <Text style={styles.actionButtonText}>Delete</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Navigation Buttons */}
-                <View style={styles.navigationContainer}>
-                    <TouchableOpacity
-                        style={[
-                            styles.navButton,
-                            currentIndex === 0 && styles.navButtonDisabled,
-                        ]}
-                        onPress={handlePrevious}
-                        disabled={currentIndex === 0}
-                    >
-                        <Icon
-                            name="chevron-back"
-                            size={24}
-                            color={currentIndex === 0 ? '#666' : '#fff'}
-                        />
-                        <Text
-                            style={[
-                                styles.navButtonText,
-                                currentIndex === 0 && styles.navButtonTextDisabled,
-                            ]}
-                        >
-                            Previous
-                        </Text>
+                        <Icon name="trash-outline" size={18} color="#fff" />
+                        <Text style={styles.deleteButtonText}>Delete</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
                         style={[
-                            styles.navButton,
-                            currentIndex === editedImages.length - 1 && styles.navButtonDisabled,
+                            styles.roundButton,
+                            currentIndex === editedImages.length - 1 && styles.roundButtonDisabled,
                         ]}
                         onPress={handleNext}
                         disabled={currentIndex === editedImages.length - 1}
                     >
-                        <Text
-                            style={[
-                                styles.navButtonText,
-                                currentIndex === editedImages.length - 1 &&
-                                    styles.navButtonTextDisabled,
-                            ]}
-                        >
-                            Next
-                        </Text>
-                        <Icon
-                            name="chevron-forward"
-                            size={24}
-                            color={
-                                currentIndex === editedImages.length - 1 ? '#666' : '#fff'
-                            }
-                        />
+                        <Icon name="chevron-forward" size={22} color="#fff" />
                     </TouchableOpacity>
                 </View>
 
@@ -304,7 +408,7 @@ const ImageEditorModal = ({ visible, images, onClose, onDone }) => {
                     >
                         {editedImages.map((image, index) => (
                             <TouchableOpacity
-                                key={index}
+                                key={image._key}
                                 style={[
                                     styles.thumbnail,
                                     index === currentIndex && styles.thumbnailActive,
@@ -316,13 +420,13 @@ const ImageEditorModal = ({ visible, images, onClose, onDone }) => {
                                     style={styles.thumbnailImage}
                                     resizeMode="cover"
                                 />
-                                {image.cropped && (
-                                    <View style={styles.thumbnailBadge}>
-                                        <Icon name="checkmark-circle" size={14} color="#4CAF50" />
-                                    </View>
-                                )}
                             </TouchableOpacity>
                         ))}
+                        {!!onAddMore && (
+                            <TouchableOpacity style={[styles.thumbnail, styles.addThumbnail]} onPress={handleAddMore} disabled={isSaving}>
+                                <Icon name="add" size={24} color="#fff" />
+                            </TouchableOpacity>
+                        )}
                     </ScrollView>
                 </View>
             </View>
@@ -335,189 +439,163 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#1a1a1a',
     },
+    centered: {
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loadingText: {
+        color: '#fff',
+        marginTop: 16,
+    },
+    backdropTint: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.45)',
+    },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
         paddingHorizontal: 16,
-        paddingTop: 50,
-        paddingBottom: 16,
-        backgroundColor: '#2C3D5B',
+        paddingTop: 56,
+        paddingBottom: 12,
     },
-    headerButton: {
-        padding: 8,
-        minWidth: 60,
+    backButton: {
+        marginRight: 8,
     },
     headerTitle: {
-        fontSize: 18,
+        flex: 1,
+        fontSize: 16,
         fontWeight: '700',
         color: '#fff',
     },
-    doneText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#4CAF50',
+    doneButton: {
+        minWidth: 84,
+        height: 38,
+        paddingHorizontal: 20,
+        borderRadius: 19,
+        backgroundColor: '#fff',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    doneTextPending: {
-        opacity: 0.5,
+    doneText: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: '#2C3D5B',
     },
     mainImageContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#000',
-        padding: 16,
     },
     imageFrame: {
         width: FRAME_WIDTH,
-        height: FRAME_WIDTH / AD_PHOTO_ASPECT_RATIO,
-        backgroundColor: '#1a1a1a',
-        borderRadius: 16,
+        height: FRAME_HEIGHT,
+        borderRadius: 18,
         overflow: 'hidden',
-        position: 'relative',
-        borderWidth: 3,
-        borderColor: '#4CAF50',
+        borderWidth: 1,
+        borderColor: '#fff',
+        backgroundColor: '#000',
     },
-    mainImage: {
-        width: '100%',
-        height: '100%',
+    frameScroll: {
+        width: FRAME_WIDTH,
+        height: FRAME_HEIGHT,
     },
-    frameBorder: {
+    grid: {
+        ...StyleSheet.absoluteFillObject,
+    },
+    gridLineV: {
         position: 'absolute',
         top: 0,
+        bottom: 0,
+        width: StyleSheet.hairlineWidth * 2,
+        backgroundColor: 'rgba(255,255,255,0.8)',
+    },
+    gridLineH: {
+        position: 'absolute',
         left: 0,
         right: 0,
-        bottom: 0,
-        borderWidth: 2,
-        borderColor: '#4CAF50',
-        borderRadius: 13,
-        opacity: 0.5,
-    },
-    frameCorner: {
-        position: 'absolute',
-        top: -1,
-        left: -1,
-        right: -1,
-        bottom: -1,
-        borderWidth: 1,
-        borderColor: '#ffffff40',
-        borderRadius: 14,
+        height: StyleSheet.hairlineWidth * 2,
+        backgroundColor: 'rgba(255,255,255,0.8)',
     },
     infoText: {
-        color: '#ffffff80',
+        color: '#ffffffcc',
         fontSize: 13,
-        marginTop: 16,
+        marginTop: 12,
         textAlign: 'center',
         paddingHorizontal: 24,
     },
-    infoTextWarning: {
-        color: '#FFB74D',
-        fontWeight: '600',
-    },
-    croppedBadge: {
-        position: 'absolute',
-        top: 24,
-        right: 24,
+    actionRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 20,
-        gap: 6,
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        gap: 10,
     },
-    croppedText: {
-        color: '#4CAF50',
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    actionButtons: {
-        flexDirection: 'row',
+    roundButton: {
+        width: 46,
+        height: 46,
+        borderRadius: 23,
+        borderWidth: 1,
+        borderColor: '#fff',
+        alignItems: 'center',
         justifyContent: 'center',
-        alignItems: 'center',
-        paddingVertical: 16,
-        gap: 16,
-        backgroundColor: '#1a1a1a',
     },
-    actionButton: {
+    roundButtonDisabled: {
+        opacity: 0.35,
+    },
+    pillButton: {
+        flex: 1,
+        height: 42,
+        borderRadius: 21,
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#2C3D5B',
-        paddingHorizontal: 24,
-        paddingVertical: 12,
-        borderRadius: 12,
+        justifyContent: 'center',
         gap: 8,
-        minWidth: 120,
-        justifyContent: 'center',
+    },
+    cropButton: {
+        backgroundColor: '#fff',
+    },
+    cropButtonText: {
+        color: '#2C3D5B',
+        fontSize: 15,
+        fontWeight: '700',
     },
     deleteButton: {
-        backgroundColor: '#ff4444',
+        backgroundColor: '#E5595B',
     },
-    actionButtonText: {
+    deleteButtonText: {
         color: '#fff',
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    navigationContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        backgroundColor: '#1a1a1a',
-    },
-    navButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-    },
-    navButtonDisabled: {
-        opacity: 0.3,
-    },
-    navButtonText: {
-        color: '#fff',
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    navButtonTextDisabled: {
-        color: '#666',
+        fontSize: 15,
+        fontWeight: '700',
     },
     thumbnailContainer: {
-        backgroundColor: '#2C3D5B',
-        paddingVertical: 16,
-        borderTopWidth: 1,
-        borderTopColor: '#ffffff20',
+        paddingTop: 10,
+        paddingBottom: 34,
     },
     thumbnailScrollContent: {
         paddingHorizontal: 16,
-        gap: 12,
+        gap: 10,
     },
     thumbnail: {
-        width: 56,
-        height: 70,
-        borderRadius: 12,
-        borderWidth: 2,
+        width: 46,
+        height: 58,
+        borderRadius: 8,
+        borderWidth: 1,
         borderColor: 'transparent',
         overflow: 'hidden',
-        position: 'relative',
     },
     thumbnailActive: {
-        borderColor: '#4CAF50',
-        borderWidth: 3,
+        borderColor: '#fff',
+        borderWidth: 2,
     },
     thumbnailImage: {
         width: '100%',
         height: '100%',
     },
-    thumbnailBadge: {
-        position: 'absolute',
-        top: 4,
-        right: 4,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        borderRadius: 10,
-        padding: 2,
+    addThumbnail: {
+        backgroundColor: 'rgba(255,255,255,0.3)',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
 });
 

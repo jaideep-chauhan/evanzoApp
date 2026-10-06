@@ -284,13 +284,7 @@ class VendorDetailsService {
       const shareOptions = buildAdShareContent({
         type: 'vendor',
         id: vendor.vendor_ad_id || vendor.id,
-        title: `Check out ${vendor.name}`,
-        text: [
-          `🌟 ${vendor.name}${vendor.type ? ` - ${vendor.type}` : ''}`,
-          vendor.location ? `📍 ${vendor.location}` : null,
-          `⭐ Rating: ${vendor.rating || 'N/A'}`,
-          vendor.description ? `\n${vendor.description}` : null,
-        ].filter(Boolean).join('\n'),
+        title: vendor.name || 'Vendor',
       });
 
       const result = await Share.share(shareOptions);

@@ -1,95 +1,72 @@
 import React from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    Dimensions,
-    Image,
-} from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 
-import FontAwesome from 'react-native-vector-icons/FontAwesome';
-import Entypo from 'react-native-vector-icons/Entypo';
 import { getCurrencySymbol } from '../../../utils/currency';
 
-const { width } = Dimensions.get('window');
-const CARD_WIDTH = (width - 48) / 2; // 2 cards with spacing
+const MAX_OFFERS = 4;
 
-const OfferCard = ({ amount = 0, percent = 0, currency = 'USD' }) => {
-    // Don't render the card if both amount and percent are 0
-    if (amount === 0 && percent === 0) {
-        return null;
-    }
+// Small dark badge in front of a value: the currency symbol or "%".
+const Badge = ({ label }) => (
+    <View style={styles.badge}>
+        <Text style={styles.badgeText}>{label}</Text>
+    </View>
+);
 
-    return (
-        <View style={styles.card}>
-            <View style={styles.row}>
-                <Text style={styles.label}></Text>
-                <Text style={styles.columnTitle}>Amount spent</Text>
-                <Text style={styles.columnTitle}>Discount</Text>
-            </View>
-            <View style={styles.row}>
-                <View style={styles.valueBox1}>
-                    <Text style={{ color: "#344562", fontSize: 8 }}>Offer:</Text>
+// One column of the grid: "Amount spent / Discount" titles, then a row per
+// offer. Only the first row carries the "Offer:" label.
+const OfferColumn = ({ offers, currency }) => (
+    <View style={styles.column}>
+        <View style={styles.row}>
+            <View style={styles.labelCell} />
+            <Text style={styles.columnTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>Amount spent</Text>
+            <Text style={styles.columnTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>Discount</Text>
+        </View>
+        {offers.map((offer, index) => (
+            <View key={index} style={styles.row}>
+                <View style={styles.labelCell}>
+                    {index === 0 && <Text style={styles.offerLabel}>Offer:</Text>}
                 </View>
                 <View style={styles.valueBox}>
-                    <Text style={[styles.valueText, { marginLeft: 0, fontWeight: '700' }]}>{getCurrencySymbol(currency)}</Text>
-                    <Text style={styles.valueText}>{amount}</Text>
+                    <Badge label={getCurrencySymbol(currency)} />
+                    <Text style={styles.valueText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{offer.amount || 0}</Text>
                 </View>
-                {Number(percent) > 0 && (
+                {Number(offer.discount) > 0 ? (
                     <View style={styles.valueBox}>
-                        <FontAwesome name="percent" size={9} color="#2C3D5B" />
-                        <Text style={styles.valueText}>{Number(percent)}%</Text>
+                        <Badge label="%" />
+                        <Text style={styles.valueText} numberOfLines={1}>{Number(offer.discount)}%</Text>
                     </View>
+                ) : (
+                    <View style={styles.valueSpacer} />
                 )}
             </View>
-        </View>
-    );
-};
+        ))}
+    </View>
+);
 
 const OfferGrid = ({ offers = [], currency = 'USD' }) => {
     // Filter out offers where both amount and discount are 0
-    const validOffers = offers.filter(offer =>
+    const validOffers = (offers || []).filter(offer =>
         (offer.amount && offer.amount !== 0) || (offer.discount && offer.discount !== 0)
-    );
+    ).slice(0, MAX_OFFERS);
 
     // If no valid offers (all are zero), don't render the grid at all
-    if (!validOffers || validOffers.length === 0) {
+    if (validOffers.length === 0) {
         return null;
     }
 
-    // Render rows of up to 2 offers, sized to actual content. Previously
-    // we padded out to a fixed 2×2 with invisible placeholder cards, which
-    // reserved height/width for nothing — the grid grew to ~2× its needed
-    // size when there was only 1 real offer. Now: a single offer renders
-    // as one card, two as a row of two, three as a row plus a half-row of
-    // one, four as a full 2×2. No phantom space.
-    const renderOfferRows = () => {
-        const rows = [];
-        const itemsPerRow = 2;
-        const offersToShow = validOffers.slice(0, 4);
-
-        for (let i = 0; i < offersToShow.length; i += itemsPerRow) {
-            const rowOffers = offersToShow.slice(i, i + itemsPerRow);
-            rows.push(
-                <View key={i} style={styles.row}>
-                    {rowOffers.map((offer, index) => (
-                        <OfferCard
-                            key={i + index}
-                            amount={offer.amount || 0}
-                            percent={offer.discount || 0}
-                            currency={currency}
-                        />
-                    ))}
-                </View>
-            );
-        }
-
-        return rows;
-    };
+    // Two columns, filled left-to-right then down (1 2 / 3 4), so the first
+    // offers stay on the top line. A single offer keeps to the left half.
+    const left = validOffers.filter((_, i) => i % 2 === 0);
+    const right = validOffers.filter((_, i) => i % 2 === 1);
 
     return (
         <View style={styles.gridContainer}>
-            {renderOfferRows()}
+            <OfferColumn offers={left} currency={currency} />
+            {right.length > 0 ? (
+                <OfferColumn offers={right} currency={currency} />
+            ) : (
+                <View style={styles.column} />
+            )}
         </View>
     );
 };
@@ -97,82 +74,77 @@ const OfferGrid = ({ offers = [], currency = 'USD' }) => {
 export default OfferGrid;
 
 const styles = StyleSheet.create({
-    container: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        padding: 16,
-        backgroundColor: '#fefefe',
-        boxShadow: '1px 1px 4px 0px #00000029',
-        borderWidth: 1,
-        borderColor: '#eaeaea',
-        borderRadius: 12,
-    },
+    // Same card treatment as the Description / Links cards above it.
     gridContainer: {
-        // Tighter padding + lighter shadow so the offer grid hugs its
-        // content. Outer padding was 16 (32 vertical) — now 10 (20 vertical),
-        // and rows / cards trimmed too. Net result: ~30-40% less height.
+        flexDirection: 'row',
+        gap: 12,
         paddingHorizontal: 12,
-        paddingVertical: 8,
-        backgroundColor: '#fefefe',
-        borderWidth: 1,
-        borderColor: '#eaeaea',
-        borderRadius: 12,
+        paddingVertical: 12,
+        marginBottom: 18,
+        backgroundColor: '#FCFAFA',
+        borderRadius: 14,
         shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 1,
-        },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
+        shadowOpacity: 0.06,
+        shadowOffset: { width: 0, height: 2 },
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    column: {
+        flex: 1,
     },
     row: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 4,
-        gap: 8,
+        alignItems: 'center',
+        gap: 4,
+        marginBottom: 6,
     },
-    card: {
-        width: CARD_WIDTH,
-        paddingVertical: 4,
-        paddingHorizontal: 8,
+    labelCell: {
+        width: 30,
     },
-    emptyCard: {
-        width: CARD_WIDTH,
-        paddingVertical: 4,
-        paddingHorizontal: 8,
-        // Invisible placeholder to maintain grid layout
+    offerLabel: {
+        color: '#344562',
+        fontSize: 10,
     },
     columnTitle: {
         flex: 1,
-        textAlign: 'right',
+        textAlign: 'center',
         color: '#1e2b4f',
-        fontSize: 8,
+        fontSize: 9,
         fontWeight: '500',
     },
     valueBox: {
         flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
         backgroundColor: '#F3F7FF',
         borderRadius: 20,
-        // 8 → 5: still touchable / legible, just less air.
         paddingVertical: 5,
-        flexDirection: 'row',
-        justifyContent: 'center',
+        paddingHorizontal: 4,
+    },
+    // Keeps the amount pill the same width when an offer has no discount
+    valueSpacer: {
+        flex: 1,
+    },
+    badge: {
+        minWidth: 16,
+        height: 16,
+        paddingHorizontal: 3,
+        borderRadius: 8,
+        backgroundColor: '#2C3D5B',
         alignItems: 'center',
+        justifyContent: 'center',
     },
-    valueBox1: {
-        paddingVertical: 5,
-        width: 40,
-    },
-    // Header's first (empty) column — same width as valueBox1 so the
-    // "Amount spent"/"Discount" titles sit directly above their values.
-    label: {
-        width: 40,
+    badgeText: {
+        color: '#fff',
+        fontSize: 9,
+        fontWeight: '700',
     },
     valueText: {
-        fontSize: 10,
+        flexShrink: 1,
+        fontSize: 12,
         fontWeight: '600',
-        color: '#2C3D5BF5',
-        marginLeft: 6,
+        color: '#2C3D5B',
     },
 });

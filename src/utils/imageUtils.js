@@ -16,27 +16,14 @@ export const normalizeMediaUrl = (url) => {
 };
 
 /**
- * Fix localhost URLs for mobile simulators/devices
+ * Make an image URL loadable on this device. URLs that carry a local-backend
+ * host are repointed at the active media host. (This used to swap
+ * `localhost:3000` for a hard-coded development-machine IP on iOS, which is
+ * unreachable from any other network — the photo then never loaded.)
  * @param {string} url - The image URL to fix
- * @returns {string} - Fixed URL that works on mobile devices
+ * @returns {string} - URL on the active media host
  */
-export const fixImageUrl = (url) => {
-    if (typeof url !== 'string') {
-        return url;
-    }
-    
-    // Replace localhost with appropriate IP for each platform
-    if (url.includes('localhost:3000')) {
-        if (Platform.OS === 'ios') {
-            return url.replace('localhost:3000', `${MACHINE_IP}:3000`);
-        }
-        if (Platform.OS === 'android') {
-            return url.replace('localhost:3000', '10.0.2.2:3000');
-        }
-    }
-    
-    return url;
-};
+export const fixImageUrl = (url) => normalizeMediaUrl(url);
 
 /**
  * Process an array of image URLs

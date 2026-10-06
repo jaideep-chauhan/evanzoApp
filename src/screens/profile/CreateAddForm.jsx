@@ -34,6 +34,7 @@ import { detectDefaultCurrency } from '../../utils/currency';
 import { CustomSuccessModal } from '../../components/CustomSuccessModal';
 import { CustomToast } from '../../components/CustomToast';
 import ImageEditorModal from '../../components/ImageEditorModal';
+import KeyboardInsetView from '../../components/KeyboardInsetView';
 import ImageGalleryModal from '../../components/ImageGalleryModal';
 import LocationSelector from '../../components/LocationSelector';
 import { icons, getCategoryIcon } from '../../assets/icons';
@@ -72,6 +73,16 @@ const EVENT_TYPE_TAG_OPTIONS = {
     'Festival': ['Music', 'Cultural', 'Food', 'Holiday'],
 };
 
+// iOS lets the ScrollView handle the keyboard natively
+// (automaticallyAdjustKeyboardInsets): it insets itself by the keyboard and
+// keeps the focused field visible. Stacking KeyboardAvoidingView padding, a
+// keyboard-height margin and fixed-offset scrollTo calls on top of that
+// shrank the form twice and made it jump while typing. Android keeps the
+// manual handling below.
+const MANUAL_KEYBOARD_SCROLL = Platform.OS !== 'ios';
+
+const MAX_VENDOR_LINKS = 5;
+
 const CreateAddForm = ({ type, onClose }) => {
     const theme = useTheme();
     const scrollViewRef = useRef(null);
@@ -89,7 +100,7 @@ const CreateAddForm = ({ type, onClose }) => {
     const gigAttachEndRef = useRef(0);
     const scrollFrameHRef = useRef(0);
     const pinGigLastFieldsAboveKeyboard = () => {
-        if (!gigDescFocusedRef.current) return;
+        if (!MANUAL_KEYBOARD_SCROLL || !gigDescFocusedRef.current) return;
         const end = gigAttachEndRef.current;
         const frameH = scrollFrameHRef.current;
         if (end > 0 && frameH > 0) {
@@ -105,6 +116,7 @@ const CreateAddForm = ({ type, onClose }) => {
     // keyboard (paired with the onFocus scrollTo handlers below).
     const [keyboardHeight, setKeyboardHeight] = useState(0);
     useEffect(() => {
+        if (!MANUAL_KEYBOARD_SCROLL) return undefined;
         const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
         const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
         const onShow = (e) => setKeyboardHeight(e.endCoordinates?.height || 0);
@@ -157,7 +169,9 @@ const CreateAddForm = ({ type, onClose }) => {
     const [categoryNames, setCategoryNames] = useState([]); // Will store category names for display
     const [selectedCategoryData, setSelectedCategoryData] = useState([]); // Full category data with subcategories
     const [vendorDescription, setVendorDescription] = useState('');
-    const [vendorLink, setVendorLink] = useState(''); // website / social link
+    // Titled links shown on the ad (website, Instagram, portfolio…). Always
+    // at least one row so the fields are visible; empty rows aren't sent.
+    const [vendorLinks, setVendorLinks] = useState([{ title: '', url: '' }]);
     const [companyName, setCompanyName] = useState('');
     const [vendorLocation, setVendorLocation] = useState('Ontario, Canada');
     const [vendorLocationData, setVendorLocationData] = useState(null); // { country, state, city, latitude, longitude }
@@ -168,6 +182,7 @@ const CreateAddForm = ({ type, onClose }) => {
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [vendorCategories, setVendorCategories] = useState([]); // Available categories from backend
     const [categorySearchQuery, setCategorySearchQuery] = useState('');
+    const [serviceSearchQuery, setServiceSearchQuery] = useState('');
 
     // Loading state
     const [isLoading, setIsLoading] = useState(false);
@@ -234,6 +249,7 @@ const CreateAddForm = ({ type, onClose }) => {
                     if (draft.vendorLocationData) setVendorLocationData(draft.vendorLocationData);
                     if (draft.selectedTags) setSelectedTags(draft.selectedTags);
                     if (draft.offers) setOffers(draft.offers);
+                    if (Array.isArray(draft.vendorLinks) && draft.vendorLinks.length) setVendorLinks(draft.vendorLinks);
                     if (draft.currency) setCurrency(draft.currency);
                 }
                 setDraftRestored(true);
@@ -261,7 +277,7 @@ const CreateAddForm = ({ type, onClose }) => {
                       }
                     : {
                           companyName, vendorDescription, vendorLocation,
-                          vendorLocationData, selectedTags, offers, currency,
+                          vendorLocationData, selectedTags, offers, vendorLinks, currency,
                           savedAt: Date.now(),
                       };
             AsyncStorage.setItem(DRAFT_KEY, JSON.stringify(draft)).catch(() => {});
@@ -274,7 +290,7 @@ const CreateAddForm = ({ type, onClose }) => {
         eventLocationData, duration, budget, description,
         // vendor fields
         companyName, vendorDescription, vendorLocation, vendorLocationData,
-        selectedTags, offers,
+        selectedTags, offers, vendorLinks,
         // shared
         currency,
     ]);
@@ -446,6 +462,21 @@ const CreateAddForm = ({ type, onClose }) => {
         setOffers([...offers, { amount: '', discount: '' }]);
     };
 
+    const addVendorLink = () => {
+        setVendorLinks((prev) => (prev.length >= MAX_VENDOR_LINKS ? prev : [...prev, { title: '', url: '' }]));
+    };
+
+    const removeVendorLink = (index) => {
+        setVendorLinks((prev) => {
+            const next = prev.filter((_, i) => i !== index);
+            return next.length ? next : [{ title: '', url: '' }];
+        });
+    };
+
+    const updateVendorLink = (index, field, value) => {
+        setVendorLinks((prev) => prev.map((link, i) => (i === index ? { ...link, [field]: value } : link)));
+    };
+
     const removeOffer = (index) => {
         if (offers.length > 1) {
             const newOffers = offers.filter((_, i) => i !== index);
@@ -491,15 +522,7 @@ const CreateAddForm = ({ type, onClose }) => {
 
             if (selectedImages && selectedImages.length > 0) {
                 // Format images and open editor modal
-                const formattedPhotos = selectedImages.map((image, index) => ({
-                    uri: image.uri,
-                    originalUri: image.originalUri || image.uri,
-                    type: image.mime || 'image/jpeg',
-                    name: `photo_${Date.now()}_${index}.jpg`,
-                    width: image.width,
-                    height: image.height,
-                    cropped: false,
-                }));
+                const formattedPhotos = formatPickedPhotos(selectedImages);
 
                 console.log('📸 Opening image editor modal with', formattedPhotos.length, 'images');
                 console.log('📸 First image URI:', formattedPhotos[0]?.uri);
@@ -521,16 +544,39 @@ const CreateAddForm = ({ type, onClose }) => {
         }
     };
 
+    const formatPickedPhotos = (selectedImages) =>
+        selectedImages.map((image, index) => ({
+            uri: image.uri,
+            originalUri: image.originalUri || image.uri,
+            type: image.mime || 'image/jpeg',
+            name: `photo_${Date.now()}_${index}.jpg`,
+            width: image.width,
+            height: image.height,
+            cropped: false,
+        }));
+
+    // "+" in the photo editor: pick more photos into the same editing session.
+    const pickMorePhotosForEditor = async () => {
+        const selectedImages = await openImagePickerWithCropper({
+            multiple: true,
+            maxFiles: type === 'vendor' ? 20 : 10,
+            compressImageQuality: 0.8,
+            compressImageMaxWidth: 2160,
+            compressImageMaxHeight: 2160,
+        });
+        return selectedImages && selectedImages.length > 0 ? formatPickedPhotos(selectedImages) : [];
+    };
+
     const handleImageEditorDone = (editedImages) => {
         // Add edited images to photos array
         setPhotos([...photos, ...editedImages]);
         setShowImageEditor(false);
         setTempSelectedImages([]);
 
-        const croppedCount = editedImages.filter(img => img.cropped).length;
+        if (editedImages.length === 0) return;
         setToastState({
             visible: true,
-            message: `${editedImages.length} image(s) added${croppedCount > 0 ? ` (${croppedCount} cropped)` : ''}`,
+            message: `${editedImages.length} image(s) added`,
             type: 'success'
         });
     };
@@ -554,14 +600,14 @@ const CreateAddForm = ({ type, onClose }) => {
 
                 // Validate "Other" custom text
                 if (selectedEventType === 'Other' && !customEventType.trim()) {
-                    setToastState({ visible: true, message: 'Please specify the event type', type: 'error' });
+                    setToastState({ visible: true, message: 'Please specify the gig type', type: 'error' });
                     setIsLoading(false);
                     return;
                 }
 
                 // Duration is required for event ads.
                 if (!duration || !duration.trim()) {
-                    setToastState({ visible: true, message: 'Please enter the event duration', type: 'error' });
+                    setToastState({ visible: true, message: 'Please enter the gig duration', type: 'error' });
                     setIsLoading(false);
                     return;
                 }
@@ -701,12 +747,12 @@ const CreateAddForm = ({ type, onClose }) => {
                     clearDraft();
                     setModalState({
                         visible: true,
-                        title: 'Event Ad Posted',
-                        message: 'Your event ad is now live and visible to vendors.',
+                        title: 'Gig Ad Posted',
+                        message: 'Your gig ad is now live and visible to vendors.',
                         type: 'success'
                     });
                 } else {
-                    setToastState({ visible: true, message: response.message || 'Failed to create event ad', type: 'error' });
+                    setToastState({ visible: true, message: response.message || 'Failed to create gig ad', type: 'error' });
                 }
             } else {
                 // Validate vendor fields
@@ -751,13 +797,25 @@ const CreateAddForm = ({ type, onClose }) => {
                     setIsLoading(false);
                     return;
                 }
-                // Optional link: add https:// if missing, must look like a URL.
-                const rawLink = vendorLink.trim();
-                const normalizedLink = rawLink && !/^https?:\/\//i.test(rawLink) ? `https://${rawLink}` : rawLink;
-                if (normalizedLink && !/^https?:\/\/[^\s/$.?#].[^\s]*\.[^\s]{2,}/i.test(normalizedLink)) {
-                    setToastState({ visible: true, message: 'Please enter a valid website or Instagram link', type: 'error' });
-                    setIsLoading(false);
-                    return;
+                // Optional links: rows left completely empty are ignored. A row
+                // with a title needs a URL; https:// is added if missing and
+                // the result must look like a URL.
+                const normalizedLinks = [];
+                for (const link of vendorLinks) {
+                    const title = (link.title || '').trim();
+                    const rawUrl = (link.url || '').trim();
+                    if (!title && !rawUrl) continue;
+                    const url = rawUrl && !/^https?:\/\//i.test(rawUrl) ? `https://${rawUrl}` : rawUrl;
+                    if (!url || !/^https?:\/\/[^\s/$.?#].[^\s]*\.[^\s]{2,}/i.test(url)) {
+                        setToastState({
+                            visible: true,
+                            message: title ? `Please enter a valid URL for "${title}"` : 'Please enter a valid link URL',
+                            type: 'error',
+                        });
+                        setIsLoading(false);
+                        return;
+                    }
+                    normalizedLinks.push({ title, url });
                 }
                 const validOffers = filledOffers.map(offer => ({
                     amount: String(offer.amount).trim(),
@@ -773,7 +831,11 @@ const CreateAddForm = ({ type, onClose }) => {
                 formData.append('categories', JSON.stringify(category || []));
                 formData.append('description', vendorDescription || '');
                 formData.append('company_name', companyName);
-                if (normalizedLink) formData.append('portfolio_url', normalizedLink);
+                if (normalizedLinks.length > 0) {
+                    formData.append('links', JSON.stringify(normalizedLinks));
+                    // First link doubles as the single link older readers expect.
+                    formData.append('portfolio_url', normalizedLinks[0].url);
+                }
                 formData.append('location', vendorLocation);
                 // Structured location fields — only present when the user
                 // selected an API result in the modal.
@@ -943,13 +1005,12 @@ const CreateAddForm = ({ type, onClose }) => {
     return (
         <KeyboardAvoidingView
             style={styles.modalBorderWrapPro}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+            enabled={false}
         >
             {/* Header */}
             <View style={styles.headerPro}>
                 <Text style={styles.headerTitlePro}>
-                    {type === 'event' ? 'Create Event Ad' : 'Create Vendor Ad'}
+                    {type === 'event' ? 'Create Gig Ad' : 'Create Vendor Ad'}
                 </Text>
             </View>
             <ScrollView
@@ -965,8 +1026,9 @@ const CreateAddForm = ({ type, onClose }) => {
                 contentContainerStyle={[styles.containerPro, { paddingBottom: 20 }]}
                 showsVerticalScrollIndicator={false}
                 nestedScrollEnabled={true}
+                automaticallyAdjustKeyboardInsets={!MANUAL_KEYBOARD_SCROLL}
                 keyboardShouldPersistTaps="handled"
-                keyboardDismissMode="on-drag"
+                keyboardDismissMode={MANUAL_KEYBOARD_SCROLL ? 'on-drag' : 'interactive'}
                 onLayout={(e) => {
                     // Frame height changes when the keyboard opens (marginBottom
                     // becomes keyboardHeight). Re-pin the last fields then.
@@ -980,7 +1042,7 @@ const CreateAddForm = ({ type, onClose }) => {
                             <Text style={styles.labelPro}>What service you need?</Text>
                             <TouchableOpacity
                                 style={[styles.inputPro, styles.dropdownButton]}
-                                onPress={() => setShowServiceDropdown(true)}
+                                onPress={() => { setServiceSearchQuery(''); setShowServiceDropdown(true); }}
                             >
                                 <Text style={styles.dropdownText}>{service || 'Select a service'}</Text>
                                 <Icon name="chevron-down" size={20} color="#ffffff80" />
@@ -988,7 +1050,7 @@ const CreateAddForm = ({ type, onClose }) => {
                         </View>
 
                         <View style={styles.fieldGroupPro}>
-                            <Text style={styles.labelPro}>Event Type</Text>
+                            <Text style={styles.labelPro}>Gig Type</Text>
                             <TouchableOpacity
                                 style={[styles.inputPro, styles.dropdownButton]}
                                 onPress={() => setShowEventTypeDropdown(true)}
@@ -996,7 +1058,7 @@ const CreateAddForm = ({ type, onClose }) => {
                                 <Text style={styles.dropdownText}>
                                     {selectedEventType === 'Other' && customEventType
                                         ? customEventType
-                                        : selectedEventType || 'Select event type'}
+                                        : selectedEventType || 'Select gig type'}
                                 </Text>
                                 <Icon name="chevron-down" size={20} color="#ffffff80" />
                             </TouchableOpacity>
@@ -1007,7 +1069,7 @@ const CreateAddForm = ({ type, onClose }) => {
                                     style={[styles.inputPro, { marginTop: 8 }]}
                                     value={customEventType}
                                     onChangeText={setCustomEventType}
-                                    placeholder="Enter custom event type..."
+                                    placeholder="Enter custom gig type..."
                                     placeholderTextColor="#ffffff80"
                                 />
                             )}
@@ -1074,6 +1136,8 @@ const CreateAddForm = ({ type, onClose }) => {
                                 <Modal
                                     visible={showDatePicker}
                                     transparent
+                                    statusBarTranslucent
+                                    navigationBarTranslucent
                                     animationType="slide"
                                     onRequestClose={() => setShowDatePicker(false)}
                                 >
@@ -1135,6 +1199,7 @@ const CreateAddForm = ({ type, onClose }) => {
                                 placeholder="e.g. 4 hours"
                                 placeholderTextColor="#ffffff80"
                                 onFocus={() => {
+                                    if (!MANUAL_KEYBOARD_SCROLL) return;
                                     setTimeout(() => {
                                         scrollViewRef.current?.scrollTo({ y: 400, animated: true });
                                     }, 300);
@@ -1154,6 +1219,7 @@ const CreateAddForm = ({ type, onClose }) => {
                                     placeholderTextColor="#ffffff80"
                                     keyboardType="numeric"
                                     onFocus={() => {
+                                        if (!MANUAL_KEYBOARD_SCROLL) return;
                                         setTimeout(() => {
                                             scrollViewRef.current?.scrollTo({ y: 500, animated: true });
                                         }, 300);
@@ -1173,6 +1239,13 @@ const CreateAddForm = ({ type, onClose }) => {
                                 multiline
                                 onFocus={() => {
                                     gigDescFocusedRef.current = true;
+                                    if (!MANUAL_KEYBOARD_SCROLL) {
+                                        // iOS keeps only the caret line clear of the
+                                        // keyboard; this is the last text field, so
+                                        // bring the whole box (and Attachments) up.
+                                        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 350);
+                                        return;
+                                    }
                                     // Backup for the keyboard-already-open case.
                                     setTimeout(pinGigLastFieldsAboveKeyboard, 200);
                                 }}
@@ -1250,7 +1323,7 @@ const CreateAddForm = ({ type, onClose }) => {
                             <Text style={styles.labelPro}>Category</Text>
                             <TouchableOpacity
                                 style={[styles.inputPro, styles.dropdownButton]}
-                                onPress={() => setShowCategoryModal(true)}
+                                onPress={() => { setCategorySearchQuery(''); setShowCategoryModal(true); }}
                             >
                                 <Text style={styles.dropdownText}>
                                     {categoryNames.length > 0 ? categoryNames[0] : 'Select Category'}
@@ -1271,6 +1344,7 @@ const CreateAddForm = ({ type, onClose }) => {
                                 placeholderTextColor="#ffffff80"
                                 multiline
                                 onFocus={() => {
+                                    if (!MANUAL_KEYBOARD_SCROLL) return;
                                     // Scroll the Description above the keyboard. Small delay
                                     // lets the keyboard finish animating up first.
                                     setTimeout(() => {
@@ -1287,20 +1361,6 @@ const CreateAddForm = ({ type, onClose }) => {
                                 </Text>
                             )}
                         </View>
-                        <View style={styles.fieldGroupPro}>
-                            <Text style={styles.labelPro}>Website / Instagram link (optional)</Text>
-                            <TextInput
-                                style={[styles.inputPro, { backgroundColor: theme.colors.primary }]}
-                                value={vendorLink}
-                                onChangeText={setVendorLink}
-                                placeholder="e.g. instagram.com/yourbusiness"
-                                placeholderTextColor="#ffffff80"
-                                autoCapitalize="none"
-                                autoCorrect={false}
-                                keyboardType="url"
-                            />
-                        </View>
-
                         <View style={styles.fieldGroupPro}>
                             <Text style={styles.labelPro}>Services Offered (Optional)</Text>
                             {availableTags.length > 0 ? (
@@ -1354,6 +1414,52 @@ const CreateAddForm = ({ type, onClose }) => {
                             />
                         </View>
                         <View style={styles.fieldGroupPro}>
+                            <View style={styles.linkHeaderRow}>
+                                <Icon name="link-outline" size={18} color="#fff" />
+                                <Text style={[styles.labelPro, styles.linkHeaderText]}>Link (Optional)</Text>
+                            </View>
+                            {vendorLinks.map((link, index) => (
+                                <View key={index} style={styles.linkBlock}>
+                                    <View style={styles.linkLabelRow}>
+                                        <Text style={styles.offerLabel}>Title</Text>
+                                        {vendorLinks.length > 1 && (
+                                            <TouchableOpacity
+                                                onPress={() => removeVendorLink(index)}
+                                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                            >
+                                                <Text style={styles.linkRemoveText}>Remove</Text>
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                    <TextInput
+                                        style={[styles.inputPro, { backgroundColor: theme.colors.primary }]}
+                                        value={link.title}
+                                        onChangeText={(value) => updateVendorLink(index, 'title', value)}
+                                        placeholder="e.g. Website, Instagram"
+                                        placeholderTextColor="#ffffff80"
+                                        maxLength={60}
+                                    />
+                                    <Text style={[styles.offerLabel, styles.linkUrlLabel]}>URL</Text>
+                                    <TextInput
+                                        style={[styles.inputPro, { backgroundColor: theme.colors.primary }]}
+                                        value={link.url}
+                                        onChangeText={(value) => updateVendorLink(index, 'url', value)}
+                                        placeholder="e.g. instagram.com/yourbusiness"
+                                        placeholderTextColor="#ffffff80"
+                                        autoCapitalize="none"
+                                        autoCorrect={false}
+                                        keyboardType="url"
+                                    />
+                                </View>
+                            ))}
+                            {vendorLinks.length < MAX_VENDOR_LINKS && (
+                                <TouchableOpacity style={styles.addLinkBtn} onPress={addVendorLink}>
+                                    <Icon name="add" size={16} color="#fff" />
+                                    <Text style={styles.addLinkText}>Add Link</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                        <View style={styles.fieldGroupPro}>
                             <Text style={styles.labelPro}>City</Text>
                             <LocationSelector
                                 initialCountry={vendorLocationData?.country || ''}
@@ -1392,6 +1498,7 @@ const CreateAddForm = ({ type, onClose }) => {
                                                 placeholderTextColor="#ffffff80"
                                                 keyboardType="numeric"
                                                 onFocus={() => {
+                                                    if (!MANUAL_KEYBOARD_SCROLL) return;
                                                     // Scroll to show the input above keyboard
                                                     setTimeout(() => {
                                                         scrollViewRef.current?.scrollToEnd({ animated: true });
@@ -1412,6 +1519,7 @@ const CreateAddForm = ({ type, onClose }) => {
                                             placeholderTextColor="#ffffff80"
                                             keyboardType="numeric"
                                             onFocus={() => {
+                                                if (!MANUAL_KEYBOARD_SCROLL) return;
                                                 // Scroll to show the input above keyboard
                                                 setTimeout(() => {
                                                     scrollViewRef.current?.scrollToEnd({ animated: true });
@@ -1511,10 +1619,12 @@ const CreateAddForm = ({ type, onClose }) => {
             <Modal
                 visible={showCategoryModal}
                 transparent={true}
+                statusBarTranslucent
+                navigationBarTranslucent
                 animationType="slide"
                 onRequestClose={() => setShowCategoryModal(false)}
             >
-                <View style={styles.modalContainer}>
+                <KeyboardInsetView style={styles.modalContainer}>
                     <TouchableOpacity
                         style={styles.modalBackdrop}
                         activeOpacity={1}
@@ -1547,6 +1657,7 @@ const CreateAddForm = ({ type, onClose }) => {
                                     .includes((categorySearchQuery || '').toLowerCase())
                             )}
                             keyExtractor={(item) => item.category_id?.toString() || item.id?.toString()}
+                            keyboardShouldPersistTaps="handled"
                             contentContainerStyle={styles.dropdownList}
                             showsVerticalScrollIndicator={false}
                             ListEmptyComponent={() => (
@@ -1639,17 +1750,19 @@ const CreateAddForm = ({ type, onClose }) => {
                             }}
                         />
                     </View>
-                </View>
+                </KeyboardInsetView>
             </Modal>
 
             {/* Service Dropdown Modal for Gigs */}
             <Modal
                 visible={showServiceDropdown}
                 transparent={true}
+                statusBarTranslucent
+                navigationBarTranslucent
                 animationType="slide"
                 onRequestClose={() => setShowServiceDropdown(false)}
             >
-                <View style={styles.modalContainer}>
+                <KeyboardInsetView style={styles.modalContainer}>
                     <TouchableOpacity
                         style={styles.modalBackdrop}
                         activeOpacity={1}
@@ -1671,10 +1784,15 @@ const CreateAddForm = ({ type, onClose }) => {
                                 style={styles.dropdownSearch}
                                 placeholder="Search service..."
                                 placeholderTextColor="#999"
+                                value={serviceSearchQuery}
+                                onChangeText={setServiceSearchQuery}
                             />
                         </View>
                         <FlatList
-                            data={serviceOptions}
+                            keyboardShouldPersistTaps="handled"
+                            data={serviceOptions.filter((option) =>
+                                String(option).toLowerCase().includes(serviceSearchQuery.trim().toLowerCase())
+                            )}
                             keyExtractor={(item) => item}
                             style={styles.dropdownList}
                             renderItem={({ item }) => (
@@ -1711,17 +1829,19 @@ const CreateAddForm = ({ type, onClose }) => {
                             )}
                         />
                     </View>
-                </View>
+                </KeyboardInsetView>
             </Modal>
 
             {/* Gig Type Dropdown Modal */}
             <Modal
                 visible={showEventTypeDropdown}
                 transparent={true}
+                statusBarTranslucent
+                navigationBarTranslucent
                 animationType="slide"
                 onRequestClose={() => setShowEventTypeDropdown(false)}
             >
-                <View style={styles.modalContainer}>
+                <KeyboardInsetView style={styles.modalContainer}>
                     <TouchableOpacity
                         style={styles.modalBackdrop}
                         activeOpacity={1}
@@ -1729,7 +1849,7 @@ const CreateAddForm = ({ type, onClose }) => {
                     />
                     <View style={styles.professionalDropdown}>
                         <View style={styles.dropdownHeader}>
-                            <Text style={styles.dropdownTitle}>Select Event Type</Text>
+                            <Text style={styles.dropdownTitle}>Select Gig Type</Text>
                             <TouchableOpacity
                                 onPress={() => setShowEventTypeDropdown(false)}
                                 style={styles.dropdownCloseBtn}
@@ -1776,7 +1896,7 @@ const CreateAddForm = ({ type, onClose }) => {
                             )}
                         />
                     </View>
-                </View>
+                </KeyboardInsetView>
             </Modal>
 
             {/* Gig Category Selection Modal - Enhanced with Subcategories */}
@@ -1829,6 +1949,7 @@ const CreateAddForm = ({ type, onClose }) => {
                     setTempSelectedImages([]);
                 }}
                 onDone={handleImageEditorDone}
+                onAddMore={pickMorePhotosForEditor}
             />
 
             {/* LocationSearchModal blocks removed — LocationSelector is
@@ -2114,6 +2235,44 @@ const styles = StyleSheet.create({
     tagTextSelected: {
         color: '#2C3D5B',
         fontWeight: '600',
+    },
+    linkHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 6,
+    },
+    linkHeaderText: {
+        marginBottom: 0,
+    },
+    linkBlock: {
+        marginBottom: 10,
+    },
+    linkLabelRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    linkUrlLabel: {
+        marginTop: 8,
+    },
+    linkRemoveText: {
+        color: '#FFB4B4',
+        fontSize: 13,
+        fontWeight: '600',
+        marginBottom: 4,
+    },
+    addLinkBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-end',
+        gap: 2,
+        paddingVertical: 4,
+    },
+    addLinkText: {
+        color: '#ffffff',
+        fontSize: 14,
+        fontWeight: '700',
     },
     offerRow: {
         flexDirection: 'row',

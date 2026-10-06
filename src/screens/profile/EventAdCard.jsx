@@ -352,7 +352,7 @@ export default function EventAdCard({
                     <View style={styles.modalCard}>
                         <Text style={styles.modalTitle}>Delete this ad?</Text>
                         <Text style={styles.modalBody}>
-                            This will remove the event ad permanently. This action can't be undone.
+                            This will remove the gig ad permanently. This action can't be undone.
                         </Text>
                         <View style={styles.modalActions}>
                             <TouchableOpacity

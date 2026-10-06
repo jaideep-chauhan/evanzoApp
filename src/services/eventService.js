@@ -45,7 +45,7 @@ class EventService {
         return {
           success: true,
           data: data.data,
-          message: data.message || 'Event ad created successfully',
+          message: data.message || 'Gig ad created successfully',
         };
       }
 
@@ -53,7 +53,7 @@ class EventService {
       return {
         success: true,
         data: response.data.data,
-        message: 'Event ad created successfully',
+        message: 'Gig ad created successfully',
       };
     } catch (error) {
       return {
@@ -61,7 +61,7 @@ class EventService {
         message:
           error.response?.data?.message ||
           error.message ||
-          'Failed to create event ad',
+          'Failed to create gig ad',
       };
     }
   }
@@ -70,7 +70,7 @@ class EventService {
   async getMyEventAds() {
     try {
       const response = await api.get('/event_ad/my-ads');
-      console.log('📱 My event ads response received');
+      console.log('📱 My gig ads response received');
 
       // Backend returns data directly or with results structure
       const eventAds = response.data.data?.results || response.data.data || [];
@@ -81,11 +81,11 @@ class EventService {
         data: eventAds,
       };
     } catch (error) {
-      console.error('❌ Get my event ads error:', error);
+      console.error('❌ Get my gig ads error:', error);
       return {
         success: false,
         message:
-          error.response?.data?.message || 'Failed to fetch your event ads',
+          error.response?.data?.message || 'Failed to fetch your gig ads',
         data: [],
       };
     }
@@ -98,12 +98,12 @@ class EventService {
       return {
         success: true,
         data: response.data.data,
-        message: 'Event ad updated successfully',
+        message: 'Gig ad updated successfully',
       };
     } catch (error) {
       return {
         success: false,
-        message: error.response?.data?.message || 'Failed to update event ad',
+        message: error.response?.data?.message || 'Failed to update gig ad',
       };
     }
   }
@@ -116,13 +116,13 @@ class EventService {
         '[eventService.deleteEventAd] missing/invalid eventId:',
         eventId,
       );
-      return {success: false, message: 'Event ad id is missing'};
+      return {success: false, message: 'Gig ad id is missing'};
     }
     try {
       await api.delete(`/event_ad/${numericId}`);
       return {
         success: true,
-        message: 'Event ad deleted successfully',
+        message: 'Gig ad deleted successfully',
       };
     } catch (error) {
       console.error(
@@ -134,7 +134,7 @@ class EventService {
       );
       return {
         success: false,
-        message: error.response?.data?.message || 'Failed to delete event ad',
+        message: error.response?.data?.message || 'Failed to delete gig ad',
       };
     }
   }
@@ -190,10 +190,10 @@ class EventService {
         break;
       }
     }
-    console.error('❌ Get public event ads error:', lastError);
+    console.error('❌ Get public gig ads error:', lastError);
     return {
       success: false,
-      message: lastError?.response?.data?.message || 'Failed to fetch event ads',
+      message: lastError?.response?.data?.message || 'Failed to fetch gig ads',
       data: [],
     };
   }
@@ -239,7 +239,7 @@ class EventService {
     } catch (error) {
       return {
         success: false,
-        message: error.response?.data?.message || 'Failed to search event ads',
+        message: error.response?.data?.message || 'Failed to search gig ads',
         data: [],
       };
     }
@@ -257,7 +257,7 @@ class EventService {
       return {
         success: false,
         message:
-          error.response?.data?.message || 'Failed to fetch event ad details',
+          error.response?.data?.message || 'Failed to fetch gig ad details',
         data: null,
       };
     }
@@ -273,7 +273,7 @@ class EventService {
         '[eventService.markEventAdComplete] missing/invalid eventId:',
         eventId,
       );
-      return {success: false, message: 'Event ad id is missing'};
+      return {success: false, message: 'Gig ad id is missing'};
     }
     try {
       const response = await api.patch(`/event_ad/${numericId}/status`, {
@@ -282,7 +282,7 @@ class EventService {
       return {
         success: true,
         data: response.data.data,
-        message: 'Event marked as completed',
+        message: 'Gig marked as completed',
       };
     } catch (error) {
       console.error(
@@ -295,7 +295,7 @@ class EventService {
       return {
         success: false,
         message:
-          error.response?.data?.message || 'Failed to mark event as completed',
+          error.response?.data?.message || 'Failed to mark gig as completed',
       };
     }
   }
@@ -406,14 +406,14 @@ class EventService {
     };
 
     // Determine event category
-    const category = event.event_type || event.service_needed || 'General Event';
+    const category = event.event_type || event.service_needed || 'General Gig';
 
     return {
       id: event.id || event.event_ad_id,
       user_id: event.user_id, // Include user_id at top level for easy access
       title:
         event.title ||
-        `${event.event_type || 'Event'} - ${event.service_needed || ''}`,
+        `${event.event_type || 'Gig'} - ${event.service_needed || ''}`,
       service_needed: event.service_needed,
       event_type: event.event_type,
       event_tags: event.event_tags || [],

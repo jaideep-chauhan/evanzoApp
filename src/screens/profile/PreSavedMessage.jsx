@@ -132,7 +132,7 @@ const PreSavedMessage = ({ onClose, visible }) => {
         if (!eventName.trim()) {
             setModalMessage({
                 title: 'Validation Error',
-                message: 'Please enter an event name',
+                message: 'Please enter a gig name',
                 type: 'error'
             });
             setSuccessModalVisible(true);
@@ -260,7 +260,7 @@ const PreSavedMessage = ({ onClose, visible }) => {
                     <Text style={[styles.label, { color: theme.colors.primary }]}>Gig Name</Text>
                     <TextInput
                         style={styles.input}
-                        placeholder="Enter event name"
+                        placeholder="Enter gig name"
                         placeholderTextColor="#999"
                         value={eventName}
                         onChangeText={setEventName}
@@ -271,7 +271,7 @@ const PreSavedMessage = ({ onClose, visible }) => {
                     <Text style={[styles.label, { color: theme.colors.primary }]}>City</Text>
                     <TextInput
                         style={styles.input}
-                        placeholder="Enter event city"
+                        placeholder="Enter gig city"
                         placeholderTextColor="#999"
                         value={location}
                         onChangeText={setLocation}
@@ -334,7 +334,7 @@ const PreSavedMessage = ({ onClose, visible }) => {
                         style={[styles.input, styles.textArea]}
                         multiline
                         numberOfLines={4}
-                        placeholder="Enter event description"
+                        placeholder="Enter gig description"
                         placeholderTextColor="#999"
                         value={description}
                         onChangeText={setDescription}

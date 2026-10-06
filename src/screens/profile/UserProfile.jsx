@@ -381,7 +381,7 @@ export default function UserProfile() {
                                 ) : (
                                     <View style={styles.emptyContainer}>
                                         <Icon name="calendar-outline" size={60} color="#ccc" />
-                                        <Text style={styles.emptyText}>No event ads found</Text>
+                                        <Text style={styles.emptyText}>No gig ads found</Text>
                                     </View>
                                 )
                             )}

@@ -111,7 +111,7 @@ Gig Details:
 
 Description: ${description}
 
-I'm looking for vendors who can provide services for this event. Please let me know if you're available and interested in working with us.
+I'm looking for vendors who can provide services for this gig. Please let me know if you're available and interested in working with us.
 
 Thank you for your time!`;
   }

@@ -129,7 +129,7 @@ class FilterService {
       } else {
         return {
           success: false,
-          message: response.data.message || 'No events found',
+          message: response.data.message || 'No gigs found',
           data: [],
           pagination: {page: 1, limit: 10, totalPages: 0, totalResults: 0},
         };

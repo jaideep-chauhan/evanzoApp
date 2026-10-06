@@ -812,16 +812,16 @@ class SettingsService {
       {
         id: 1,
         category: 'general',
-        question: 'How do I post an event?',
+        question: 'How do I post a gig?',
         answer:
-          'Go to the Gigs tab and click "Post Gig". Fill in the details about your event including date, city, and requirements.',
+          'Go to the Gigs tab and click "Post Gig". Fill in the details about your gig including date, city, and requirements.',
       },
       {
         id: 2,
         category: 'vendors',
         question: 'What happens after I hire a vendor?',
         answer:
-          "Once you hire a vendor, you'll be able to communicate directly with them and track the progress of your event planning.",
+          "Once you hire a vendor, you'll be able to communicate directly with them and track the progress of your gig.",
       },
       {
         id: 3,

@@ -268,7 +268,7 @@ export default function EventDetailViewEnhanced() {
         if (!user) {
             Alert.alert(
                 'Log in to send a quote',
-                'You need an account to contact the event poster.',
+                'You need an account to contact the gig poster.',
                 [
                     { text: 'Not now', style: 'cancel' },
                     { text: 'Log in', onPress: () => navigation.navigate('Login') },
@@ -284,7 +284,7 @@ export default function EventDetailViewEnhanced() {
             eventFromParams.created_by;
 
         if (!organizerUserId) {
-            Alert.alert('Error', 'Unable to identify event organizer. Please try again.');
+            Alert.alert('Error', 'Unable to identify gig poster. Please try again.');
             return;
         }
 
@@ -305,7 +305,7 @@ export default function EventDetailViewEnhanced() {
             // the event + date so the organizer can immediately tell which
             // ad the quote is for, followed by a blank line and the
             // sender's typed message.
-            const quoteMessage = `Message from event- "${eventData.title}" on "${eventData.date}"\n\n${quoteText.trim()}`;
+            const quoteMessage = `Message from gig- "${eventData.title}" on "${eventData.date}"\n\n${quoteText.trim()}`;
 
             // Step 3: Send quote message
             const quoteAd = buildAdContext(
@@ -320,7 +320,7 @@ export default function EventDetailViewEnhanced() {
             if (messageResult.success) {
                 Alert.alert(
                     'Quote Sent!',
-                    'Your quote has been sent to the event organizer. They will respond to you via chat.',
+                    'Your quote has been sent to the gig poster. They will respond to you via chat.',
                     [
                         {
                             text: 'View Chat',

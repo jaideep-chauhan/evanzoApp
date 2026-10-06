@@ -121,7 +121,7 @@ export default function Settings() {
                 },
                 notification: {
                     title: '❌ Ad Rejected',
-                    body: 'Your event ad "Test Birthday Party" has been rejected. Reason: Missing required information',
+                    body: 'Your gig ad "Test Birthday Party" has been rejected. Reason: Missing required information',
                 }
             });
             Alert.alert('Success', 'Test rejection notification sent!');

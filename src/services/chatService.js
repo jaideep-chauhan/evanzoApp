@@ -1,6 +1,6 @@
 import api, { API_BASE_URL, MEDIA_BASE_URL } from './api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import authFetch from './authFetch';
+import authFetch, {authUpload} from './authFetch';
 
 class ChatService {
   // Create a new chat
@@ -241,15 +241,32 @@ class ChatService {
   // Send media message — uses authFetch so the multipart body actually
   // works on Android (axios XHR mangles file parts) and so a 401 mid-upload
   // is transparently refreshed + retried once.
-  async sendMediaMessage(chatId, formData) {
+  // Pass `onProgress(percent)` to get real upload progress (XHR-based).
+  async sendMediaMessage(chatId, formData, {onProgress} = {}) {
     try {
       console.log('📤 ChatService.sendMediaMessage - Sending to:', `/chat/${chatId}/messages/media`);
 
-      const res = await authFetch(`${API_BASE_URL}/chat/${chatId}/messages/media`, {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await res.json().catch(() => ({}));
+      const url = `${API_BASE_URL}/chat/${chatId}/messages/media`;
+      let res;
+      let data;
+      if (onProgress) {
+        // Chat videos can be up to 100MB — allow far longer than the default.
+        const upload = await authUpload(url, formData, {onProgress, timeoutMs: 15 * 60 * 1000});
+        if (upload.timeout) {
+          return {success: false, message: 'Upload timed out. Please check your internet connection and try again.'};
+        }
+        if (upload.networkError) {
+          return {success: false, message: 'Network error. Please check your connection and try again.'};
+        }
+        res = upload;
+        data = upload.json || {};
+      } else {
+        res = await authFetch(url, {
+          method: 'POST',
+          body: formData,
+        });
+        data = await res.json().catch(() => ({}));
+      }
 
       if (!res.ok) {
         console.error('❌ ChatService.sendMediaMessage - HTTP', res.status, data?.message);

@@ -10,6 +10,7 @@ import {
     Linking,
     ScrollView,
     Dimensions,
+    ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 
@@ -43,7 +44,7 @@ function renderReviews(reviews, styles) {
 import defaultImg from '../../../assets/images/dummy.png'; // Default fallback image
 import OfferGrid from './OfferCard';
 import ProfileCardCarousel from './ProfileCardCarousel';
-import { getImageSource } from '../../../utils/imageUtils';
+import { getImageSource, thumbnailUrl } from '../../../utils/imageUtils';
 
 
 export default function VendorDetailsSection({
@@ -51,6 +52,7 @@ export default function VendorDetailsSection({
     onSend,
     description = "",
     link = "", // website / social link (portfolio_url)
+    links = [], // titled links [{ title, url }]; falls back to `link`
     reviews = [],
     hideMessageSection = false,
     offers = [],
@@ -65,6 +67,8 @@ export default function VendorDetailsSection({
     // Index of the photo open full screen, or null
     const [galleryIndex, setGalleryIndex] = useState(null);
     const [imageDimensions, setImageDimensions] = useState({});
+    // Photos that have finished loading (or failed) — hides their spinner
+    const [loadedPhotos, setLoadedPhotos] = useState({});
     return (
         // This section is already rendered inside the screen's vertical
         // ScrollView (vendorAddDetails/index.jsx). Nesting a second vertical
@@ -95,8 +99,14 @@ export default function VendorDetailsSection({
                         {photos && photos.length > 0 ?
                             photos.map((photo, idx) => {
                                 console.log(`Rendering photo ${idx}:`, photo);
-                                const imageSource = getImageSource(photo, defaultImg);
-                                console.log(`Image source for photo ${idx}:`, imageSource);
+                                // Screen-sized copy for the carousel — the
+                                // originals can be several MB each and left the
+                                // slide blank while they downloaded. The
+                                // full-screen gallery still gets the original.
+                                const fullSource = getImageSource(photo, defaultImg);
+                                const imageSource = fullSource?.uri
+                                    ? { ...fullSource, uri: thumbnailUrl(fullSource.uri, 1080, 80) }
+                                    : fullSource;
 
                                 return (
                                     <TouchableOpacity
@@ -105,15 +115,16 @@ export default function VendorDetailsSection({
                                         activeOpacity={0.9}
                                         onPress={() => setGalleryIndex(idx)}
                                     >
+                                        {!loadedPhotos[idx] && (
+                                            <ActivityIndicator style={styles.photoLoader} color="#2C3D5B" />
+                                        )}
                                         <Image
                                             source={imageSource}
                                             style={styles.photo}
                                             onError={(error) => {
                                                 console.log('Error loading image:', photo, error.nativeEvent?.error);
                                             }}
-                                            onLoad={() => {
-                                                console.log('Successfully loaded image:', photo);
-                                            }}
+                                            onLoadEnd={() => setLoadedPhotos((prev) => ({ ...prev, [idx]: true }))}
                                             resizeMode="cover"
                                         />
                                     </TouchableOpacity>
@@ -133,38 +144,49 @@ export default function VendorDetailsSection({
                         initialIndex={galleryIndex ?? 0}
                         onClose={() => setGalleryIndex(null)}
                     />
-                    {/* Description below images */}
-                    <View style={styles.descContainer}>
-                        {!descExpanded ? (
-                            <>
-                                <Text style={styles.descriptionText} numberOfLines={3}>
-                                    {description}
-                                </Text>
-                                <Text style={styles.seeMoreBtn} onPress={() => setDescExpanded(true)}>
-                                    See More
-                                </Text>
-                            </>
-                        ) : (
-                            <>
-                                <Text style={styles.descriptionText}>{description}</Text>
-                                <Text style={styles.seeMoreBtn} onPress={() => setDescExpanded(false)}>
-                                    See Less
-                                </Text>
-                            </>
-                        )}
-                    </View>
-                    {!!link && (
-                        <TouchableOpacity
-                            style={styles.linkRow}
-                            onPress={() => Linking.openURL(link).catch(() => {})}
-                        >
-                            <Text style={styles.linkIcon}>🔗</Text>
-                            <Text style={styles.linkText} numberOfLines={1}>
-                                {link.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')}
-                            </Text>
-                        </TouchableOpacity>
-                    )}
                 </View>
+
+                {/* Description — its own card under the photos */}
+                {!!description && (
+                    <View style={styles.card}>
+                        <Text style={styles.cardLabel}>Description</Text>
+                        <Text style={styles.descriptionText} numberOfLines={descExpanded ? undefined : 4}>
+                            {description}
+                        </Text>
+                        <Text style={styles.seeMoreBtn} onPress={() => setDescExpanded((v) => !v)}>
+                            {descExpanded ? 'Read less' : 'Read more'}
+                        </Text>
+                    </View>
+                )}
+
+                {/* Links — titled links when the ad has them; ads created
+                    before multi-link support only carry the single `link`. */}
+                {(() => {
+                    const shownLinks = (Array.isArray(links) ? links : []).filter((l) => l?.url);
+                    const list = shownLinks.length ? shownLinks : link ? [{ title: '', url: link }] : [];
+                    if (list.length === 0) return null;
+                    return (
+                        <View style={styles.card}>
+                            <Text style={styles.cardLabel}>Links</Text>
+                            {list.map((item, index) => (
+                                <TouchableOpacity
+                                    key={`${item.url}-${index}`}
+                                    style={styles.linkRow}
+                                    activeOpacity={0.7}
+                                    onPress={() => Linking.openURL(item.url).catch(() => {})}
+                                >
+                                    <Icon name="link-outline" size={18} color="#2C3D5B" style={styles.linkIcon} />
+                                    <View style={styles.linkBody}>
+                                        <Text style={styles.linkTitle} numberOfLines={1}>
+                                            {item.title || 'Link'}
+                                        </Text>
+                                        <Text style={styles.linkText} numberOfLines={1}>{item.url}</Text>
+                                    </View>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    );
+                })()}
 
                 <OfferGrid offers={offers} currency={currency} />
 
@@ -249,26 +271,39 @@ const styles = StyleSheet.create({
         height: (SCREEN_WIDTH - 64) * 1.25,
         borderRadius: 12,
         opacity: 1,
-        backgroundColor: '#f0f0f0', // Add background color for loading state
+    },
+    photoLoader: {
+        ...StyleSheet.absoluteFillObject,
+    },
+    // Small heading used by the Description and Links cards
+    cardLabel: {
+        color: '#1D1B20',
+        fontSize: 13,
+        fontWeight: '500',
+        marginBottom: 8,
     },
     linkRow: {
         flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 12,
-        paddingVertical: 10,
-        paddingHorizontal: 12,
-        borderRadius: 10,
-        backgroundColor: '#EEF2F8',
+        alignItems: 'flex-start',
+        paddingVertical: 8,
+        paddingLeft: 8,
     },
     linkIcon: {
-        fontSize: 14,
         marginRight: 8,
+        marginTop: 1,
+    },
+    linkBody: {
+        flex: 1,
+    },
+    linkTitle: {
+        color: '#2C3D5B',
+        fontSize: 14,
+        fontWeight: '700',
+        marginBottom: 2,
     },
     linkText: {
-        flex: 1,
-        color: '#2C3D5B',
-        fontWeight: '600',
-        textDecorationLine: 'underline',
+        color: '#1D1B20',
+        fontSize: 13,
     },
     descContainer: {
         marginTop: 14,
@@ -277,7 +312,8 @@ const styles = StyleSheet.create({
         color: '#1E2B4F',
         fontWeight: '700',
         marginTop: 4,
-        fontSize: 14,
+        fontSize: 13,
+        textDecorationLine: 'underline',
         alignSelf: 'flex-end',
     },
     messageBox: {

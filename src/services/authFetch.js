@@ -110,7 +110,7 @@ export const authFetch = async (url, init = {}) => {
 // ─────────────────────────────────────────────────────────────────────────
 const UPLOAD_TIMEOUT_MS = 180000; // 3 min ceiling so a stuck upload fails instead of hanging forever
 
-const xhrUpload = (url, formData, token, onProgress) =>
+const xhrUpload = (url, formData, token, onProgress, timeoutMs = UPLOAD_TIMEOUT_MS) =>
     new Promise((resolve) => {
         const xhr = new XMLHttpRequest();
         xhr.open('POST', url);
@@ -118,7 +118,7 @@ const xhrUpload = (url, formData, token, onProgress) =>
         if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
         // Deliberately DON'T set Content-Type — the native layer must inject
         // the multipart boundary itself. Setting it breaks the upload.
-        xhr.timeout = UPLOAD_TIMEOUT_MS;
+        xhr.timeout = timeoutMs;
 
         if (onProgress && xhr.upload) {
             xhr.upload.onprogress = (e) => {
@@ -141,10 +141,10 @@ const xhrUpload = (url, formData, token, onProgress) =>
         xhr.send(formData);
     });
 
-export const authUpload = async (url, formData, { onProgress } = {}) => {
+export const authUpload = async (url, formData, { onProgress, timeoutMs } = {}) => {
     const token = await secureStorage.getItem('authToken');
 
-    let result = await xhrUpload(url, formData, token, onProgress);
+    let result = await xhrUpload(url, formData, token, onProgress, timeoutMs);
     if (result.status !== 401 || !token) return result;
 
     // 401 → refresh once and retry (same policy as authFetch).
@@ -155,7 +155,7 @@ export const authUpload = async (url, formData, { onProgress } = {}) => {
         if (__DEV__) console.log('[authUpload] refresh failed:', refreshErr?.message);
         return result; // surface the original 401
     }
-    return xhrUpload(url, formData, newAccess, onProgress);
+    return xhrUpload(url, formData, newAccess, onProgress, timeoutMs);
 };
 
 export default authFetch;

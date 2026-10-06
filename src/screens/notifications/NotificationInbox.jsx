@@ -100,7 +100,7 @@ const NotificationItem = ({ notification, onPress, onLongPress }) => {
             </View>
             <View style={styles.itemContent}>
                 <Text style={styles.itemTitle} numberOfLines={1}>
-                    {notification.title}
+                    {displayTitle(notification.title)}
                 </Text>
                 {!!notification.message && (
                     <Text style={styles.itemMessage} numberOfLines={2}>
@@ -112,6 +112,10 @@ const NotificationItem = ({ notification, onPress, onLongPress }) => {
         </TouchableOpacity>
     );
 };
+
+// Message notifications are titled with just the sender's name. Rows saved
+// before that change still carry the old "New message from " prefix.
+const displayTitle = (title) => String(title || '').replace(/^New message from\s+/i, '');
 
 export default function NotificationInbox() {
     const navigation = useNavigation();
@@ -150,6 +154,15 @@ export default function NotificationInbox() {
 
             const countResult = await notificationService.getUnreadCount();
             if (countResult.success) setUnreadCount(countResult.count);
+
+            // Opening the inbox counts as seeing everything in it: mark it
+            // all read on the server so the app-icon badge and the bell clear.
+            // The rows keep their unread highlight for this visit so the user
+            // can still tell what's new.
+            if (pageNum === 1 && countResult.success && countResult.count > 0) {
+                const marked = await notificationService.markAllAsRead();
+                if (marked.success) notificationService.syncBadge();
+            }
         } catch (error) {
             console.error('Failed to fetch notifications:', error);
         } finally {

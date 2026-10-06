@@ -84,7 +84,7 @@ const ReportUserModal = ({
                 reported_user_id: reportedUserId,
                 reason: selectedReason,
                 details: adContext
-                    ? `[${adContext.type === 'event' ? 'Event' : 'Service'} ad #${adContext.id} "${adContext.title}"] ${additionalDetails}`.trim()
+                    ? `[${adContext.type === 'event' ? 'Gig' : 'Service'} ad #${adContext.id} "${adContext.title}"] ${additionalDetails}`.trim()
                     : additionalDetails,
                 screenshots: screenshotUrls,
                 report_type: adContext ? 'ad' : reportType,

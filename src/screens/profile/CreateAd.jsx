@@ -45,7 +45,7 @@ const CreateAd = ({ onClose, onTabPress }) => {
                             onPress={() => onTabPress && onTabPress('event')}
                             activeOpacity={0.7}
                         >
-                            <Text style={styles.tabBtnText}>Event</Text>
+                            <Text style={styles.tabBtnText}>Gig</Text>
                         </TouchableOpacity>
                     </View>
                 </>

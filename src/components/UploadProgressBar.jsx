@@ -4,6 +4,7 @@ import {
     Text,
     StyleSheet,
     Animated,
+    Modal,
 } from 'react-native';
 
 /**
@@ -80,18 +81,31 @@ export const UploadProgressOverlay = ({
 }) => {
     if (!visible) return null;
 
+    // In its own Modal so the dim covers the WHOLE screen. As a plain
+    // absolute-fill View it only covered the parent it was rendered in — on
+    // the create-ad sheet that left an undimmed border around the form.
     return (
-        <View style={styles.overlay}>
-            <View style={styles.overlayContent}>
-                <UploadProgressBar
-                    stage={stage}
-                    progress={progress}
-                    currentItem={currentItem}
-                    totalItems={totalItems}
-                    color={color}
-                />
+        <Modal
+            visible
+            transparent
+            animationType="fade"
+            statusBarTranslucent
+            navigationBarTranslucent
+            // Android back does nothing: the upload can't be cancelled here.
+            onRequestClose={() => {}}
+        >
+            <View style={styles.overlay}>
+                <View style={styles.overlayContent}>
+                    <UploadProgressBar
+                        stage={stage}
+                        progress={progress}
+                        currentItem={currentItem}
+                        totalItems={totalItems}
+                        color={color}
+                    />
+                </View>
             </View>
-        </View>
+        </Modal>
     );
 };
 
@@ -149,11 +163,10 @@ const styles = StyleSheet.create({
     },
     // Overlay styles
     overlay: {
-        ...StyleSheet.absoluteFillObject,
+        flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
         justifyContent: 'center',
         alignItems: 'center',
-        zIndex: 1000,
     },
     overlayContent: {
         backgroundColor: '#fff',

@@ -102,7 +102,10 @@ export default function VendorChat({ navigation }) {
         vendorDetailsService.getVendorDetails(passedVendorId)
             .then((res) => {
                 const url = res?.data?.portfolio_url;
-                if (alive && url) setVendor((prev) => (prev ? { ...prev, portfolio_url: url } : prev));
+                const links = res?.data?.links;
+                if (alive && (url || links?.length)) {
+                    setVendor((prev) => (prev ? { ...prev, portfolio_url: url, links } : prev));
+                }
             })
             .catch(() => {});
         return () => {
@@ -340,6 +343,7 @@ export default function VendorChat({ navigation }) {
                             photos={formattedImages}
                             description={vendor?.description || ''}
                             link={vendor?.portfolio_url || vendor?._original?.portfolio_url || ''}
+                            links={vendor?.links || vendor?._original?.links || []}
                             onSend={() => console.log('Send button pressed')}
                             hideMessageSection={true}
                             offers={vendor?.offers || []}

@@ -10,6 +10,9 @@ import {
     ScrollView,
     Image,
     TextInput,
+    Keyboard,
+    KeyboardAvoidingView,
+    Platform,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -140,32 +143,22 @@ export default function CategorySelectionModalEnhanced({
     };
 
     const handleCategoryClick = (category) => {
-        console.log('📁 Category clicked:', {
-            category,
-            hasSubcategories: category.subcategories && category.subcategories.length > 0,
-            subcategoriesCount: category.subcategories?.length || 0,
-            subcategoriesArray: category.subcategories
-        });
-
-        // Debug: Check what's in the categories state
-        console.log('🔍 All categories in state:', categories.map(cat => ({
-            id: cat.category_id,
-            name: cat.name,
-            hasSubcategories: cat.subcategories && cat.subcategories.length > 0,
-            subcategoriesCount: cat.subcategories?.length || 0
-        })));
-
-        // Always set the selected category and show subcategories (if any)
         setSearchQuery('');
-        setSelectedCategory(category);
 
-        // Check if category has subcategories
-        if (category.subcategories && category.subcategories.length > 0) {
-            setSelectionStep('subcategory');
-        } else {
-            // No subcategories, but still go to subcategory view to show Done/Cancel buttons
-            setSelectionStep('subcategory');
+        // A category with nothing under it is the final choice: pick it right
+        // away instead of opening an empty subcategory step.
+        if (!category.subcategories || category.subcategories.length === 0) {
+            Keyboard.dismiss();
+            onCategorySelect([category.category_id], [category]);
+            onClose();
+            return;
         }
+
+        // The search field stays focused across steps; drop the keyboard so
+        // the subcategories and the Done button aren't hidden behind it.
+        Keyboard.dismiss();
+        setSelectedCategory(category);
+        setSelectionStep('subcategory');
     };
 
     const handleSubcategoryToggle = (subcategory) => {
@@ -239,6 +232,7 @@ export default function CategorySelectionModalEnhanced({
         setSelectedCategory(parent);
         setSelectedSubcategories([subcategory]);
         setSelectionStep('subcategory');
+        Keyboard.dismiss();
     };
 
     const renderSearchedSubcategory = (sub) => (
@@ -281,7 +275,7 @@ export default function CategorySelectionModalEnhanced({
                         </Text>
                     )}
                 </View>
-                <Icon name="chevron-forward" size={18} color="#9AA5B8" />
+                {subCount > 0 && <Icon name="chevron-forward" size={18} color="#9AA5B8" />}
             </TouchableOpacity>
         );
     };
@@ -324,6 +318,11 @@ export default function CategorySelectionModalEnhanced({
                 status bar. */}
             <SafeAreaProvider>
             <SafeAreaView style={[styles.container, styles.safeAreaPad]}>
+            {/* Keeps Cancel / Done above the keyboard while searching */}
+            <KeyboardAvoidingView
+                style={styles.flex}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            >
                 {/* Header */}
                 <View style={styles.header}>
                     {selectionStep === 'subcategory' && !showOnlySubcategories && !categoryTabs && (
@@ -538,6 +537,7 @@ export default function CategorySelectionModalEnhanced({
                         </TouchableOpacity>
                     </View>
                 )}
+            </KeyboardAvoidingView>
             </SafeAreaView>
             </SafeAreaProvider>
         </Modal>
@@ -545,6 +545,9 @@ export default function CategorySelectionModalEnhanced({
 }
 
 const styles = StyleSheet.create({
+    flex: {
+        flex: 1,
+    },
     safeAreaPad: {
         paddingTop: 4,
     },

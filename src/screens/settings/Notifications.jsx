@@ -23,7 +23,7 @@ export default function Notifications() {
     const notificationItems = [
         {
             title: 'Gig Updates',
-            subtitle: 'Reminders and changes related to your posted events',
+            subtitle: 'Reminders and changes related to your posted gigs',
             value: eventUpdates,
             onToggle: setEventUpdates
         },
