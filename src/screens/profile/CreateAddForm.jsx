@@ -244,6 +244,11 @@ const CreateAddForm = ({ type, onClose }) => {
                     if (draft.description) setDescription(draft.description);
                 } else {
                     if (draft.companyName) setCompanyName(draft.companyName);
+                    if (Array.isArray(draft.category) && draft.category.length) {
+                        setCategory(draft.category);
+                        setCategoryNames(draft.categoryNames || []);
+                        setAvailableTags(draft.availableTags || []);
+                    }
                     if (draft.vendorDescription) setVendorDescription(draft.vendorDescription);
                     if (draft.vendorLocation) setVendorLocation(draft.vendorLocation);
                     if (draft.vendorLocationData) setVendorLocationData(draft.vendorLocationData);
@@ -278,6 +283,7 @@ const CreateAddForm = ({ type, onClose }) => {
                     : {
                           companyName, vendorDescription, vendorLocation,
                           vendorLocationData, selectedTags, offers, vendorLinks, currency,
+                          category, categoryNames, availableTags,
                           savedAt: Date.now(),
                       };
             AsyncStorage.setItem(DRAFT_KEY, JSON.stringify(draft)).catch(() => {});
@@ -290,7 +296,7 @@ const CreateAddForm = ({ type, onClose }) => {
         eventLocationData, duration, budget, description,
         // vendor fields
         companyName, vendorDescription, vendorLocation, vendorLocationData,
-        selectedTags, offers, vendorLinks,
+        selectedTags, offers, vendorLinks, category, categoryNames, availableTags,
         // shared
         currency,
     ]);
@@ -586,14 +592,43 @@ const CreateAddForm = ({ type, onClose }) => {
         setPhotos(newPhotos);
     };
 
+    // The upload overlay is its own full-screen Modal, and iOS drops a second
+    // Modal that opens while another is still closing — the "Ad Posted"
+    // confirmation never appeared. Open it once the overlay has gone.
+    const pendingResultRef = useRef(null);
+    const showResultModal = (state) => {
+        if (Platform.OS !== 'ios') {
+            setModalState(state);
+            return;
+        }
+        pendingResultRef.current = state;
+        // Fallback in case the overlay's dismiss callback never comes.
+        setTimeout(openPendingResult, 1500);
+    };
+    const openPendingResult = () => {
+        const pending = pendingResultRef.current;
+        if (!pending) return;
+        pendingResultRef.current = null;
+        setModalState(pending);
+    };
+
     const handlePost = async () => {
         setIsLoading(true);
 
         try {
             if (type === 'event') {
                 // Validate event fields
-                if (!service || !selectedEventType || !location || !dateSelected) {
-                    setToastState({ visible: true, message: 'Please fill in all required fields', type: 'error' });
+                const missingGigField = !service
+                    ? 'Please select the service you need'
+                    : !selectedEventType
+                        ? 'Please select a gig type'
+                        : !location
+                            ? 'Please select a city'
+                            : !dateSelected
+                                ? 'Please select a date'
+                                : null;
+                if (missingGigField) {
+                    setToastState({ visible: true, message: missingGigField, type: 'error' });
                     setIsLoading(false);
                     return;
                 }
@@ -745,7 +780,7 @@ const CreateAddForm = ({ type, onClose }) => {
 
                 if (response.success) {
                     clearDraft();
-                    setModalState({
+                    showResultModal({
                         visible: true,
                         title: 'Gig Ad Posted',
                         message: 'Your gig ad is now live and visible to vendors.',
@@ -756,8 +791,17 @@ const CreateAddForm = ({ type, onClose }) => {
                 }
             } else {
                 // Validate vendor fields
-                if (!category || !companyName || !vendorLocation) {
-                    setToastState({ visible: true, message: 'Please fill in all required fields', type: 'error' });
+                // Name the missing field — a generic message left people
+                // hunting for it in a long form.
+                const missingVendorField = !category || category.length === 0
+                    ? 'Please select a category'
+                    : !companyName?.trim()
+                        ? 'Please enter your company name'
+                        : !vendorLocation
+                            ? 'Please select a city'
+                            : null;
+                if (missingVendorField) {
+                    setToastState({ visible: true, message: missingVendorField, type: 'error' });
                     setIsLoading(false);
                     return;
                 }
@@ -906,7 +950,7 @@ const CreateAddForm = ({ type, onClose }) => {
 
                 if (response.success) {
                     clearDraft();
-                    setModalState({
+                    showResultModal({
                         visible: true,
                         title: 'Vendor Ad Posted',
                         message: 'Your vendor ad is now live and visible to users.',
@@ -1007,8 +1051,8 @@ const CreateAddForm = ({ type, onClose }) => {
             style={styles.modalBorderWrapPro}
             enabled={false}
         >
-            {/* Header */}
-            <View style={styles.headerPro}>
+            {/* Header — tapping it also closes the keyboard */}
+            <View style={styles.headerPro} onStartShouldSetResponder={() => true} onResponderRelease={Keyboard.dismiss}>
                 <Text style={styles.headerTitlePro}>
                     {type === 'event' ? 'Create Gig Ad' : 'Create Vendor Ad'}
                 </Text>
@@ -1028,7 +1072,9 @@ const CreateAddForm = ({ type, onClose }) => {
                 nestedScrollEnabled={true}
                 automaticallyAdjustKeyboardInsets={!MANUAL_KEYBOARD_SCROLL}
                 keyboardShouldPersistTaps="handled"
-                keyboardDismissMode={MANUAL_KEYBOARD_SCROLL ? 'on-drag' : 'interactive'}
+                // Dragging the form closes the keyboard, so the Cancel / Post
+                // row it covers is always reachable.
+                keyboardDismissMode="on-drag"
                 onLayout={(e) => {
                     // Frame height changes when the keyboard opens (marginBottom
                     // becomes keyboardHeight). Re-pin the last fields then.
@@ -1229,12 +1275,12 @@ const CreateAddForm = ({ type, onClose }) => {
                         </View>
 
                         <View style={styles.fieldGroupPro}>
-                            <Text style={styles.labelPro}>Description (optional, min. 30 words if provided)</Text>
+                            <Text style={styles.labelPro}>Description (min. 30 words)</Text>
                             <TextInput
                                 style={[styles.inputPro, styles.textAreaPro, { backgroundColor: theme.colors.primary }]}
                                 value={description}
                                 onChangeText={setDescription}
-                                placeholder="Describe your needs in detail (minimum 30 words if provided)..."
+                                placeholder="Describe your needs in detail (minimum 30 words)..."
                                 placeholderTextColor="#ffffff80"
                                 multiline
                                 onFocus={() => {
@@ -1395,11 +1441,6 @@ const CreateAddForm = ({ type, onClose }) => {
                             ) : (
                                 <Text style={[styles.helperText, { color: '#999', marginTop: 8 }]}>
                                     Select a category to see available services
-                                </Text>
-                            )}
-                            {type === 'vendor' && photos.length > 0 && (
-                                <Text style={styles.photoCount}>
-                                    {photos.length} / 5 photos (minimum)
                                 </Text>
                             )}
                         </View>
@@ -1963,6 +2004,7 @@ const CreateAddForm = ({ type, onClose }) => {
                 visible={uploadStage !== 'idle'}
                 stage={uploadStage}
                 progress={uploadStage === 'compressing' ? compressionProgress.percent : uploadProgress}
+                onHidden={openPendingResult}
             />
         </KeyboardAvoidingView>
     );

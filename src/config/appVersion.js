@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 // The app's own version, used by versionCheckService to decide whether to
 // show the "update available" prompt.
 //
@@ -10,4 +12,7 @@
 // 1.9 < latest and prompted to update forever (an infinite update loop).
 // TODO: make this dynamic via react-native-device-info's getVersion() so it
 // can never go stale again.
-export const APP_VERSION = '2.3.0';
+// iOS and Android ship different version numbers (iOS 3.x, Android 2.x), and
+// each is compared with its own platform's `latest` from /app-version. A
+// single shared value made iOS compare as 2.3.0 while it was really 3.0.
+export const APP_VERSION = Platform.OS === 'ios' ? '3.1' : '2.4.0';

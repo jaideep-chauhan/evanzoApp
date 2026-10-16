@@ -33,9 +33,14 @@ const KeyboardInsetView = ({ style, children, ...rest }) => {
             const keyboardTop = event?.endCoordinates?.screenY;
             const keyboardHeight = event?.endCoordinates?.height || 0;
             const node = ref.current;
-            if (node?.measureInWindow && typeof keyboardTop === 'number') {
-                node.measureInWindow((x, y, width, height) => {
-                    apply(height > 0 ? Math.max(0, Math.round(y + height - keyboardTop)) : keyboardHeight, event);
+            // measure()'s pageY is relative to the app's root view, which is
+            // also what the keyboard's screenY is measured against. (On
+            // edge-to-edge Android, measureInWindow leaves out the status bar,
+            // so the bar was lifted ~one status bar too little and stayed
+            // half behind the keyboard.)
+            if (node?.measure && typeof keyboardTop === 'number') {
+                node.measure((x, y, width, height, pageX, pageY) => {
+                    apply(height > 0 ? Math.max(0, Math.round(pageY + height - keyboardTop)) : keyboardHeight, event);
                 });
             } else {
                 apply(keyboardHeight, event);

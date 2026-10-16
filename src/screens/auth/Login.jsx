@@ -50,6 +50,9 @@ export default function LoginScreen() {
     const [imageLoaded, setImageLoaded] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    // Shown under the form when sign-in fails. The toast alone was never
+    // seen on this screen, so a wrong password looked like nothing happened.
+    const [loginError, setLoginError] = useState('');
     const [googleLoading, setGoogleLoading] = useState(false);
     const [appleLoading, setAppleLoading] = useState(false);
 
@@ -173,6 +176,7 @@ export default function LoginScreen() {
 
                                     setIsLoading(true);
                                     setSubmitting(true);
+                                    setLoginError('');
 
                                     try {
                                         // Pass emailOrPhone directly to login function
@@ -195,6 +199,7 @@ export default function LoginScreen() {
                                             // Show error message via toast
                                             const errorMsg = result.error || 'Invalid credentials. Please try again.';
                                             console.log('❌ Login failed:', errorMsg);
+                                            setLoginError(errorMsg);
 
                                             // Show toast immediately
                                             Toast.show({
@@ -211,6 +216,7 @@ export default function LoginScreen() {
                                         }
                                     } catch (error) {
                                         console.error('❌ Login error:', error);
+                                        setLoginError('Something went wrong. Please try again later.');
 
                                         // Show toast immediately
                                         Toast.show({
@@ -297,6 +303,10 @@ export default function LoginScreen() {
                                         >
                                             <Text style={[styles.forgotText, { color: theme.colors.primary }]}>Forgot your password?</Text>
                                         </TouchableOpacity>
+
+                                        {!!loginError && (
+                                            <Text style={[styles.errorText, styles.loginErrorText]}>{loginError}</Text>
+                                        )}
                                         
                                         <TouchableOpacity 
                                             style={[
@@ -461,6 +471,10 @@ const styles = StyleSheet.create({
     inputError: {
         borderColor: '#ff4444',
         borderWidth: 1,
+    },
+    loginErrorText: {
+        textAlign: 'center',
+        marginBottom: 10,
     },
     errorText: {
         color: '#ff4444',

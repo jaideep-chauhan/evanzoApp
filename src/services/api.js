@@ -126,8 +126,16 @@ api.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
 
+        // A 401 from the sign-in / sign-up / refresh endpoints means wrong
+        // credentials, not an expired session: hand it straight back so the
+        // screen shows the server's message ("Invalid email or password").
+        // Treating it as an expired session swapped that message for the
+        // refresh error, or left the request waiting on a stuck refresh.
+        const isAuthEndpoint = /\/auth\/(login|sign-up|google-login|apple-login|refresh-tokens|reset-password|forgot-password)/
+            .test(originalRequest?.url || '');
+
         // Check if this is a 401 error and we haven't already tried to refresh for this request
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
 
             // Check if this is an authentication error
             const errorMessage = error.response?.data?.message || '';

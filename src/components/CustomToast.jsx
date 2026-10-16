@@ -37,7 +37,9 @@ export const CustomToast = ({ visible, message, type = 'success', onHide, durati
 
             return () => clearTimeout(timer);
         }
-    }, [visible]);
+    // Re-run for a new message too: a second error while one is showing used
+    // to keep the old text and never restart the hide timer.
+    }, [visible, message]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const hideToast = () => {
         Animated.parallel([

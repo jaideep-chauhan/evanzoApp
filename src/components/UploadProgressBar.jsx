@@ -78,15 +78,17 @@ export const UploadProgressOverlay = ({
     currentItem = 0,
     totalItems = 0,
     color = '#2C3D5B',
+    // iOS: called once the overlay has fully closed. Open any follow-up Modal
+    // from here — iOS ignores a Modal presented while another is closing.
+    onHidden,
 }) => {
-    if (!visible) return null;
-
     // In its own Modal so the dim covers the WHOLE screen. As a plain
     // absolute-fill View it only covered the parent it was rendered in — on
     // the create-ad sheet that left an undimmed border around the form.
     return (
         <Modal
-            visible
+            visible={visible}
+            onDismiss={onHidden}
             transparent
             animationType="fade"
             statusBarTranslucent

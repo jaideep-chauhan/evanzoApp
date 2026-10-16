@@ -75,23 +75,34 @@ const ImageEditorModal = ({ visible, images, onClose, onDone, onAddMore }) => {
         }
     }, [visible, images]);
 
-    // The picker reports each photo's real size. Only measure when it
-    // didn't (Image.getSize is not reliable for several files at once).
-    useEffect(() => {
-        editedImages.forEach((image) => {
-            if ((image.width && image.height) || sizes[image._key]) return;
-            Image.getSize(
-                image.uri,
-                (width, height) => setSizes((prev) => (prev[image._key] ? prev : { ...prev, [image._key]: { width, height } })),
-                () => {},
-            );
+    // Size of each photo as it is actually drawn, i.e. after EXIF rotation.
+    // The picker reports the stored pixel size, which is sideways for
+    // rotated photos (a landscape shot read as portrait got black bars).
+    // Filled in from each <Image>'s onLoad (the thumbnails load every photo).
+    const rememberSize = (image) => (event) => {
+        const { width, height } = event?.nativeEvent?.source || {};
+        if (!width || !height) return;
+        setSizes((prev) => {
+            const known = prev[image._key];
+            if (known && known.width === width && known.height === height) return prev;
+            return { ...prev, [image._key]: { width, height } };
         });
-    }, [editedImages]); // eslint-disable-line react-hooks/exhaustive-deps
+    };
 
     const sizeOf = (image) =>
-        image.width && image.height
-            ? { width: image.width, height: image.height }
-            : sizes[image._key] || { width: 0, height: 0 };
+        sizes[image._key] || { width: image.width || 0, height: image.height || 0 };
+
+    // Drawn size, measuring now if that photo hasn't loaded on screen yet.
+    const measuredSize = (image) =>
+        sizes[image._key]
+            ? Promise.resolve(sizes[image._key])
+            : new Promise((resolve) =>
+                Image.getSize(
+                    image.uri,
+                    (width, height) => resolve({ width, height }),
+                    () => resolve(sizeOf(image)),
+                ),
+            );
 
     const currentImage = editedImages[currentIndex];
     const currentLayout = currentImage
@@ -163,10 +174,11 @@ const ImageEditorModal = ({ visible, images, onClose, onDone, onAddMore }) => {
     // Cut one photo to the part its frame shows. Photos that are already 4:5
     // pass through untouched.
     const fitToFrame = async (image) => {
-        const { width, height } = sizeOf(image);
+        const { width, height } = await measuredSize(image);
         if (!width || !height || isAdPhotoAspectRatio(width, height)) return image;
 
         const layout = layoutFor(width, height);
+        // Where the user left it, or centred if they never opened this photo.
         const offset = offsetFor(image, layout);
         const cropWidth = Math.min(width, FRAME_WIDTH / layout.scale);
         const cropHeight = Math.min(height, FRAME_HEIGHT / layout.scale);
@@ -333,6 +345,7 @@ const ImageEditorModal = ({ visible, images, onClose, onDone, onAddMore }) => {
                                     source={{ uri: currentImage.uri }}
                                     style={{ width: currentLayout.displayWidth, height: currentLayout.displayHeight }}
                                     resizeMode="cover"
+                                    onLoad={rememberSize(currentImage)}
                                 />
                             </ScrollView>
                         )}
@@ -419,6 +432,7 @@ const ImageEditorModal = ({ visible, images, onClose, onDone, onAddMore }) => {
                                     source={{ uri: image.uri }}
                                     style={styles.thumbnailImage}
                                     resizeMode="cover"
+                                    onLoad={rememberSize(image)}
                                 />
                             </TouchableOpacity>
                         ))}

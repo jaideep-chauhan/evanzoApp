@@ -14,12 +14,19 @@ const Badge = ({ label }) => (
 
 // One column of the grid: "Amount spent / Discount" titles, then a row per
 // offer. Only the first row carries the "Offer:" label.
-const OfferColumn = ({ offers, currency }) => (
+const OfferColumn = ({ offers, currency }) => {
+    // Older offers can have no discount; don't title an empty column.
+    const hasDiscount = offers.some((offer) => Number(offer.discount) > 0);
+    return (
     <View style={styles.column}>
         <View style={styles.row}>
             <View style={styles.labelCell} />
             <Text style={styles.columnTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>Amount spent</Text>
-            <Text style={styles.columnTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>Discount</Text>
+            {hasDiscount ? (
+                <Text style={styles.columnTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>Discount</Text>
+            ) : (
+                <View style={styles.valueSpacer} />
+            )}
         </View>
         {offers.map((offer, index) => (
             <View key={index} style={styles.row}>
@@ -41,7 +48,8 @@ const OfferColumn = ({ offers, currency }) => (
             </View>
         ))}
     </View>
-);
+    );
+};
 
 const OfferGrid = ({ offers = [], currency = 'USD' }) => {
     // Filter out offers where both amount and discount are 0
